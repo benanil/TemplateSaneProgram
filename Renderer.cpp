@@ -13,7 +13,7 @@
     #define STBI_NEON
 #else
     #define GLAD_GL_IMPLEMENTATION
-    #include "glad.hpp"
+    #include "External/glad.hpp"
 
     #define AX_LOG(...) printf(__VA_ARGS__)
 #endif
@@ -57,7 +57,7 @@ Texture CreateTexture(int width, int height, void* data, bool mipmap)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     texture.width  = width;
     texture.height = height;
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
     if (mipmap) glGenerateMipmap(GL_TEXTURE_2D);
     CheckAndLogGlError();
     return texture;

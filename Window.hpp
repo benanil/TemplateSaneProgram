@@ -61,7 +61,7 @@ void GetMousePos(float* x, float* y);
 void GetMouseWindowPos(float* x, float* y);
 void SetMouseWindowPos(float x, float y);
 void SetMouseMoveCallback(void(*callback)(float, float));
-
+float GetMouseWheelDelta();
 
 ////////                TIME                 ////////
 

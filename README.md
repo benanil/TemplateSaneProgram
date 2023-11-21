@@ -15,14 +15,14 @@ g++ -std=c++17 -w -O3 -mavx2 -march=native ASTL.cpp Profiler.cpp -o astl_test
 # Windowing
 ASTL supports windowing which means you can create window (only windows supported for now) <br>
 it works like glfw and SDL, supports keyboard and mouse input <br>
-to change the icon of the .exe <br>
+to change the icon of the .exe in info.rc <br>
+also application information(CompanyName, Version, Product name) in info.rc and execute this command <br>
+don't forget to build resource file with this command <br>
 ```
-windres icon.rc -O coff -o icon.res
+windres SaneProgram.rc -O coff -o SaneProgram.res
 ```
-also you can set the application information in info.rc and execute this command <br>
-```
-windres info.rc -O coff -o info.res <br>
-```
+To change icon and information of the .exe: <br> 
+Visual Studio go to SolutionExplorer-> right click SaneProgram->AddExisting->SaneProgram.res
 # Contributing
 
 feel free to contribute

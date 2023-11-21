@@ -45,7 +45,7 @@ extern void AXExit();
 
 void UpdateRenderArea();
 
-#if defined(AX_USE_WINDOW) && defined(__ANDROID__) 
+#if defined(__ANDROID__) 
 static void InitWindow()
 {
   constexpr EGLint attribs[] = {
@@ -125,7 +125,7 @@ void GetWindowPos(int* x, int* y) { }
 
 void SetWindowName(const char* name) { }
 
-#elif defined(AX_USE_WINDOW) && defined(_WIN32)
+#elif defined(_WIN32)
 
 #ifndef NOMINMAX
 #  define NOMINMAX
@@ -232,7 +232,7 @@ BOOL(WINAPI* wglSwapIntervalEXT)(int) = nullptr;
 static void FatalError(const char* msg)
 {
     MessageBoxA(NULL, msg, "Error", MB_OK | MB_ICONEXCLAMATION);
-    exit(EXIT_FAILURE);
+    exit(0);
 }
 
 static void InitOpenGLExtensions(void)
@@ -400,6 +400,8 @@ void SetMouseWindowPos(float x, float y)
 {
     SetMousePos(windowPosX_ + x, windowPosY_ + y);
 }
+float g_axMouseWheelDelta = 0.0f;
+float GetMouseWheelDelta() { return g_axMouseWheelDelta; };
 
 static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPARAM lparam)
 {
@@ -412,6 +414,9 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
             g_axMousePosX = (float)LOWORD(lparam); 
             g_axMousePosY = (float)HIWORD(lparam); 
             if (MouseMoveCallback) MouseMoveCallback(g_axMousePosX, g_axMousePosY);
+            break;
+        case WM_MOUSEWHEEL:
+            g_axMouseWheelDelta = (float)GET_WHEEL_DELTA_WPARAM(wparam) / (float)WHEEL_DELTA;
             break;
         case WM_LBUTTONDOWN: g_axMouseDown |= MouseButton_Left; break;
         case WM_RBUTTONDOWN: g_axMouseDown |= MouseButton_Right; break;
@@ -472,7 +477,7 @@ static HWND WindowCreate(HINSTANCE inst)
     window_class.hCursor       = LoadCursor(0, IDC_ARROW);
     window_class.hbrBackground = 0;
     window_class.lpszClassName = "ASTLWindow";
-    window_class.hIcon         = LoadIconA(inst, "duck_icon");
+    window_class.hIcon         = LoadIconA(inst, "icon");
     
     if (!RegisterClassA(&window_class))
         FatalError("Failed to register window.");
@@ -516,7 +521,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
     SwapBuffers(dc);
     
-    AXStart();
+    if (AXStart() == 0) return 1; // user defined startup failed
 
     LARGE_INTEGER frequency, prevTime, currentTime;
     QueryPerformanceFrequency(&frequency);
@@ -549,6 +554,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         SwapBuffers(dc);
 
         RecordLastKeys();
+        g_axMouseWheelDelta = 0.0f;
     }
     end_infinite_loop:
     {
