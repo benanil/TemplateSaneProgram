@@ -14,7 +14,7 @@
 		<CleanCommand></CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand>astl_test.exe</RunCommand>
+		<RunCommand>SaneProgram.exe</RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
 		<DebugCommand></DebugCommand>
 		<ExePathCommand></ExePathCommand>
