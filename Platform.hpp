@@ -1,15 +1,20 @@
 
+/********************************************************************
+*    Purpose: Creating Window, Keyboard and Mouse input, Main Loop  *
+*             Touch Input(Android).                                 *
+*             Functions are implemented in Platform.cpp             *
+*    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com        *
+********************************************************************/
+
 #pragma once
 
 ////////                Window               ////////
 
+#ifndef __ANDROID__
 void SetWindowSize(int width, int height);
 void SetWindowPosition(int x, int y);
-void SetWindowResizeCallback(void(*callback)(int, int));
 void SetWindowMoveCallback(void(*callback)(int, int));
 void SetWindowName(const char* name);
-
-void GetWindowSize(int* x, int* y);
 void GetWindowPos(int* x, int* y);
 
 // Sets Window as Full Screen, with given resolution, this might improve performance but pixel density drops down
@@ -21,13 +26,12 @@ bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight);
 bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight);
 
 void SetVSync(bool active);
+#endif
 
-void GetMonitorSize(int* width, int* height);
 void SetFocusChangedCallback(void(*callback)(bool focused));
-
-void TerminateWindow();
-void HandleInput();
-
+void SetWindowResizeCallback(void(*callback)(int, int));
+void GetWindowSize(int* x, int* y);
+void GetMonitorSize(int* width, int* height);
 
 ////////                Keyboard             ////////
 
@@ -42,7 +46,7 @@ void SetKeyPressCallback(void(*callback)(wchar_t));
 
 
 ////////                Mouse                ////////
-
+// Mouse is finger in Android, and MouseButton is finger id.
 
 enum MouseButton_
 {
@@ -56,17 +60,19 @@ bool GetMouseDown(MouseButton button);
 bool GetMouseReleased(MouseButton button);
 bool GetMousePressed(MouseButton button);
 
-void SetMousePos(float x, float y);
 void GetMousePos(float* x, float* y);
 void GetMouseWindowPos(float* x, float* y);
-void SetMouseWindowPos(float x, float y);
 void SetMouseMoveCallback(void(*callback)(float, float));
 float GetMouseWheelDelta();
 
+#ifndef __ANDROID__
+void SetMousePos(float x, float y);
+void SetMouseWindowPos(float x, float y);
+#endif
 ////////                TIME                 ////////
 
-
 double GetDeltaTime();
+double TimeSinceStartup();
 
 extern struct android_app* g_android_app;
 
@@ -144,3 +150,27 @@ enum KeyboardKey_
     Key_F12            = 0x7B,
 };
 typedef int KeyboardKey;
+
+// These functions are not used in android code, we are inlining here
+// this waycompiler will not use this functions
+#ifdef __ANDROID__
+inline void SetWindowSize(int width, int height) {}
+inline void SetWindowPosition(int x, int y) {}
+inline void SetWindowMoveCallback(void(*callback)(int, int)) {}
+inline void SetWindowName(const char* name) {}
+inline void GetWindowPos(int* x, int* y) {}
+
+// Sets Window as Full Screen, with given resolution, this might improve performance but pixel density drops down
+// You can set the resolution using GetMonitorSize or following resolutions: 
+// 2560x1440, 1920x1080, 1280×720 etc.
+inline bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight) {}
+
+// Go back to full screen Mode
+inline bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) {}
+
+inline void SetVSync(bool active) {}
+
+inline void SetMousePos(float x, float y) {}
+
+inline void SetMouseWindowPos(float x, float y) {}
+#endif

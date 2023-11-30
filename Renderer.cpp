@@ -6,6 +6,8 @@
 *        Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
+#elif defined(_WIN32)
+
 #ifdef __ANDROID__
     #include <game-activity/native_app_glue/android_native_app_glue.h>
     #include <GLES3/gl32.h>
@@ -78,7 +80,6 @@ Texture LoadTexture(const char* path, bool mipmap)
     free(buffer);
     AAsset_close(asset);
     return texture;
-
 #else
     image = stbi_load(path, &width, &height, &channels, 3);
     ASSERT(image);
@@ -149,7 +150,8 @@ Mesh CreateMeshFromGLTF(GLTFPrimitive* gltf)
         // all attributes are type of float position, texcoord..
         int size = sizeof(float) * attribIndexToNumComp[i];
         glBufferData(GL_ARRAY_BUFFER, (uint64)size * mesh.numVertex, gltf->vertexAttribs[i], GL_STATIC_DRAW);
-        glVertexAttribPointer(v, attribIndexToNumComp[i], GL_FLOAT, GL_FALSE, 0, nullptr); // all attributes are type of float, position, texcoord..
+        // all attributes are type of float, position, texcoord..
+        glVertexAttribPointer(v, attribIndexToNumComp[i], GL_FLOAT, GL_FALSE, 0, nullptr); 
         glEnableVertexAttribArray(v);
         // traverse set bits instead of traversing each bit
         attributes &= ~1;
@@ -260,18 +262,16 @@ void InitRenderer()
 {
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CCW);
-#ifdef __ANDROID__
-    InitWindow();
-#endif
     // create empty vao unfortunately this step is necessary for ogl 3.2
     glGenVertexArrays(1, &emptyVao);
     // setup any other gl related global states
     glClearColor(0.2f, 0.8f, 0.25f, 1.0f);
 }
 
-void ToggleDepthTest(bool val)
+void SetDepthTest(bool val)
 {
-    if (val) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    void(*EnableDisable[2])(unsigned int) = { glEnable, glDisable };
+    EnableDisable[val](GL_DEPTH_TEST);
 }
 
 void ToggleDepthWrite(bool val) { glDepthMask(val); }
@@ -335,12 +335,5 @@ void RenderMesh(Mesh mesh)
     glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
 }
 
-void Render()
-{
-    // Present the rendered image. This is an implicit glFlush.
-#ifdef __ANDROID__
-    EGLBoolean swapResult = eglSwapBuffers(display_, surface_);
-    ASSERT(swapResult);
-    glClear(GL_COLOR_BUFFER_BIT);
-#endif
-}
+
+#endif // defined(_WIN32)

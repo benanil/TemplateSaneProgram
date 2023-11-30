@@ -69,13 +69,11 @@ void SetModelMatrix(float* model);
 
 void RenderMesh(Mesh mesh);
 
-void Render();
-
 void InitRenderer();
 
 void DestroyRenderer();
 
-void ToggleDepthTest(bool val);
+void SetDepthTest(bool val);
 
 void ToggleDepthWrite(bool val);
 

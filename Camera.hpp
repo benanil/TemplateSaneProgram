@@ -1,6 +1,6 @@
 #pragma once
 #include "ASTL/Math/Transform.hpp"
-#include "Window.hpp"
+#include "Platform.hpp"
 
 struct Camera
 {

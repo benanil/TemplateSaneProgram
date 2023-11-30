@@ -4,7 +4,7 @@
 
 #include "Renderer.hpp"
 #include "Camera.hpp"
-#include "Window.hpp"
+#include "Platform.hpp"
 
 const Vector2i windowStartSize{1920, 1080};
 
@@ -60,10 +60,10 @@ int AXStart()
 // do rendering and main loop here
 void AXLoop()
 {
-    ToggleDepthTest(false);
+    SetDepthTest(false);
     // works like a skybox
     RenderFullScreen(fullScreenShader, forestTexture.handle);
-    ToggleDepthTest(true);
+    SetDepthTest(true);
 
     BindShader(shader);
     if (GetMousePressed(MouseButton_Left))  meshPosition.x += 2.0f;
@@ -78,8 +78,6 @@ void AXLoop()
 
     SetTexture(texture, 0);
     RenderMesh(mesh);
-
-    Render();
 }
 
 void AXExit()
