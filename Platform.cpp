@@ -8,6 +8,7 @@
 
 #include "PlatformAndroid.cpp"
 
+#else
 
 #include "PlatformAndroid.cpp"
 
