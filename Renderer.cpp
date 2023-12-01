@@ -6,7 +6,7 @@
 *        Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
-#elif defined(_WIN32)
+#if defined(_WIN32)
 
 #ifdef __ANDROID__
     #include <game-activity/native_app_glue/android_native_app_glue.h>
@@ -270,7 +270,7 @@ void InitRenderer()
 
 void SetDepthTest(bool val)
 {
-    void(*EnableDisable[2])(unsigned int) = { glEnable, glDisable };
+    void(*EnableDisable[2])(unsigned int) = { glDisable, glEnable};
     EnableDisable[val](GL_DEPTH_TEST);
 }
 

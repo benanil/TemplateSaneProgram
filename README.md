@@ -8,10 +8,7 @@ to use Visual Studio:
 ```
 cmake . -Bbuild
 ```
-to use with gcc:
-```
-g++ -std=c++17 -w -O3 -mavx2 -march=native ASTL.cpp Profiler.cpp -o astl_test
-```
+build with with gcc, by running build.bat
 # Windowing
 ASTL supports windowing which means you can create window (only windows supported for now) <br>
 it works like glfw and SDL, supports keyboard and mouse input <br>
@@ -21,7 +18,7 @@ don't forget to build resource file with this command <br>
 ```
 windres SaneProgram.rc -O coff -o SaneProgram.res
 ```
-To change icon and information of the .exe: <br> 
+To change icon and information of the .exe: <br>
 Visual Studio go to SolutionExplorer-> right click SaneProgram->AddExisting->SaneProgram.res
 # Contributing
 

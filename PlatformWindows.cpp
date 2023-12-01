@@ -3,6 +3,7 @@
 *    Purpose: Creating Window, Keyboard and Mouse input, Main Loop  *
 *    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com        *
 ********************************************************************/
+#ifdef _WIN32
 
 #ifndef NOMINMAX
 #  define NOMINMAX
@@ -11,6 +12,7 @@
 #endif
 #include <Windows.h>
 
+#include "ASTL/Common.hpp"
 #include "Platform.hpp"
 #include "External/glad.hpp"
 
@@ -241,13 +243,13 @@ bool GetKeyPressed(char c)  { return GetBit128(PlatformCtx.PressedKeys, c); }
 
 static void SetPressedAndReleasedKeys()
 {
-    g_axReleasedKeys[0] = PlatformCtx.LastKeys[0] & ~PlatformCtx.DownKeys[0];
-    g_axReleasedKeys[1] = PlatformCtx.LastKeys[1] & ~PlatformCtx.DownKeys[1];
-    g_axPressedKeys[0]  = ~PlatformCtx.LastKeys[0] & PlatformCtx.DownKeys[0];
-    g_axPressedKeys[1]  = ~PlatformCtx.LastKeys[1] & PlatformCtx.DownKeys[1];
+    PlatformCtx.ReleasedKeys[0] = PlatformCtx.LastKeys[0] & ~PlatformCtx.DownKeys[0];
+    PlatformCtx.ReleasedKeys[1] = PlatformCtx.LastKeys[1] & ~PlatformCtx.DownKeys[1];
+    PlatformCtx.PressedKeys[0]  = ~PlatformCtx.LastKeys[0] & PlatformCtx.DownKeys[0];
+    PlatformCtx.PressedKeys[1]  = ~PlatformCtx.LastKeys[1] & PlatformCtx.DownKeys[1];
     // Mouse
-    g_axMouseReleased = PlatformCtx.MouseLast & ~PlatformCtx.MouseDown;
-    g_axMousePressed  = ~PlatformCtx.MouseLast & PlatformCtx.MouseDown;
+    PlatformCtx.MouseReleased = PlatformCtx.MouseLast & ~PlatformCtx.MouseDown;
+    PlatformCtx.MousePressed  = ~PlatformCtx.MouseLast & PlatformCtx.MouseDown;
 }
 
 static void RecordLastKeys() {
@@ -256,9 +258,9 @@ static void RecordLastKeys() {
     PlatformCtx.MouseLast = PlatformCtx.MouseDown;
 }
 
-bool GetMouseDown(MouseButton button)     { return !!( MouseDown    & button); }
-bool GetMouseReleased(MouseButton button) { return !!(MouseReleased & button); }
-bool GetMousePressed(MouseButton button)  { return !!(MousePressed  & button); }
+bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.MouseDown     & button); }
+bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.MouseReleased & button); }
+bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.MousePressed  & button); }
 
 void GetMousePos(float* x, float* y)
 {
@@ -289,6 +291,11 @@ float GetMouseWheelDelta()
     return PlatformCtx.MouseWheelDelta; 
 }
 
+static void UpdateRenderArea()
+{
+    glViewport(0, 0, PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
+}
+
 static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     LRESULT result = 0;
@@ -299,7 +306,8 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_MOUSEMOVE:
             PlatformCtx.MousePosX = (float)LOWORD(lparam); 
             PlatformCtx.MousePosY = (float)HIWORD(lparam); 
-            if (MouseMoveCallback) MouseMoveCallback(PlatformCtx.MousePosX, PlatformCtx.MousePosY);
+            if (PlatformCtx.MouseMoveCallback) 
+                PlatformCtx.MouseMoveCallback(PlatformCtx.MousePosX, PlatformCtx.MousePosY);
             break;
         case WM_MOUSEWHEEL:
             PlatformCtx.MouseWheelDelta = (float)GET_WHEEL_DELTA_WPARAM(wparam) / (float)WHEEL_DELTA;
@@ -332,7 +340,8 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         }
         case WM_CHAR:
             ::MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, (char*)&wparam, 1, &wch, 1);
-            if (PlatformCtx.KeyPressCallback) KeyPressCallback(wch);
+            if (PlatformCtx.KeyPressCallback) 
+                PlatformCtx.KeyPressCallback(wch);
             break;
         case WM_SIZE:
             PlatformCtx.WindowWidth  = LOWORD(lparam);
@@ -403,12 +412,20 @@ double TimeSinceStartup()
     return (double)(currentTime.QuadPart - PlatformCtx.StartupTime) / PlatformCtx.Frequency;
 }
 
+// forom SaneProgram.cpp
+extern void AXInit();
+extern int  AXStart();
+extern void AXLoop();
+extern void AXExit();
+// forom Renderer.cpp
+extern void DestroyRenderer();
+
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
     AXInit();
     
     PlatformCtx.hwnd = WindowCreate(inst);
-    HDC   dc         = GetDC(hwnd);
+    HDC   dc         = GetDC(PlatformCtx.hwnd);
     HGLRC rc         = InitOpenGL(dc);
     
     gladLoaderLoadGL();
@@ -426,7 +443,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&prevTime);
 
-    QueryPerformanceCounter(&currentTime);
+    currentTime = prevTime;
     PlatformCtx.StartupTime = currentTime.QuadPart;
     PlatformCtx.Frequency   = frequency.QuadPart;
 
@@ -436,7 +453,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
         {
             if (msg.message == WM_QUIT) 
-            goto end_infinite_loop;
+                goto end_infinite_loop;
          
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
@@ -486,7 +503,9 @@ bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight)
     bool success = ChangeDisplaySettings(&fullscreenSettings, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL;
     ASSERT(success && "unable to make full screen");
     ShowWindow(PlatformCtx.hwnd, SW_MAXIMIZE);
-    if (success && WindowResizeCallback) WindowResizeCallback(fullscreenWidth, fullscreenHeight), UpdateRenderArea();
+    
+    if (success && PlatformCtx.WindowResizeCallback)
+        PlatformCtx.WindowResizeCallback(fullscreenWidth, fullscreenHeight), UpdateRenderArea();
     return success;
 }
 
@@ -499,11 +518,12 @@ bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHei
     PlatformCtx.WindowWidth = windowedWidth; PlatformCtx.WindowHeight = windowedHeight;
     SetWindowPos(PlatformCtx.hwnd, HWND_NOTOPMOST, windowX, windowY, windowedWidth, windowedHeight, SWP_SHOWWINDOW);
     ShowWindow(PlatformCtx.hwnd, SW_RESTORE);
-    if (success && WindowResizeCallback) WindowResizeCallback(windowedWidth, windowedHeight), UpdateRenderArea();
+
+    if (success && PlatformCtx.WindowResizeCallback)
+        PlatformCtx.WindowResizeCallback(windowedWidth, windowedHeight), UpdateRenderArea();
+    
     return success;
 }
 
-void UpdateRenderArea()
-{
-    glViewport(0, 0, PlatformCtx.PlatformCtx.WindowHeight, PlatformCtx.WindowHeight);
-}
+
+#endif // defined _WIN32

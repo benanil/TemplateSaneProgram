@@ -1,4 +1,11 @@
 
+// #if defined(__ANDROID__) 
+//     #include "PlatformAndroid.cpp"
+// 
+// #else
+//     #include "PlatformAndroid.cpp"
+// #endif
+
 #include <stdio.h>
 #include "ASTL/Math/Matrix.hpp"
 
