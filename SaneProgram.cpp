@@ -1,7 +1,6 @@
 
 // #if defined(__ANDROID__) 
 //     #include "PlatformAndroid.cpp"
-// 
 // #else
 //     #include "PlatformAndroid.cpp"
 // #endif
@@ -17,8 +16,8 @@ const Vector2i windowStartSize{1920, 1080};
 
 ParsedGLTF gltf;
 Shader     shader;
-Mesh       mesh;
-Texture    texture;
+Mesh*      meshes{};
+Texture*   textures{};
 Texture    forestTexture;
 Camera     camera;
 Vector3f   meshPosition{};
@@ -39,6 +38,7 @@ void AXInit()
     SetWindowName("Duck Window");
     SetWindowSize(windowStartSize.x, windowStartSize.y);
     SetWindowPosition(0, 0);
+    SetVSync(true);
 }
 
 void WindowResizeCallback(int width, int height)
@@ -49,7 +49,7 @@ void WindowResizeCallback(int width, int height)
 // return 1 if success
 int AXStart()
 {
-    gltf = ParseGLTF("Meshes/Duck.gltf");
+    gltf = ParseGLTF("Meshes/GroveStreet.gltf");
     ASSERT(gltf.error == GLTFError_NONE);
     if (gltf.error != GLTFError_NONE) return 0;
     
@@ -57,8 +57,25 @@ int AXStart()
     forestTexture    = LoadTexture("Textures/forest.jpg", false);
     fullScreenShader = CreateFullScreenShader(fragmentShaderSource);
     shader           = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
-    mesh             = CreateMeshFromGLTF(&gltf.meshes[0].primitives[0]);
-    texture          = LoadTexture(gltf.images[0].path, true);
+    
+    int numMeshes = 0;
+    for (int i = 0, n = 0; i < gltf.numMeshes; i++)
+    {
+        numMeshes += gltf.meshes[i].numPrimitives;
+    }
+    meshes = new Mesh[numMeshes]{};
+
+    for (int i = 0, n = 0; i < gltf.numMeshes; i++)
+    {
+        for (int j = 0; j < gltf.meshes[i].numPrimitives; ++j, ++n)
+        {
+            meshes[n] = CreateMeshFromGLTF(&gltf.meshes[i].primitives[j]);
+        }
+    }
+
+    textures = new Texture[gltf.numImages]{};
+    for (int i = 0, n = 0; i < gltf.numImages; i++)
+        textures[i] = LoadTexture(gltf.images[i].path, true);
     
     camera.Init(windowStartSize);
     return 1;
@@ -73,25 +90,37 @@ void AXLoop()
     SetDepthTest(true);
 
     BindShader(shader);
-    if (GetMousePressed(MouseButton_Left))  meshPosition.x += 2.0f;
-    if (GetMousePressed(MouseButton_Right)) meshPosition.x -= 2.0f;
 
     camera.Update();
-    Matrix4 model = Matrix4::CreateScale(0.05f, 0.05f, 0.05f) * Matrix4::FromPosition(meshPosition);
-    Matrix4 mvp = model * camera.view * camera.projection;
-
-    SetModelViewProjection(mvp.GetPtr());
-    SetModelMatrix(model.GetPtr());
-
-    SetTexture(texture, 0);
-    RenderMesh(mesh);
+    for (int i = 0; i < gltf.numNodes; i++) 
+    {
+        GLTFNode node = gltf.nodes[i];
+        // if node is not mesh skip
+        if (node.type != 0) continue;
+    
+        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+        Matrix4 mvp = model * camera.view * camera.projection;
+        
+        SetModelViewProjection(mvp.GetPtr());
+        SetModelMatrix(model.GetPtr());
+    
+        GLTFMesh mesh = gltf.meshes[node.index];
+        for (int j = 0; j < mesh.numPrimitives; ++j)
+        {
+            GLTFMaterial material = gltf.materials[mesh.primitives[j].material];
+            SetTexture(textures[material.textures[0].index], 0);
+            RenderMesh(meshes[node.index]);
+        }
+    }
 }
 
 void AXExit()
 {
     DeleteShader(shader);
-    DeleteMesh(mesh);
-    DeleteTexture(texture);
+    for (int i = 0; i < gltf.numMeshes; i++) DeleteMesh(meshes[i]);
+    for (int i = 0; i < gltf.numImages; i++) DeleteTexture(textures[i]);
+    delete[] meshes;
+    delete[] textures;
     FreeGLTF(gltf);
     DeleteShader(fullScreenShader);
     DestroyRenderer();

@@ -14,7 +14,7 @@ set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     SaneProgram.cpp
     Renderer.cpp
-    Window.cpp
+		PlatformWindows.cpp
 )
 
 include_directories(${CMAKE_SOURCE_DIR})

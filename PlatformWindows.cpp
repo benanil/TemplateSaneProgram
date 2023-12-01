@@ -13,6 +13,7 @@
 #include <Windows.h>
 
 #include "ASTL/Common.hpp"
+#include "ASTL/Algorithms.hpp"
 #include "Platform.hpp"
 #include "External/glad.hpp"
 
@@ -464,6 +465,10 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         QueryPerformanceCounter(&currentTime);
         PlatformCtx.DeltaTime = (double)(currentTime.QuadPart - prevTime.QuadPart) / frequency.QuadPart;
         prevTime = currentTime;
+        
+        // char fps[9]{};
+        // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
+        // SetWindowName(fps);
 
         // Do OpenGL rendering here
         AXLoop();
