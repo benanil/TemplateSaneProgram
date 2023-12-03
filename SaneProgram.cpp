@@ -14,7 +14,7 @@
 
 const Vector2i windowStartSize{1920, 1080};
 
-ParsedGLTF gltf;
+ParsedScene scene;
 Shader     shader;
 Mesh*      meshes{};
 Texture*   textures{};
@@ -49,9 +49,13 @@ void WindowResizeCallback(int width, int height)
 // return 1 if success
 int AXStart()
 {
-    gltf = ParseGLTF("Meshes/GroveStreet.gltf");
-    ASSERT(gltf.error == GLTFError_NONE);
-    if (gltf.error != GLTFError_NONE) return 0;
+    ParseGLTF("Meshes/GroveStreet/GroveStreet.gltf", &scene);
+    
+    if (scene.error != AError_NONE)
+    {
+        AX_ERROR("%s", ParsedSceneGetError(scene.error));
+        return 0;
+    }
     
     InitRenderer();
     forestTexture    = LoadTexture("Textures/forest.jpg", false);
@@ -59,23 +63,23 @@ int AXStart()
     shader           = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
     
     int numMeshes = 0;
-    for (int i = 0, n = 0; i < gltf.numMeshes; i++)
+    for (int i = 0, n = 0; i < scene.numMeshes; i++)
     {
-        numMeshes += gltf.meshes[i].numPrimitives;
+        numMeshes += scene.meshes[i].numPrimitives;
     }
     meshes = new Mesh[numMeshes]{};
 
-    for (int i = 0, n = 0; i < gltf.numMeshes; i++)
+    for (int i = 0, n = 0; i < scene.numMeshes; i++)
     {
-        for (int j = 0; j < gltf.meshes[i].numPrimitives; ++j, ++n)
+        for (int j = 0; j < scene.meshes[i].numPrimitives; ++j, ++n)
         {
-            meshes[n] = CreateMeshFromGLTF(&gltf.meshes[i].primitives[j]);
+            meshes[n] = CreateMeshFromPrimitive(&scene.meshes[i].primitives[j]);
         }
     }
 
-    textures = new Texture[gltf.numImages]{};
-    for (int i = 0, n = 0; i < gltf.numImages; i++)
-        textures[i] = LoadTexture(gltf.images[i].path, true);
+    textures = new Texture[scene.numImages]{};
+    for (int i = 0, n = 0; i < scene.numImages; i++)
+        textures[i] = LoadTexture(scene.images[i].path, true);
     
     camera.Init(windowStartSize);
     return 1;
@@ -92,9 +96,9 @@ void AXLoop()
     BindShader(shader);
 
     camera.Update();
-    for (int i = 0; i < gltf.numNodes; i++) 
+    for (int i = 0; i < scene.numNodes; i++) 
     {
-        GLTFNode node = gltf.nodes[i];
+        ANode node = scene.nodes[i];
         // if node is not mesh skip
         if (node.type != 0) continue;
     
@@ -104,10 +108,10 @@ void AXLoop()
         SetModelViewProjection(mvp.GetPtr());
         SetModelMatrix(model.GetPtr());
     
-        GLTFMesh mesh = gltf.meshes[node.index];
+        AMesh mesh = scene.meshes[node.index];
         for (int j = 0; j < mesh.numPrimitives; ++j)
         {
-            GLTFMaterial material = gltf.materials[mesh.primitives[j].material];
+            AMaterial material = scene.materials[mesh.primitives[j].material];
             SetTexture(textures[material.textures[0].index], 0);
             RenderMesh(meshes[node.index]);
         }
@@ -117,33 +121,11 @@ void AXLoop()
 void AXExit()
 {
     DeleteShader(shader);
-    for (int i = 0; i < gltf.numMeshes; i++) DeleteMesh(meshes[i]);
-    for (int i = 0; i < gltf.numImages; i++) DeleteTexture(textures[i]);
+    for (int i = 0; i < scene.numMeshes; i++) DeleteMesh(meshes[i]);
+    for (int i = 0; i < scene.numImages; i++) DeleteTexture(textures[i]);
     delete[] meshes;
     delete[] textures;
-    FreeGLTF(gltf);
+    FreeParsedScene(&scene);
     DeleteShader(fullScreenShader);
     DestroyRenderer();
 }
-
-// in update before RenderFunction
-// for (int i = 0; i < gltf.numNodes; i++) 
-// {
-//     GLTFNode node = gltf.nodes[i];
-//     // in this scene first mesh is shitty so pass that
-//     if (node.type != 0) continue;
-// 
-//     model = Matrix4::CreateScale(1.0f, 1.0f, 1.0f) * Matrix4::FromQuaternion(node.rotation) * Matrix4::FromPosition(node.translation);
-//     mvp = model * view * projection;
-//     
-//     SetModelViewProjection(&mvp.m[0][0]);
-//     SetModelMatrix(&model.m[0][0]);
-// 
-//     GLTFMesh mesh = gltf.meshes[node.index];
-//     for (int j = 0; j < mesh.numPrimitives; ++j)
-//     {
-//         GLTFMaterial material = gltf.materials[mesh.primitives[j].material];
-//         SetTexture(textures[0], 0); //SetTexture(textures[material.textures[0].index], 0);
-//         RenderMesh(meshes[node.index]);
-//     }
-// }

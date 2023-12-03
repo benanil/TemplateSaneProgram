@@ -177,7 +177,7 @@
     ],
     "images": [
         {
-            "uri": "Textures/DuckCM.png"
+            "uri": "Meshes/Duck/DuckCM.png"
         }
     ],
     "samplers": [

@@ -208,7 +208,7 @@
   ],
   "images": [
     {
-      "uri": "Textures/color_baseColor.png"
+      "uri": "Meshes/GroveStreet/color_baseColor.png"
     }
   ],
   "materials": [

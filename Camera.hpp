@@ -11,7 +11,7 @@ struct Camera
 	Matrix4 inverseView;
 
 	float verticalFOV = 65.0f;
-	float nearClip = 0.01f;
+	float nearClip = 0.1f;
 	float farClip = 500.0f;
 	
 	Vector2i viewportSize, monitorSize;

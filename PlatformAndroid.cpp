@@ -49,6 +49,11 @@ void SetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseM
 void GetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowWidth}
 void GetMonitorSize(int* width, int* height) { *x = PlatformCtx.WindowHeight; *y = PlatformCtx.WindowHeight}
 
+void FatalError(const char* format, ...)
+{
+    // todo: not implemented android FatalError(const char* format, ...)
+}
+
 android_app* g_android_app = nullptr;
 
 extern void AXInit();

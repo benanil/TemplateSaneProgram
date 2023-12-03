@@ -8,6 +8,14 @@
 
 #pragma once
 
+#if !(defined(__GNUC__) || defined(__GNUG__))
+#define AX_ERROR(format, ...)	FatalError("%s -line:%i " format, __FILE__, __LINE__, __VA_ARGS__)
+#else                                                                
+#define AX_ERROR(format, ...)	FatalError("%s -line:%i " format, __FILE__, __LINE__,##__VA_ARGS__)
+#endif
+
+void FatalError(const char* format, ...);
+
 ////////                Window               ////////
 
 #ifndef __ANDROID__

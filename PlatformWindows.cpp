@@ -124,9 +124,18 @@ wglChoosePixelFormatARB_type* wglChoosePixelFormatARB = nullptr;
 
 BOOL(WINAPI* wglSwapIntervalEXT)(int) = nullptr;
 
-static void FatalError(const char* msg)
+#include <stdio.h>
+
+void FatalError(const char* format, ...)
 {
-    MessageBoxA(NULL, msg, "Error", MB_OK | MB_ICONEXCLAMATION);
+    char buffer[1024]; // Adjust the size according to your needs
+    // Format the error message
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    // Display the message box
+    MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
 }
 
 static void InitOpenGLExtensions(void)
@@ -140,7 +149,7 @@ static void InitOpenGLExtensions(void)
     window_class.lpszClassName = "Dummy_WGL_StagingWindow";
     
     if (!RegisterClass(&window_class)) 
-    FatalError("Failed to register dummy OpenGL window.");
+        FatalError("Failed to register dummy OpenGL window.");
     
     HWND dummy_window = CreateWindowExA(0, window_class.lpszClassName, "ASTL Window",
                                         0, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0,

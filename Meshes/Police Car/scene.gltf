@@ -128,13 +128,13 @@
   ],
   "images": [
     {
-      "uri": "Meshes/low_poly_car/textures/diff_car_low_diffuse.png"
-    },
-    {
-      "uri": "Meshes/low_poly_car/textures/diff_car_low_specularGlossiness.png"
-    },
-    {
-      "uri": "Meshes/low_poly_car/textures/diff_car_low_normal.png"
+      "uri": "textures/diff_car_low_diffuse.png"
+    },        
+    {         
+      "uri": "textures/diff_car_low_specularGlossiness.png"
+    },        
+    {         
+      "uri": "textures/diff_car_low_normal.png"
     }
   ],
   "materials": [
