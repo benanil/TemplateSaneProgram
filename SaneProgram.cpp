@@ -103,28 +103,6 @@ void AXLoop()
 
     SetTexture(textures[0], 0);
     RenderMesh(meshes[0]);
-
-    // camera.Update();
-    // for (int i = 0; i < scene.numNodes; i++) 
-    // {
-    //     ANode node = scene.nodes[i];
-    //     // if node is not mesh skip
-    //     if (node.type != 0) continue;
-    // 
-    //     Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-    //     Matrix4 mvp = model * camera.view * camera.projection;
-    //     
-    //     SetModelViewProjection(mvp.GetPtr());
-    //     SetModelMatrix(model.GetPtr());
-    // 
-    //     AMesh mesh = scene.meshes[node.index];
-    //     for (int j = 0; j < mesh.numPrimitives; ++j)
-    //     {
-    //         AMaterial material = scene.materials[mesh.primitives[j].material];
-    //         SetTexture(textures[material.textures[0].index], 0);
-    //         RenderMesh(meshes[node.index]);
-    //     }
-    // }
 }
 
 void AXExit()
@@ -138,3 +116,25 @@ void AXExit()
     DeleteShader(fullScreenShader);
     DestroyRenderer();
 }
+
+// camera.Update();
+// for (int i = 0; i < scene.numNodes; i++) 
+// {
+//     ANode node = scene.nodes[i];
+//     // if node is not mesh skip
+//     if (node.type != 0) continue;
+// 
+//     Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+//     Matrix4 mvp = model * camera.view * camera.projection;
+//     
+//     SetModelViewProjection(mvp.GetPtr());
+//     SetModelMatrix(model.GetPtr());
+// 
+//     AMesh mesh = scene.meshes[node.index];
+//     for (int j = 0; j < mesh.numPrimitives; ++j)
+//     {
+//         AMaterial material = scene.materials[mesh.primitives[j].material];
+//         SetTexture(textures[material.textures[0].index], 0);
+//         RenderMesh(meshes[node.index]);
+//     }
+// }
