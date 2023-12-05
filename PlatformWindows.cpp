@@ -429,6 +429,7 @@ extern void AXLoop();
 extern void AXExit();
 // forom Renderer.cpp
 extern void DestroyRenderer();
+extern void InitRenderer();
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
@@ -442,12 +443,13 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     
     ShowWindow(PlatformCtx.hwnd, show);
     UpdateWindow(PlatformCtx.hwnd);
+    InitRenderer();
     // first thing that we will see is going to be black color instead of white
     // if we clear before starting the engine
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
     SwapBuffers(dc);
-    
+
     if (AXStart() == 0) return 1; // user defined startup failed
+    InitRenderer();
 
     LARGE_INTEGER frequency, prevTime, currentTime;
     QueryPerformanceFrequency(&frequency);

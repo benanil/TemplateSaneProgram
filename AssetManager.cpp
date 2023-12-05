@@ -3,7 +3,7 @@
 *    Purpose:                                              *
 *        Manages                                           *                                     
 *    Author:                                               *
-*        anielcangulkaya7@gmail.com github @benanil        *
+*        anilcangulkaya7@gmail.com github @benanil        *
 ***********************************************************/
 
 #include "ASTL/Additional/GLTFParser.hpp"
@@ -16,14 +16,15 @@ ParsedScene* LoadSceneExternal(const char* path)
     AX_NO_UNROLL while (path[size]) size++;
 
     const char* extension = path + (size - 4);
-    
+    ParsedScene* result = new ParsedScene();
+
     if (!(extension[0] ^ 'g' | extension[1] ^ 'l' | extension[2] ^ 't' | extension[3] ^ 'f'))
     {
-        return ParseGLTF(path);
+        ParseGLTF(path, result);
     }
     else if (!(extension[1] ^ 'o' | extension[2] ^ 'b' | extension[3] ^ 'j'))
     {
-        return ParseOBJ(path);
+        // ParseOBJ(path, result);
     }
     else if (!(extension[1] ^ 'f' | extension[2] ^ 'b' | extension[3] ^ 'x'))
     {

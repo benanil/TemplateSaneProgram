@@ -3,6 +3,12 @@
 
 #include "ASTL/Additional/GLTFParser.hpp"
 
+#ifdef __ANDROID__  
+#define AX_SHADER_VERSION_PRECISION() "#version 300 es\n" "precision mediump float;\n" "precision mediump sampler2D;\n"
+#else
+#define AX_SHADER_VERSION_PRECISION() "#version 330\n"
+#endif
+
 struct Shader
 {
     unsigned int handle;
@@ -97,6 +103,7 @@ void SetDepthTest(bool val);
 
 void ToggleDepthWrite(bool val);
 
+// Warning! Order is important
 enum TextureType_
 {
     TextureType_R8	         = 0,
@@ -106,12 +113,14 @@ enum TextureType_
     TextureType_R8UI	     = 4,
     TextureType_R16UI	     = 5,
     TextureType_R32UI	     = 6,
+
     TextureType_RG8	         = 7,
     TextureType_RG8_SNORM	 = 8,
     TextureType_RG16F	     = 9,
     TextureType_RG32F	     = 10,
     TextureType_RG16UI	     = 11,
     TextureType_RG32UI	     = 12,
+    
     TextureType_RGB8	     = 13,
     TextureType_SRGB8	     = 14,
     TextureType_RGB8_SNORM	 = 15,
@@ -122,6 +131,7 @@ enum TextureType_
     TextureType_RGB8UI	     = 20,
     TextureType_RGB16UI	     = 21,
     TextureType_RGB32UI	     = 22,
+    
     TextureType_RGBA8	     = 23,
     TextureType_SRGB8_ALPHA8 = 24,
     TextureType_RGBA8_SNORM	 = 25,

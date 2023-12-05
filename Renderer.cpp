@@ -6,11 +6,13 @@
 *        Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
-#if defined(_WIN32)
-
 #ifdef __ANDROID__
     #include <game-activity/native_app_glue/android_native_app_glue.h>
     #include <GLES3/gl32.h>
+
+    #define CHECK_GL_ERROR() if (GLenum error = glGetError()) {\
+                            __android_log_print(ANDROID_LOG_FATAL, "AX-GL_ERROR", "%s -line:%i message: %s", \
+                                __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0);}
     #define STBI_NO_STDIO
     #define STBI_NEON
 #else
@@ -18,6 +20,7 @@
     #include "External/glad.hpp"
 
     #define AX_LOG(...) printf(__VA_ARGS__)
+#define CHECK_GL_ERROR() if (GLenum error = glGetError()) { FatalError("%s -line:%i message: %s" , __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0); }
 #endif
 
 #include "ASTL/Common.hpp"
@@ -57,8 +60,8 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RGB8           , GL_RGB,             GL_UNSIGNED_BYTE	             }, //  TextureType_RGB8	     = 13,
     {   GL_SRGB8          , GL_RGB,             GL_UNSIGNED_BYTE	             }, //  TextureType_SRGB8	     = 14,
     {   GL_RGB8_SNORM     , GL_RGB,             GL_BYTE                          }, //  TextureType_RGB8_SNORM	 = 15,
-    {   GL_R11F_G11F_B10F , GL_RGB,             GL_UNSIGNED_INT_10F_11F_11F_REV  }, //  TextureType_R11F_G11F_B1 = 16,
-    {   GL_RGB9_E5        , GL_RGB,             GL_UNSIGNED_INT_5_9_9_9_REV      }, //  TextureType_RGB9_E5	     = 17,
+    {   GL_R11F_G11F_B10F , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_R11F_G11F_B1 = 16,
+    {   GL_RGB9_E5        , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_RGB9_E5	     = 17,
     {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_RGB16F	     = 18,
     {   GL_RGB32F         , GL_RGB,             GL_FLOAT	                     }, //  TextureType_RGB32F	     = 19,
     {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, //  TextureType_RGB8UI	     = 20,
@@ -77,21 +80,18 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }  //  TextureType_RGBA32UI	 = 34,
 };
 
-static uint32  emptyVao = 0;
-
-bool CheckAndLogGlError() 
+const char* GetGLErrorString(GLenum error) 
 {
-    GLenum error = glGetError();
     switch (error) {
-    case GL_NO_ERROR: break;
-    case GL_INVALID_ENUM:                  AX_ERROR("GL Error: GL_INVALID_ENUM\n"); break;
-    case GL_INVALID_VALUE:                 AX_ERROR("GL Error: GL_INVALID_VALUE\n"); break;
-    case GL_INVALID_OPERATION:             AX_ERROR("GL Error: GL_INVALID_OPERATION\n"); break;
-    case GL_INVALID_FRAMEBUFFER_OPERATION: AX_ERROR("GL Error: GL_INVALID_FRAMEBUFFER_OPERATION\n"); break;
-    case GL_OUT_OF_MEMORY:                 AX_ERROR("GL Error: GL_OUT_OF_MEMORY\n"); break;
-    default: AX_ERROR("Unknown GL error: %d\n", error); break;
+        case GL_NO_ERROR: break;
+        case GL_INVALID_ENUM:                  return "GL_INVALID_ENUM\n";
+        case GL_INVALID_VALUE:                 return "GL_INVALID_VALUE\n";
+        case GL_INVALID_OPERATION:             return "GL_INVALID_OPERATION\n";
+        case GL_INVALID_FRAMEBUFFER_OPERATION: return "GL_INVALID_FRAMEBUFFER_OPERATION\n";
+        case GL_OUT_OF_MEMORY:                 return "GL_OUT_OF_MEMORY\n";
+        default: AX_ERROR("Unknown GL error: %d\n", error); break;
     }
-    return true;
+    return "UNKNOWN_GL_ERROR";
 }
 
 // for now only .jpg files supported
@@ -113,7 +113,7 @@ Texture CreateTexture(int width, int height, void* data, bool mipmap, TextureTyp
     if (mipmap)
         glGenerateMipmap(GL_TEXTURE_2D);
     
-    CheckAndLogGlError();
+    CHECK_GL_ERROR();
     return texture;
 }
 
@@ -126,20 +126,23 @@ Texture LoadTexture(const char* path, bool mipmap)
     off_t size = AAsset_getLength(asset);
     unsigned char* buffer = (unsigned char*)malloc(size);
     AAsset_read(asset, buffer, size);
-    image = stbi_load_from_memory(buffer, size, &width, &height, &channels, 3);
-    ASSERT(image);
-    stbi_image_free(image);
+    image = stbi_load_from_memory(buffer, size, &width, &height, &channels, 0);
     free(buffer);
     AAsset_close(asset);
-    return texture;
 #else
     image = stbi_load(path, &width, &height, &channels, 0);
-    if (image == nullptr) AX_ERROR("image is not exist! %s", path);
-    
+#endif
+    if (image == nullptr)
+    {
+        AX_ERROR("image is not exist! %s", path);
+        // todo: create default image.
+        // todo: return default image instead.
+        return {};
+    }
     const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
     Texture texture = CreateTexture(width, height, image, mipmap, numCompToFormat[channels]);
+    // stbi_image_free(image);
     return texture;
-#endif
 }
 
 inline GLenum ToGLType(GraphicType type)
@@ -163,7 +166,7 @@ inline unsigned int GLTFWrapToOGLWrap(int wrap) {
     ASSERT(wrap < 5 && "wrong or undefined sampler type!"); 
     return values[wrap];
 }
-
+void* indexData=nullptr;
 Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
 {
     Mesh mesh;
@@ -172,9 +175,12 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
     glBindBuffer(GL_ARRAY_BUFFER, mesh.vertexHandle);
     glBufferData(GL_ARRAY_BUFFER, (uint64)layoutDesc->stride * numVertex, vertexBuffer, GL_STATIC_DRAW);
+    CHECK_GL_ERROR();
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GLTypeToSize(indexType), indexBuffer, GL_STATIC_DRAW);
+    CHECK_GL_ERROR();
+    
     mesh.numIndex = numIndex; 
     mesh.numVertex = numVertex; 
     mesh.indexType = GL_BYTE + indexType;
@@ -183,7 +189,7 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
     glGenVertexArrays(1, &mesh.vertexLayoutHandle);
     glBindVertexArray(mesh.vertexLayoutHandle);
-    
+    indexData = indexBuffer;
     char* offset = 0;
     for (int i = 0; i < layoutDesc->numLayout; ++i)
     {
@@ -194,7 +200,7 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
         glEnableVertexAttribArray(i);
         offset += layout.numComp * GLTypeToSize(layout.type);
     }
-
+    CHECK_GL_ERROR();
     return mesh;
 }
 
@@ -276,27 +282,28 @@ Shader LoadShader(const char* vertexSource, const char* fragmentSource)
 
 Shader CreateFullScreenShader(const char* fragmentSource)
 {
-    const GLchar* vertexShaderSource = 
-   "#version 150 core\n\
-    out vec2 texCoord;\
-    void main(){\
-    	float x = -1.0 + float((gl_VertexID & 1) << 2);\
-    	float y = -1.0 + float((gl_VertexID & 2) << 1);\
-    	texCoord.x = (x + 1.0) * 0.5;\
-    	texCoord.y = (y + 1.0) * 0.5;\
-    	texCoord.y = 1.0 - texCoord.y;\
-        gl_Position = vec4(x, y, 0, 1);\
+    const GLchar* vertexShaderSource =
+    AX_SHADER_VERSION_PRECISION()
+    "out vec2 texCoord;\n\
+    void main(){\n\
+    	float x = -1.0 + float((gl_VertexID & 1) << 2);\n\
+    	float y = -1.0 + float((gl_VertexID & 2) << 1);\n\
+    	texCoord.x = (x + 1.0) * 0.5;\n\
+    	texCoord.y = (y + 1.0) * 0.5;\n\
+    	texCoord.y = 1.0 - texCoord.y;\n\
+        gl_Position = vec4(x, y, 0, 1);\n\
     }";
     return LoadShader(vertexShaderSource, fragmentSource);
 }
 
 Shader ImportShader(const char* vertexPath, const char* fragmentPath)
 {
-    char* vertexText = ReadAllFile(vertexPath);
-    char* fragmentText = ReadAllFile(fragmentPath);
+    char* vertexText   = ReadAllFile(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    char* fragmentText = ReadAllFile(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    
     Shader shader = LoadShader(vertexText, fragmentText);
-    free(vertexText);
-    free(fragmentText);
+    FreeAllText(vertexText);
+    FreeAllText(fragmentText);
     return shader;
 }
 
@@ -312,9 +319,10 @@ void DeleteMesh(Mesh mesh)
 
 void GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
                             GLsizei length, const GLchar* msg, const void* data) {
-    AX_LOG("OpenGL error: %s", msg);
+    AX_ERROR("OpenGL error: %s", msg);
     AX_LOG("\n");
 }
+static GLuint emptyVao;
 
 void InitRenderer()
 {
@@ -322,8 +330,8 @@ void InitRenderer()
     glFrontFace(GL_CCW);
     // create empty vao unfortunately this step is necessary for ogl 3.2
     glGenVertexArrays(1, &emptyVao);
-    // setup any other gl related global states
-    glClearColor(0.2f, 0.8f, 0.25f, 1.0f);
+
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
 }
 
 void SetDepthTest(bool val)
@@ -347,8 +355,9 @@ void RenderFullScreen(Shader fullScreenShader, unsigned int texture)
     glBindVertexArray(emptyVao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(currentShader, "tex"), 0);
+    glUniform1i(glGetUniformLocation(fullScreenShader.handle, "tex"), 0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
+    CHECK_GL_ERROR();
 }
 
 void BindShader(Shader shader)
@@ -389,10 +398,8 @@ void RenderMesh(Mesh mesh)
     glUniformMatrix4fv(mvpLoc  , 1, false, &modelViewProjection.m[0][0]);
     glUniformMatrix4fv(modelLoc, 1, false, &modelMatrix.m[0][0]);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.vertexHandle);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
-    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
+    // glBindBuffer(GL_VERTEX_ARRAY, mesh.vertexHandle);
+    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
+    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, indexData);
+    CHECK_GL_ERROR();
 }
-
-
-#endif // defined(_WIN32)

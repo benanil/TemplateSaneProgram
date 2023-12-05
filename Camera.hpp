@@ -40,13 +40,13 @@ struct Camera
 	{
 		projWidth = width; projHeight = height;
 		projection = Matrix4::PerspectiveFovRH(verticalFOV * DegToRad, (float)width, (float)height, nearClip, farClip);
-		inverseProjection = Matrix4::Inverse(projection);	
+		// inverseProjection = Matrix4::Inverse(projection);	
 	}
 
 	void RecalculateView()
 	{
 		view = Matrix4::LookAtRH(position, Front, Vector3f::Up());
-		inverseView = Matrix4::Inverse(view);
+		// inverseView = Matrix4::Inverse(view);
 	}
 
 	void SetCursorPos(int x, int y) 
@@ -117,7 +117,7 @@ struct Camera
 		Vector3f rayDir = Vector3f::Normalize(target.xyz());
 		return MakeRay(position, rayDir);
 	}
-
+#ifdef AX_SUPPORT_SSE
 	RaySSE ScreenPointToRaySSE(Vector2f pos) const
 	{
 		Vector2f coord = MakeVec2(pos.x / (float)viewportSize.x, pos.y / (float)viewportSize.y);
@@ -133,4 +133,5 @@ struct Camera
 		ray.direction = _mm_insert_ps(ray.direction, _mm_setzero_ps(), 3);
 		return ray;
 	}
+#endif
 };

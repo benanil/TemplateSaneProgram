@@ -1,4 +1,3 @@
-#version 330
 
 in  vec3 vnorm;
 in  vec2 vtexCoord;

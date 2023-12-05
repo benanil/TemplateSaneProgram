@@ -8,13 +8,23 @@
 
 #pragma once
 
-#if !(defined(__GNUC__) || defined(__GNUG__))
-#define AX_ERROR(format, ...)	FatalError("%s -line:%i " format, __FILE__, __LINE__, __VA_ARGS__)
-#else                                                                
-#define AX_ERROR(format, ...)	FatalError("%s -line:%i " format, __FILE__, __LINE__,##__VA_ARGS__)
-#endif
+#ifdef __ANDROID__
+    #include <android/log.h>
+    #define AX_ERROR(format, ...) { __android_log_print(ANDROID_LOG_FATAL, "AX-FATAL", "%s -line:%i " format, __FILE__, __LINE__, ##__VA_ARGS__); ASSERT(0);}
+    #define AX_LOG(format, ...)    __android_log_print(ANDROID_LOG_INFO, "AX-INFO", "%s -line:%i " format, __FILE__, __LINE__, ##__VA_ARGS__)
+    #define AX_WARN(format, ...)   __android_log_print(ANDROID_LOG_WARN, "AX-WARN", "%s -line:%i " format, __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+    void FatalError(const char* format, ...); // defined in PlatformBla.cpp
 
-void FatalError(const char* format, ...);
+    #define AX_LOG(format, ...)  
+    #define AX_WARN(format, ...) 
+
+    #if !(defined(__GNUC__) || defined(__GNUG__))
+    #   define AX_ERROR(format, ...) FatalError("%s -line:%i " format, __FILE__, __LINE__, __VA_ARGS__)
+    #else                                                             
+    #   define AX_ERROR(format, ...) FatalError("%s -line:%i " format, __FILE__, __LINE__,##__VA_ARGS__)
+    #endif
+#endif
 
 ////////                Window               ////////
 
@@ -81,8 +91,6 @@ void SetMouseWindowPos(float x, float y);
 
 double GetDeltaTime();
 double TimeSinceStartup();
-
-extern struct android_app* g_android_app;
 
 /*
 * VK_0 - VK_9 are the same as ASCII '0' - '9' (0x30 - 0x39)
@@ -160,7 +168,7 @@ enum KeyboardKey_
 typedef int KeyboardKey;
 
 // These functions are not used in android code, we are inlining here
-// this waycompiler will not use this functions
+// this way compiler will not use this functions
 #ifdef __ANDROID__
 inline void SetWindowSize(int width, int height) {}
 inline void SetWindowPosition(int x, int y) {}
@@ -168,13 +176,9 @@ inline void SetWindowMoveCallback(void(*callback)(int, int)) {}
 inline void SetWindowName(const char* name) {}
 inline void GetWindowPos(int* x, int* y) {}
 
-// Sets Window as Full Screen, with given resolution, this might improve performance but pixel density drops down
-// You can set the resolution using GetMonitorSize or following resolutions: 
-// 2560x1440, 1920x1080, 1280×720 etc.
-inline bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight) {}
+inline bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight) { return false; }
 
-// Go back to full screen Mode
-inline bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) {}
+inline bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) { return false; }
 
 inline void SetVSync(bool active) {}
 

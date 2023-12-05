@@ -20,18 +20,19 @@ Mesh*      meshes{};
 Texture*   textures{};
 Texture    forestTexture;
 Camera     camera;
-Vector3f   meshPosition{};
 
-const char* fragmentShaderSource = R"(
-    #version 150 core
-    out vec4 color;
+const char* fragmentShaderSource =
+AX_SHADER_VERSION_PRECISION()
+R"(
     in vec2 texCoord;
+    out vec4 color;
     uniform sampler2D tex;
     void main() {
         color = texture(tex, texCoord);
     }
 )";
 static Shader fullScreenShader{0};
+
 
 void AXInit()
 {
@@ -49,7 +50,7 @@ void WindowResizeCallback(int width, int height)
 // return 1 if success
 int AXStart()
 {
-    ParseGLTF("Meshes/GroveStreet/GroveStreet.gltf", &scene);
+    ParseGLTF("Meshes/Duck/Duck.gltf", &scene);
     
     if (scene.error != AError_NONE)
     {
@@ -57,13 +58,12 @@ int AXStart()
         return 0;
     }
     
-    InitRenderer();
     forestTexture    = LoadTexture("Textures/forest.jpg", false);
     fullScreenShader = CreateFullScreenShader(fragmentShaderSource);
     shader           = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
     
     int numMeshes = 0;
-    for (int i = 0, n = 0; i < scene.numMeshes; i++)
+    for (int i = 0; i < scene.numMeshes; i++)
     {
         numMeshes += scene.meshes[i].numPrimitives;
     }
@@ -78,7 +78,7 @@ int AXStart()
     }
 
     textures = new Texture[scene.numImages]{};
-    for (int i = 0, n = 0; i < scene.numImages; i++)
+    for (int i = 0; i < scene.numImages; i++)
         textures[i] = LoadTexture(scene.images[i].path, true);
     
     camera.Init(windowStartSize);
@@ -93,29 +93,38 @@ void AXLoop()
     RenderFullScreen(fullScreenShader, forestTexture.handle);
     SetDepthTest(true);
 
-    BindShader(shader);
-
     camera.Update();
-    for (int i = 0; i < scene.numNodes; i++) 
-    {
-        ANode node = scene.nodes[i];
-        // if node is not mesh skip
-        if (node.type != 0) continue;
-    
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        Matrix4 mvp = model * camera.view * camera.projection;
-        
-        SetModelViewProjection(mvp.GetPtr());
-        SetModelMatrix(model.GetPtr());
-    
-        AMesh mesh = scene.meshes[node.index];
-        for (int j = 0; j < mesh.numPrimitives; ++j)
-        {
-            AMaterial material = scene.materials[mesh.primitives[j].material];
-            SetTexture(textures[material.textures[0].index], 0);
-            RenderMesh(meshes[node.index]);
-        }
-    }
+    Matrix4 model = Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One() * 0.1f);
+    Matrix4 mvp = model * camera.view * camera.projection;
+
+    BindShader(shader);
+    SetModelViewProjection(mvp.GetPtr());
+    SetModelMatrix(model.GetPtr());
+
+    SetTexture(textures[0], 0);
+    RenderMesh(meshes[0]);
+
+    // camera.Update();
+    // for (int i = 0; i < scene.numNodes; i++) 
+    // {
+    //     ANode node = scene.nodes[i];
+    //     // if node is not mesh skip
+    //     if (node.type != 0) continue;
+    // 
+    //     Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+    //     Matrix4 mvp = model * camera.view * camera.projection;
+    //     
+    //     SetModelViewProjection(mvp.GetPtr());
+    //     SetModelMatrix(model.GetPtr());
+    // 
+    //     AMesh mesh = scene.meshes[node.index];
+    //     for (int j = 0; j < mesh.numPrimitives; ++j)
+    //     {
+    //         AMaterial material = scene.materials[mesh.primitives[j].material];
+    //         SetTexture(textures[material.textures[0].index], 0);
+    //         RenderMesh(meshes[node.index]);
+    //     }
+    // }
 }
 
 void AXExit()

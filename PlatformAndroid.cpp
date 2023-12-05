@@ -16,7 +16,6 @@
 #include <time.h> // gettime
 #include <jni.h>
 #include <game-activity/GameActivity.cpp>
-#include <game-activity/native_app_glue/android_native_app_glue.h>
 #include <game-text-input/gametextinput.cpp>
 
 struct PlatformContextWin
@@ -38,7 +37,7 @@ struct PlatformContextWin
     uint64 StartTime;
     double DeltaTime;
 
-    bool VSyncActive;
+    bool VSyncActive = true;
 } PlatformCtx{};
 
 void SetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
@@ -46,25 +45,73 @@ void SetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.Window
 void SetKeyPressCallback(void(*callback)(wchar_t))          { PlatformCtx.KeyPressCallback     = callback; }
 void SetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseMoveCallback    = callback;}
 
-void GetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowWidth}
-void GetMonitorSize(int* width, int* height) { *x = PlatformCtx.WindowHeight; *y = PlatformCtx.WindowHeight}
+void GetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowWidth; }
+void GetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowHeight; *height = PlatformCtx.WindowHeight; }
 
-void FatalError(const char* format, ...)
+void UpdateRenderArea()
 {
-    // todo: not implemented android FatalError(const char* format, ...)
+    EGLint width, height;
+    eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_WIDTH, &width);
+    eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_HEIGHT, &height);
+    PlatformCtx.WindowWidth  = width;
+    PlatformCtx.WindowHeight = height;
+    glViewport(0, 0, PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
 }
 
-android_app* g_android_app = nullptr;
+/****               Keyboard and Touch                ****/
+bool GetKeyDown(char c)     { return false; }
+bool GetKeyPressed(char c)  { return false; }
+bool GetKeyReleased(char c) { return false; }
+
+bool GetMouseDown(MouseButton button)     { return false; }
+bool GetMouseReleased(MouseButton button) { return false; }
+bool GetMousePressed(MouseButton button)  { return false; }
+
+void GetMousePos(float* x, float* y) { }
+void GetMouseWindowPos(float* x, float* y) { }
+float GetMouseWheelDelta() { return 0.0f; }
+
+/****                     Time                        ****/
+
+constexpr long long NS_PER_SECOND = 1000000000LL;
+
+static uint64 PerformanceCounter()
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec * NS_PER_SECOND  + now.tv_nsec;
+}
+
+double TimeSinceStartup()
+{
+    return (double)(PerformanceCounter() - PlatformCtx.StartTime) / NS_PER_SECOND;
+}
+
+double GetDeltaTime()
+{
+    return PlatformCtx.DeltaTime;
+}
 
 extern void AXInit();
+
 extern int  AXStart();
 extern void AXLoop();
 extern void AXExit();
 
-void UpdateRenderArea();
+
+extern "C" {
+
+#include <game-activity/native_app_glue/android_native_app_glue.c>
+
+android_app* g_android_app = nullptr;
 
 static void InitWindow()
 {
+    // The default display is probably what you want on Android
+    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLint majorVersion = 0, minorVersion = 0;
+    eglInitialize(display, &majorVersion, &minorVersion);
+
     const EGLint attribs[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
                                EGL_SURFACE_TYPE   , EGL_WINDOW_BIT,
                                EGL_BLUE_SIZE      , 8,
@@ -72,11 +119,6 @@ static void InitWindow()
                                EGL_RED_SIZE       , 8,
                                EGL_DEPTH_SIZE     , 24,
                                EGL_NONE };
-
-    // The default display is probably what you want on Android
-    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    eglInitialize(display, nullptr, nullptr);
-
     // figure out how many configs there are
     EGLint numConfigs;
     eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
@@ -114,6 +156,7 @@ static void InitWindow()
 
     // get some window metrics
     EGLBoolean madeCurrent = eglMakeCurrent(display, surface, surface, context);
+    if (madeCurrent == false) AX_ERROR("make current failed!");
 
     PlatformCtx.Display = display;
     PlatformCtx.Surface = surface;
@@ -122,18 +165,36 @@ static void InitWindow()
     UpdateRenderArea();
 }
 
-void handle_cmd(android_app *pApp, int32_t cmd) 
+static void TerminateWindow()
+{
+    eglMakeCurrent(PlatformCtx.Display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroyContext(PlatformCtx.Display, PlatformCtx.Context);
+    eglDestroySurface(PlatformCtx.Display, PlatformCtx.Surface);
+    eglTerminate(PlatformCtx.Display);
+    PlatformCtx.Display = EGL_NO_DISPLAY;
+    PlatformCtx.Surface = EGL_NO_SURFACE;
+    PlatformCtx.Context = EGL_NO_CONTEXT;
+}
+
+void handle_cmd(android_app *pApp, int32_t cmd)
 {
     switch (cmd) {
         case APP_CMD_INIT_WINDOW:
             pApp->userData = (void*)(~0ull);
             g_android_app = pApp;
+            AXInit();
+            InitWindow();
             InitRenderer();
-            break;
+
+            if (AXStart() == 0) return; // user defined startup failed
+        break;
+        case APP_CMD_WINDOW_RESIZED:
+            UpdateRenderArea();
         case APP_CMD_TERM_WINDOW:
             DestroyRenderer();
-            g_android_app = nullptr;
-            break;
+            pApp->userData = 0;
+            g_android_app  = nullptr;
+        break;
         default:
             break;
     }
@@ -147,59 +208,17 @@ bool motion_event_filter_func(const GameActivityMotionEvent *motionEvent)
     return sourceClass == AINPUT_SOURCE_CLASS_POINTER;
 }
 
-/****               Keyboard and Touch                ****/
-bool GetKeyDown(char c)     { return false; }
-bool GetKeyPressed(char c)  { return false; }
-bool GetKeyReleased(char c) { return false; }
-
-bool GetMouseDown(MouseButton button)     { return false; }
-bool GetMouseReleased(MouseButton button) { return false; }
-bool GetMousePressed(MouseButton button)  { return false; }
-
-void GetMousePos(float* x, float* y) { }
-void GetMouseWindowPos(float* x, float* y) { }
-void SetMouseMoveCallback(void(*callback)(float, float)) { }
-float GetMouseWheelDelta() { return 0.0f; }
-
-/****                     Time                        ****/
-
-constexpr long long NS_PER_SECOND = 1000000000LL;
-
-static uint64 PerformanceCounter()
-{
-    struct timespec now;
-    clock_gettime(SDL_MONOTONIC_CLOCK, &now);
-    return now.tv_sec * NS_PER_SECOND  + now.tv_nsec;
-}
-
-double TimeSinceStartup()
-{
-    return (double)(PerformanceCounter() - PlatformCtx.StartTime) / NS_PER_SECOND;
-}
-
-double GetDeltaTime()
-{
-    return PlatformCtx.DeltaTime;
-}
-
-void HandleInput();
-void TerminateWindow();
+static void HandleInput();
 
 /* This the main entry point for a native activity */
-void android_main(struct android_app *pApp)
+void android_main(android_app *pApp)
 {
-    AXInit();
-    InitWindow();
-
-    if (AXStart() == 0) return 1; // user defined startup failed
-    
     // Register an event handler for Android events
     pApp->onAppCmd = handle_cmd;
-
     // Set input event filters (set it to NULL if the app wants to process all inputs).
     // Note that for key inputs, this example uses the default default_key_filter() implemented in android_native_app_glue.c.
     android_app_set_motion_event_filter(pApp, motion_event_filter_func);
-
+    
     // This sets up a typical game/event loop. It will run until the app is destroyed.
     int events;
     android_poll_source *pSource;
@@ -228,28 +247,16 @@ void android_main(struct android_app *pApp)
             prevTime = currentTime;
             AXLoop();
             
-            EGLBoolean swapResult = eglSwapBuffers(PlatformCtx.Display, surface_);
+            EGLBoolean swapResult = eglSwapBuffers(PlatformCtx.Display, PlatformCtx.Surface);
             ASSERT(swapResult);
 
             glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // GL_STENCIL_BUFFER_BIT
         }
     } while (!pApp->destroyRequested);
-    
-    TerminateWindow();
-}
 
-void UpdateRenderArea()
-{
-    EGLint width, height;
-    eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_WIDTH, &width);
-    eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_HEIGHT, &height);
-    if (width != PlatformCtx.WindowWidth|| height != PlatformCtx.WindowHeight)
-    {
-        PlatformCtx.WindowWidth = PlatformCtx.width;
-        PlatformCtx.WindowHeight = PlatformCtx.height;
-    }
-    glViewport(0, 0, PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
+    AXExit();
+    TerminateWindow();
 }
 
 static void HandleInput()
@@ -267,7 +274,6 @@ static void HandleInput()
 
         // Find the pointer index, mask and bitshift to turn it into a readable value.
         int32_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-        AX_LOG("Pointer(s): ");
 
         // get the x and y position of this event if it is not ACTION_MOVE.
         GameActivityPointerAxes& pointer = motionEvent.pointers[pointerIndex];
@@ -335,31 +341,6 @@ static void HandleInput()
     android_app_clear_key_events(inputBuffer);
 }
 
-static void TerminateWindow()
-{
-    eglMakeCurrent(PlatformCtx.Display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    eglDestroyContext(PlatformCtx.Display, PlatformCtx.Context);
-    eglDestroySurface(PlatformCtx.Display, PlatformCtx.Surface);
-    eglTerminate(display_);
-    PlatformCtx.Display = EGL_NO_DISPLAY;
-    PlatformCtx.Surface = EGL_NO_SURFACE;
-    PlatformCtx.Context = EGL_NO_CONTEXT;
-}
-
-void SetWindowSize(int width, int height) { }
-
-void SetWindowPosition(int x, int y) { }
-
-void SetWindowResizeCallback(void(*callback)(int, int)) {}
-
-void SetWindowMoveCallback(void(*callback)(int, int)) {}
-
-void SetMouseMoveCallback(void(*callback)(float, float)) {}
-
-void GetWindowSize(int* x, int* y) { }
-
-void GetWindowPos(int* x, int* y) { }
-
-void SetWindowName(const char* name) { }
+} // extern C end
 
 #endif // ifdef __ANDROID__
