@@ -12,14 +12,12 @@
 #include "Camera.hpp"
 #include "Platform.hpp"
 
-const Vector2i windowStartSize{1920, 1080};
-
 ParsedScene scene;
 Shader     shader;
 Mesh*      meshes{};
 Texture*   textures{};
 Texture    forestTexture;
-Camera     camera;
+Camera     camera{};
 
 const char* fragmentShaderSource =
 AX_SHADER_VERSION_PRECISION()
@@ -37,7 +35,7 @@ static Shader fullScreenShader{0};
 void AXInit()
 {
     SetWindowName("Duck Window");
-    SetWindowSize(windowStartSize.x, windowStartSize.y);
+    // SetWindowSize(windowStartSize.x, windowStartSize.y);
     SetWindowPosition(0, 0);
     SetVSync(true);
 }
@@ -80,7 +78,10 @@ int AXStart()
     textures = new Texture[scene.numImages]{};
     for (int i = 0; i < scene.numImages; i++)
         textures[i] = LoadTexture(scene.images[i].path, true);
-    
+
+    Vector2i windowStartSize;
+    GetMonitorSize(&windowStartSize.x, &windowStartSize.y);
+
     camera.Init(windowStartSize);
     return 1;
 }
@@ -94,7 +95,7 @@ void AXLoop()
     SetDepthTest(true);
 
     camera.Update();
-    Matrix4 model = Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One() * 0.1f);
+    Matrix4 model = Matrix4::Identity() * Matrix4::CreateScale(Vector3f::One() * 0.1f) * Matrix4::FromPosition(Vector3f::Zero());//Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One() * 0.1f);
     Matrix4 mvp = model * camera.view * camera.projection;
 
     BindShader(shader);

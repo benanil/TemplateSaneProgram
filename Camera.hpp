@@ -28,10 +28,16 @@ struct Camera
 
 	void Init(Vector2i xviewPortSize)
 	{
+		verticalFOV = 65.0f;
+		nearClip = 0.1f;
+		farClip = 500.0f;
+		pitch = 0.0f, yaw = -90.0f , senstivity = 20.0f;
+
 		viewportSize = xviewPortSize;
 		position = MakeVec3(0.0f, 0.0f, 15.0f);
 		Front = MakeVec3(0.0f, 0.0f, -1.0f);
 		GetMonitorSize(&monitorSize.x, &monitorSize.y);
+
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
 		RecalculateView();
 	}

@@ -46,8 +46,6 @@ void DeleteShader(Shader shader);
 
 void DeleteMesh(Mesh mesh);
 
-void HandleInput();
-
 void InitRenderer();
 
 void DestroyRenderer();

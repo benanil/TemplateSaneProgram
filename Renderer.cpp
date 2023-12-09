@@ -153,7 +153,7 @@ inline GLenum ToGLType(GraphicType type)
 inline GLenum GLTypeToSize(GraphicType type)
 {
     // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
-    const int TypeToSize[8]{ 1, 1, 2, 2, 4, 4, 4 };
+    const int TypeToSize[8]={ 1, 1, 2, 2, 4, 4, 4 };
     return TypeToSize[type];
 }
 
@@ -166,7 +166,7 @@ inline unsigned int GLTFWrapToOGLWrap(int wrap) {
     ASSERT(wrap < 5 && "wrong or undefined sampler type!"); 
     return values[wrap];
 }
-void* indexData=nullptr;
+
 Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
 {
     Mesh mesh;
@@ -189,7 +189,7 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
     glGenVertexArrays(1, &mesh.vertexLayoutHandle);
     glBindVertexArray(mesh.vertexLayoutHandle);
-    indexData = indexBuffer;
+
     char* offset = 0;
     for (int i = 0; i < layoutDesc->numLayout; ++i)
     {
@@ -206,28 +206,23 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
 Mesh CreateMeshFromPrimitive(APrimitive* primitive)
 {
-    // Position 3, TexCoord 2, Normal 3, Tangent 3, TexCoord2 2
-    static const int attribIndexToNumComp[6] { 3, 2, 3, 3, 2 }; 
-    
     InputLayoutDesc desc;
     InputLayout inputLayout[6]{};
     desc.layout = inputLayout;
     desc.stride = 0;
+
+    // Position 3, TexCoord 2, Normal 3, Tangent 3, TexCoord2 2
+    const int attribIndexToNumComp[6] = { 3, 2, 3, 3, 2 };     
+    int v = 0, attributes = primitive->attributes;
     
-    int i = 0, v = 0, attributes = primitive->attributes;
-    while (attributes)
+    for (int i = 0; attributes > 0; i += NextSetBit(&attributes), v++)
     {
         uint64_t size = sizeof(float) * attribIndexToNumComp[i];
         desc.layout[v].numComp = attribIndexToNumComp[v];
         desc.layout[v].type = GraphicType_Float;
-        
-        attributes &= ~1;
-        int tz = TrailingZeroCount(attributes);
-        attributes >>= tz;
-        i += tz;
-        v++;
         desc.stride += size;
     }
+
     desc.numLayout = v;
     Mesh mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
     return mesh;
@@ -399,7 +394,7 @@ void RenderMesh(Mesh mesh)
     glUniformMatrix4fv(modelLoc, 1, false, &modelMatrix.m[0][0]);
 
     // glBindBuffer(GL_VERTEX_ARRAY, mesh.vertexHandle);
-    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
-    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, indexData);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
+    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
     CHECK_GL_ERROR();
 }
