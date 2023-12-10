@@ -12,6 +12,6 @@ uniform mat4 model;
 void main()
 {
     gl_Position = mvp * vec4(inPosition, 1.0);
-    vnorm       = mat3(transpose(inverse(model))) * normalize(inNormal);
+    vnorm       = inNormal;
     vtexCoord   = inTexCoord; 
 }

@@ -335,7 +335,7 @@ void SetDepthTest(bool val)
     EnableDisable[val](GL_DEPTH_TEST);
 }
 
-void ToggleDepthWrite(bool val) { glDepthMask(val); }
+void SetDepthWrite(bool val) { glDepthMask(val); }
 
 void DestroyRenderer()
 {
@@ -398,3 +398,28 @@ void RenderMesh(Mesh mesh)
     glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
     CHECK_GL_ERROR();
 }
+
+/*
+
+struct UniformData
+{	
+    unsigned int id;
+    GLenum type; // GL_FLOAT etc.
+};
+
+glGetProgramiv(shaderProgram, GL_ACTIVE_UNIFORMS, &activeUniforms);
+		
+map.reserve(activeUniforms);
+for (int i = 0; i < activeUniforms; i++) {
+    char name[64]{};
+
+    GLsizei uniform_length = 0;
+    GLint	uniform_size = 0;
+    UniformData data;
+
+    glGetActiveUniform(shaderProgram, (GLuint)i, (GLsizei)sizeof(name), &uniform_length, &uniform_size, &data.type, name);
+    data.id = i; //uniform location
+    map.insert({ name, data});
+}
+
+*/

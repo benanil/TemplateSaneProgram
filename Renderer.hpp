@@ -4,15 +4,12 @@
 #include "ASTL/Additional/GLTFParser.hpp"
 
 #ifdef __ANDROID__  
-#define AX_SHADER_VERSION_PRECISION() "#version 300 es\n" "precision mediump float;\n" "precision mediump sampler2D;\n"
+#define AX_SHADER_VERSION_PRECISION() "#version 300 es\n" "precision highp float;\n" "precision mediump sampler2D;\n"
 #else
 #define AX_SHADER_VERSION_PRECISION() "#version 330\n"
 #endif
 
-struct Shader
-{
-    unsigned int handle;
-};
+struct Shader { unsigned int handle; };
 
 struct Texture
 {
@@ -101,7 +98,9 @@ void DestroyRenderer();
 
 void SetDepthTest(bool val);
 
-void ToggleDepthWrite(bool val);
+void SetDepthWrite(bool val);
+
+
 
 // Warning! Order is important
 enum TextureType_

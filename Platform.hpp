@@ -70,7 +70,11 @@ enum MouseButton_
 {
     MouseButton_Left   = 1,
     MouseButton_Right  = 2,
-    MouseButton_Middle = 4
+    MouseButton_Middle = 4,
+
+    MouseButton_Touch0 = 1,
+    MouseButton_Touch1 = 2,
+    MouseButton_Touch2 = 4
 };
 typedef int MouseButton;
 
@@ -86,6 +90,16 @@ float GetMouseWheelDelta();
 #ifndef __ANDROID__
 void SetMousePos(float x, float y);
 void SetMouseWindowPos(float x, float y);
+#else
+struct Touch
+{
+    float positionX;
+    float positionY;
+};
+
+Touch GetTouch(int index);
+
+int NumTouchPressed();
 #endif
 ////////                TIME                 ////////
 
@@ -170,11 +184,12 @@ typedef int KeyboardKey;
 // These functions are not used in android code, we are inlining here
 // this way compiler will not use this functions
 #ifdef __ANDROID__
+
 inline void SetWindowSize(int width, int height) {}
 inline void SetWindowPosition(int x, int y) {}
 inline void SetWindowMoveCallback(void(*callback)(int, int)) {}
 inline void SetWindowName(const char* name) {}
-inline void GetWindowPos(int* x, int* y) {}
+inline void GetWindowPos(int* x, int* y) { *x=0; *y=0;}
 
 inline bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight) { return false; }
 

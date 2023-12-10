@@ -18,6 +18,8 @@
 #include <game-activity/GameActivity.cpp>
 #include <game-text-input/gametextinput.cpp>
 
+constexpr int NumTouch = 4;
+
 struct PlatformContextWin
 {
     // Callbacks
@@ -38,6 +40,14 @@ struct PlatformContextWin
     double DeltaTime;
 
     bool VSyncActive = true;
+
+    Touch Fingers[NumTouch  ]{};
+    
+    // bitmasks for finger states(touch)
+    int FingerDown = 0;
+    int FingerReleased = 0;
+    int FingerPressed = 0;
+
 } PlatformCtx{};
 
 void SetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
@@ -63,12 +73,16 @@ bool GetKeyDown(char c)     { return false; }
 bool GetKeyPressed(char c)  { return false; }
 bool GetKeyReleased(char c) { return false; }
 
-bool GetMouseDown(MouseButton button)     { return false; }
-bool GetMouseReleased(MouseButton button) { return false; }
-bool GetMousePressed(MouseButton button)  { return false; }
+Touch GetTouch(int index) { return PlatformCtx.Fingers[index]; }
 
-void GetMousePos(float* x, float* y) { }
-void GetMouseWindowPos(float* x, float* y) { }
+int NumTouchPressed() { return PopCount(PlatformCtx.FingerDown); }
+
+bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.FingerDown & 0b11); }
+bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.FingerReleased & 0b11); }
+bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.FingerPressed & 0b11); }
+
+void GetMousePos(float* x, float* y) { *x = PlatformCtx.Fingers[0].positionX; *y = PlatformCtx.Fingers[0].positionY; }
+void GetMouseWindowPos(float* x, float* y) { *x = PlatformCtx.Fingers[0].positionX; *y = PlatformCtx.Fingers[0].positionY; }
 float GetMouseWheelDelta() { return 0.0f; }
 
 /****                     Time                        ****/
@@ -118,6 +132,8 @@ static void InitWindow()
                                EGL_GREEN_SIZE     , 8,
                                EGL_RED_SIZE       , 8,
                                EGL_DEPTH_SIZE     , 24,
+                               EGL_SAMPLE_BUFFERS , 1, // enable msaa
+                               EGL_SAMPLES        , 4, // 4x msaa
                                EGL_NONE };
     // figure out how many configs there are
     EGLint numConfigs;
@@ -176,7 +192,7 @@ static void TerminateWindow()
     PlatformCtx.Context = EGL_NO_CONTEXT;
 }
 
-void handle_cmd(android_app *pApp, int32_t cmd)
+void HandleCMD(android_app *pApp, int32_t cmd)
 {
     switch (cmd) {
         case APP_CMD_INIT_WINDOW:
@@ -190,6 +206,7 @@ void handle_cmd(android_app *pApp, int32_t cmd)
         break;
         case APP_CMD_WINDOW_RESIZED:
             UpdateRenderArea();
+            break;
         case APP_CMD_TERM_WINDOW:
             DestroyRenderer();
             pApp->userData = 0;
@@ -214,7 +231,7 @@ static void HandleInput();
 void android_main(android_app *pApp)
 {
     // Register an event handler for Android events
-    pApp->onAppCmd = handle_cmd;
+    pApp->onAppCmd = HandleCMD;
     // Set input event filters (set it to NULL if the app wants to process all inputs).
     // Note that for key inputs, this example uses the default default_key_filter() implemented in android_native_app_glue.c.
     android_app_set_motion_event_filter(pApp, motion_event_filter_func);
@@ -251,7 +268,10 @@ void android_main(android_app *pApp)
             ASSERT(swapResult);
 
             glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // GL_STENCIL_BUFFER_BIT
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // | GL_STENCIL_BUFFER_BIT
+            
+            PlatformCtx.FingerReleased = 0;
+            PlatformCtx.FingerPressed = 0;
         }
     } while (!pApp->destroyRequested);
 
@@ -280,46 +300,49 @@ static void HandleInput()
         float x = GameActivityPointerAxes_getX(&pointer);
         float y = GameActivityPointerAxes_getY(&pointer);
 
+        if (pointer.id >= 4)
+            continue;
+
         // determine the action type and process the event accordingly.
         switch (action & AMOTION_EVENT_ACTION_MASK)
         {
             case AMOTION_EVENT_ACTION_DOWN:
             case AMOTION_EVENT_ACTION_POINTER_DOWN:
-                AX_LOG("( %i: %f, %f ) pointer down\n", pointer.id, x, y);
+            {
+                PlatformCtx.FingerPressed |= 1 << pointer.id;
+                PlatformCtx.FingerDown |= 1 << pointer.id;
+                PlatformCtx.Fingers[pointer.id].positionX = x;
+                PlatformCtx.Fingers[pointer.id].positionY = y;
                 break;
-
-            case AMOTION_EVENT_ACTION_CANCEL:
-                // treat the CANCEL as an UP event: doing nothing in the app, except
-                // removing the pointer from the cache if pointers are locally saved.
-                // code pass through on purpose.
+            }
             case AMOTION_EVENT_ACTION_UP:
             case AMOTION_EVENT_ACTION_POINTER_UP:
-                AX_LOG("( %i: %f, %f ) pointer up\n", pointer.id, x, y);
+            {
+                PlatformCtx.FingerReleased |= 1 << pointer.id;
+                PlatformCtx.FingerDown &= ~(1 << pointer.id);
                 break;
-
+            }
             case AMOTION_EVENT_ACTION_MOVE:
+            {
                 // There is no pointer index for ACTION_MOVE, only a snapshot of
                 // all active pointers; app needs to cache previous active pointers
                 // to figure out which ones are actually moved.
-                for (auto index = 0; index < motionEvent.pointerCount; index++)
+                for (auto index = 0; index < (motionEvent.pointerCount & 7); index++) // &7 because max 4 button
                 {
                     pointer = motionEvent.pointers[index];
-                    x = GameActivityPointerAxes_getX(&pointer);
-                    y = GameActivityPointerAxes_getY(&pointer);
-                    AX_LOG("( %i: %f, %f ) \n", pointer.id, x, y);
-
-                    if (index != (motionEvent.pointerCount - 1)) AX_LOG(",");
+                    PlatformCtx.Fingers[pointer.id].positionX = GameActivityPointerAxes_getX(&pointer);
+                    PlatformCtx.Fingers[pointer.id].positionY = GameActivityPointerAxes_getY(&pointer);
                 }
-                AX_LOG("Pointer Move");
                 break;
+            }
             default:
                 AX_LOG("Unknown MotionEvent Action: %i", action);
         }
-        AX_LOG("Pointer Move\n");
     }
     // clear the motion input count in this buffer for main thread to re-use.
     android_app_clear_motion_events(inputBuffer);
 
+    /*
     // handle input key events.
     for (auto i = 0; i < inputBuffer->keyEventsCount; i++)
     {
@@ -337,6 +360,8 @@ static void HandleInput()
                 AX_LOG("Unknown KeyEvent Action: %i \n", keyEvent.action);
         }
     }
+    */
+
     // clear the key input count too.
     android_app_clear_key_events(inputBuffer);
 }

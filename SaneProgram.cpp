@@ -31,11 +31,11 @@ R"(
 )";
 static Shader fullScreenShader{0};
 
-
 void AXInit()
 {
     SetWindowName("Duck Window");
-    // SetWindowSize(windowStartSize.x, windowStartSize.y);
+    SetWindowSize(1920, 1080);
+
     SetWindowPosition(0, 0);
     SetVSync(true);
 }
@@ -48,7 +48,7 @@ void WindowResizeCallback(int width, int height)
 // return 1 if success
 int AXStart()
 {
-    ParseGLTF("Meshes/Duck/Duck.gltf", &scene);
+    ParseGLTF("Meshes/GroveStreet/GroveStreet.gltf", &scene);
     
     if (scene.error != AError_NONE)
     {
@@ -56,7 +56,7 @@ int AXStart()
         return 0;
     }
     
-    forestTexture    = LoadTexture("Textures/forest.jpg", false);
+    forestTexture    = LoadTexture("Textures/orange-top-gradient-background.jpg", false);
     fullScreenShader = CreateFullScreenShader(fragmentShaderSource);
     shader           = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
     
@@ -77,7 +77,7 @@ int AXStart()
 
     textures = new Texture[scene.numImages]{};
     for (int i = 0; i < scene.numImages; i++)
-        textures[i] = LoadTexture(scene.images[i].path, true);
+        textures[i] = LoadTexture(scene.images[i].path, false);
 
     Vector2i windowStartSize;
     GetMonitorSize(&windowStartSize.x, &windowStartSize.y);
@@ -95,12 +95,27 @@ void AXLoop()
     SetDepthTest(true);
 
     camera.Update();
-    Matrix4 model = Matrix4::Identity() * Matrix4::CreateScale(Vector3f::One() * 0.1f) * Matrix4::FromPosition(Vector3f::Zero());//Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One() * 0.1f);
-    Matrix4 mvp = model * camera.view * camera.projection;
-
     BindShader(shader);
-    SetModelViewProjection(mvp.GetPtr());
-    SetModelMatrix(model.GetPtr());
+    for (int i = 0; i < scene.numNodes; i++)
+    {
+        ANode node = scene.nodes[i];
+        // if node is not mesh skip
+        if (node.type != 0) continue;
+
+        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+        Matrix4 mvp = model * camera.view * camera.projection;
+
+        SetModelViewProjection(mvp.GetPtr());
+        SetModelMatrix(model.GetPtr());
+
+        AMesh mesh = scene.meshes[node.index];
+        for (int j = 0; j < mesh.numPrimitives; ++j)
+        {
+            AMaterial material = scene.materials[mesh.primitives[j].material];
+            SetTexture(textures[material.textures[0].index], 0);
+            RenderMesh(meshes[node.index]);
+        }
+    }
 
     SetTexture(textures[0], 0);
     RenderMesh(meshes[0]);
