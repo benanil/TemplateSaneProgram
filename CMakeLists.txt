@@ -12,6 +12,7 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build)
 # Add your source files here
 set(SOURCES
     ASTL/Additional/GLTFParser.cpp
+    ASTL/Additional/OBJParser.cpp
     SaneProgram.cpp
     Renderer.cpp
 		PlatformWindows.cpp

@@ -136,6 +136,7 @@ void FatalError(const char* format, ...)
     va_end(args);
     // Display the message box
     MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
+    OutputDebugString(buffer);
 }
 
 static void InitOpenGLExtensions(void)

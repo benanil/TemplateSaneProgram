@@ -10,17 +10,27 @@
     #include <game-activity/native_app_glue/android_native_app_glue.h>
     #include <GLES3/gl32.h>
 
-    #define CHECK_GL_ERROR() if (GLenum error = glGetError()) {\
-                            __android_log_print(ANDROID_LOG_FATAL, "AX-GL_ERROR", "%s -line:%i message: %s", \
-                                __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0);}
+    #if defined(_DEBUG) || defined(DEBUG)
+        #define CHECK_GL_ERROR() if (GLenum error = glGetError()) {\
+                                __android_log_print(ANDROID_LOG_FATAL, "AX-GL_ERROR", "%s -line:%i message: %s", \
+                                    __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0);}
+    #else
+        #define CHECK_GL_ERROR()
+    #endif
+
     #define STBI_NO_STDIO
     #define STBI_NEON
 #else
     #define GLAD_GL_IMPLEMENTATION
     #include "External/glad.hpp"
 
-    #define AX_LOG(...) printf(__VA_ARGS__)
-#define CHECK_GL_ERROR() if (GLenum error = glGetError()) { FatalError("%s -line:%i message: %s" , __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0); }
+    #if defined(_DEBUG) || defined(DEBUG)
+        #define CHECK_GL_ERROR() if (GLenum error = glGetError()) \
+                                 { FatalError("%s -line:%i message: %s" , __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0); }
+    #else
+        #define CHECK_GL_ERROR()
+    #endif
+
 #endif
 
 #include "ASTL/Common.hpp"
@@ -33,6 +43,10 @@
 
 #include "Renderer.hpp"
 #include "Platform.hpp"
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Texture                                  */
+/*//////////////////////////////////////////////////////////////////////////*/
 
 struct TextureFormat
 {
@@ -145,6 +159,12 @@ Texture LoadTexture(const char* path, bool mipmap)
     return texture;
 }
 
+void DeleteTexture(Texture texture) { glDeleteTextures(1, &texture.handle); }
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Mesh                                     */
+/*//////////////////////////////////////////////////////////////////////////*/
+
 inline GLenum ToGLType(GraphicType type)
 {
     return GL_BYTE + (GLenum)type;
@@ -228,6 +248,48 @@ Mesh CreateMeshFromPrimitive(APrimitive* primitive)
     return mesh;
 }
 
+void DeleteMesh(Mesh mesh)
+{
+    glDeleteVertexArrays(1, &mesh.vertexLayoutHandle);
+    glDeleteBuffers(1, &mesh.vertexHandle);
+    glDeleteBuffers(1, &mesh.indexHandle);
+}
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Shader                                   */
+/*//////////////////////////////////////////////////////////////////////////*/
+
+static unsigned int currentShader = 0;
+
+unsigned int GetUniformLocation(Shader shader, const char* name)
+{
+    return glGetUniformLocation(shader.handle, name);
+}
+
+void SetShaderValue(int   value, unsigned int location) { glUniform1i(location, value);}
+void SetShaderValue(float value, unsigned int location) { glUniform1f(location, value);}
+
+void SetShaderValue(const void* value, unsigned int location, GraphicType type)
+{
+    switch (type)
+    {
+        case GraphicType_Int:         glUniform1i(location , *(const int*)value);          break;
+        case GraphicType_UnsignedInt: glUniform1ui(location, *(const unsigned int*)value); break;
+        case GraphicType_Float:       glUniform1f(location , *(const float*)value);        break;
+
+        case GraphicType_Vector2f:    glUniform2fv(location, 1, (const float*)value); break;
+        case GraphicType_Vector3f:    glUniform3fv(location, 1, (const float*)value); break;
+        case GraphicType_Vector4f:    glUniform4fv(location, 1, (const float*)value); break;
+     
+        case GraphicType_Matrix2: glUniformMatrix2fv(location, 1, GL_FALSE, (const float*)value); break;
+        case GraphicType_Matrix3: glUniformMatrix3fv(location, 1, GL_FALSE, (const float*)value); break;
+        case GraphicType_Matrix4: glUniformMatrix4fv(location, 1, GL_FALSE, (const float*)value); break;
+        default:
+            AX_ERROR("Shader set value Graphic type invalid. type: %i", type);
+            break;
+    }
+}
+
 void CheckShaderError(uint shader)
 {
     GLint isCompiled = 0;
@@ -302,27 +364,34 @@ Shader ImportShader(const char* vertexPath, const char* fragmentPath)
     return shader;
 }
 
-void DeleteTexture(Texture texture) { glDeleteTextures(1, &texture.handle); }
-void DeleteShader(Shader shader)    { glDeleteProgram(shader.handle);       }
-
-void DeleteMesh(Mesh mesh)
+void DeleteShader(Shader shader)    
 {
-    glDeleteVertexArrays(1, &mesh.vertexLayoutHandle);
-    glDeleteBuffers(1, &mesh.vertexHandle);
-    glDeleteBuffers(1, &mesh.indexHandle);
+    glDeleteProgram(shader.handle);       
 }
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Renderer                                 */
+/*//////////////////////////////////////////////////////////////////////////*/
 
 void GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
                             GLsizei length, const GLchar* msg, const void* data) {
     AX_ERROR("OpenGL error: %s", msg);
     AX_LOG("\n");
 }
+
 static GLuint emptyVao;
 
 void InitRenderer()
 {
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CCW);
+    
+#if defined(_DEBUG) || defined(DEBUG)
+    // enable debug message
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
+    glDebugMessageControlARB(GL_DEBUG_SOURCE_APPLICATION_ARB, GL_DEBUG_TYPE_ERROR_ARB, GL_DEBUG_SEVERITY_LOW_ARB, 0, NULL, GL_TRUE);
+    glDebugMessageCallbackARB(GLDebugMessageCallback, nullptr);
+#endif
     // create empty vao unfortunately this step is necessary for ogl 3.2
     glGenVertexArrays(1, &emptyVao);
 
@@ -335,14 +404,10 @@ void SetDepthTest(bool val)
     EnableDisable[val](GL_DEPTH_TEST);
 }
 
-void SetDepthWrite(bool val) { glDepthMask(val); }
-
-void DestroyRenderer()
+void SetDepthWrite(bool val) 
 {
-
+    glDepthMask(val); 
 }
-
-static unsigned int currentShader = 0;
 
 void RenderFullScreen(Shader fullScreenShader, unsigned int texture)
 {
@@ -350,7 +415,7 @@ void RenderFullScreen(Shader fullScreenShader, unsigned int texture)
     glBindVertexArray(emptyVao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(fullScreenShader.handle, "tex"), 0);
+    glUniform1i(0, 0);// glUniform1i(glGetUniformLocation(fullScreenShader.handle, "tex"), 0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     CHECK_GL_ERROR();
 }
@@ -367,59 +432,34 @@ void SetTexture(Texture texture, int index)
     glBindTexture(GL_TEXTURE_2D, texture.handle);
 }
 
-extern int windowHeight_, windowWidth_;
-
 static Matrix4 modelViewProjection;
 static Matrix4 modelMatrix;
 
 void SetModelViewProjection(float* mvp) 
 {
     SmallMemCpy(&modelViewProjection.m[0][0], mvp, 16 * sizeof(float)); 
+    GLint mvpLoc   = glGetUniformLocation(currentShader, "mvp");
+    glUniformMatrix4fv(mvpLoc  , 1, false, &modelViewProjection.m[0][0]);
 }
 
 void SetModelMatrix(float* model)       
 {
+    // Todo fix this, don't use uniform location like this
     SmallMemCpy(&modelMatrix.m[0][0], model, 16 * sizeof(float)); 
+    GLint modelLoc = glGetUniformLocation(currentShader, "model");
+    glUniformMatrix4fv(modelLoc, 1, false, &modelMatrix.m[0][0]);
 }
 
 void RenderMesh(Mesh mesh)
 {
     glBindVertexArray(mesh.vertexLayoutHandle);
 
-    // Todo fix this, don't use uniform location like this
-    GLint mvpLoc   = glGetUniformLocation(currentShader, "mvp");
-    GLint modelLoc = glGetUniformLocation(currentShader, "model");
-
-    glUniformMatrix4fv(mvpLoc  , 1, false, &modelViewProjection.m[0][0]);
-    glUniformMatrix4fv(modelLoc, 1, false, &modelMatrix.m[0][0]);
-
-    // glBindBuffer(GL_VERTEX_ARRAY, mesh.vertexHandle);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
     glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
     CHECK_GL_ERROR();
 }
 
-/*
+void DestroyRenderer()
+{
 
-struct UniformData
-{	
-    unsigned int id;
-    GLenum type; // GL_FLOAT etc.
-};
-
-glGetProgramiv(shaderProgram, GL_ACTIVE_UNIFORMS, &activeUniforms);
-		
-map.reserve(activeUniforms);
-for (int i = 0; i < activeUniforms; i++) {
-    char name[64]{};
-
-    GLsizei uniform_length = 0;
-    GLint	uniform_size = 0;
-    UniformData data;
-
-    glGetActiveUniform(shaderProgram, (GLuint)i, (GLsizei)sizeof(name), &uniform_length, &uniform_size, &data.type, name);
-    data.id = i; //uniform location
-    map.insert({ name, data});
 }
-
-*/

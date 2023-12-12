@@ -26,6 +26,18 @@ enum GraphicType_
     GraphicType_Int,
     GraphicType_UnsignedInt,
     GraphicType_Float,
+
+    GraphicType_Vector2f,
+    GraphicType_Vector3f,
+    GraphicType_Vector4f,
+
+    GraphicType_Vector2i,
+    GraphicType_Vector3i,
+    GraphicType_Vector4i,
+
+    GraphicType_Matrix2,
+    GraphicType_Matrix3,
+    GraphicType_Matrix4,
 };
 typedef int GraphicType;
 
@@ -100,6 +112,18 @@ void SetDepthTest(bool val);
 
 void SetDepthWrite(bool val);
 
+// Todo(Anil): lookup uniforms
+unsigned int GetUniformLocation(Shader shader, const char* name);
+
+
+// sets uniform to binded shader
+void SetShaderValue(const void* value, unsigned int location, GraphicType type);
+
+// sets uniform to binded shader
+void SetShaderValue(int value, unsigned int location);
+
+// sets uniform to binded shader
+void SetShaderValue(float value, unsigned int location);
 
 
 // Warning! Order is important
