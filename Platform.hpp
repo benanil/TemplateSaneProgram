@@ -33,7 +33,7 @@
 #endif
 
 
-inline __constexpr const char* GetFileName(const char* path)
+inline constexpr const char* GetFileName(const char* path)
 {
     int length = 0;
     while (path[length]) length++;

@@ -388,9 +388,9 @@ void InitRenderer()
     
 #if defined(_DEBUG) || defined(DEBUG)
     // enable debug message
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
-    glDebugMessageControlARB(GL_DEBUG_SOURCE_APPLICATION_ARB, GL_DEBUG_TYPE_ERROR_ARB, GL_DEBUG_SEVERITY_LOW_ARB, 0, NULL, GL_TRUE);
-    glDebugMessageCallbackARB(GLDebugMessageCallback, nullptr);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageControl(GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_ERROR, GL_DEBUG_SEVERITY_LOW, 0, NULL, GL_TRUE);
+    glDebugMessageCallback(GLDebugMessageCallback, nullptr);
 #endif
     // create empty vao unfortunately this step is necessary for ogl 3.2
     glGenVertexArrays(1, &emptyVao);

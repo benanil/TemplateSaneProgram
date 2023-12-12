@@ -56,16 +56,18 @@ void WindowResizeCallback(int width, int height)
 // return 1 if success
 int AXStart()
 {
-    ParseGLTF("Meshes/GroveStreet/GroveStreet.gltf", &scene);
+    //ParseGLTF("Meshes/GroveStreet/GroveStreet.gltf", &scene);
     
-    if (scene.error != AError_NONE)
-    {
-        AX_ERROR("%s", ParsedSceneGetError(scene.error));
-        return 0;
-    }
-    // OptimizeScene(scene);
-
-    ParseObj("Meshes/bunny.obj", &objScene);
+    // if (scene.error != AError_NONE)
+    // {
+    //     AX_ERROR("%s", ParsedSceneGetError(scene.error));
+    //     return 0;
+    // }
+    //SaveGLTFBinary(&scene, "Meshes/GroveStreet/GroveStreet.abn");
+    //FreeParsedGLTF(&scene);
+    MemsetZero(&scene, sizeof(ParsedGLTF));
+    LoadGLTFBinary(&scene, "Meshes/GroveStreet/GroveStreet.abn");
+   //  ParseObj("Meshes/bunny.obj", &objScene);
     
     if (objScene.error != AError_NONE)
     {
@@ -97,12 +99,12 @@ int AXStart()
         }
     }
     
-    objMeshes = new Mesh[objScene.numMeshes]{};
-
-    for (int i = 0; i < objScene.numMeshes; i++)
-    {
-        objMeshes[i] = CreateMeshFromPrimitive(&objScene.meshes[i].primitives[0]);
-    }
+    // objMeshes = new Mesh[objScene.numMeshes]{};
+    // 
+    // for (int i = 0; i < objScene.numMeshes; i++)
+    // {
+    //     objMeshes[i] = CreateMeshFromPrimitive(&objScene.meshes[i].primitives[0]);
+    // }
 
     textures = new Texture[scene.numImages]{};
     for (int i = 0; i < scene.numImages; i++)
@@ -156,17 +158,17 @@ void AXLoop()
         }
     }
 
-    Matrix4 model = Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One());
-    Matrix4 mvp = model * camera.view * camera.projection;
-
-    SetModelViewProjection(mvp.GetPtr());
-    SetModelMatrix(model.GetPtr());
-
-    for (int i = 0; i < objScene.numMeshes; i++)
-    {
-        AMesh mesh = scene.meshes[i];
-        RenderMesh(objMeshes[i]);
-    }
+     // Matrix4 model = Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One());
+     // Matrix4 mvp = model * camera.view * camera.projection;
+     // 
+     // SetModelViewProjection(mvp.GetPtr());
+     // SetModelMatrix(model.GetPtr());
+     // 
+     // for (int i = 0; i < objScene.numMeshes; i++)
+     // {
+     //     AMesh mesh = scene.meshes[i];
+     //     RenderMesh(objMeshes[i]);
+     // }
     // todo material and light system
 }
 
@@ -178,7 +180,7 @@ void AXExit()
     delete[] meshes;
     delete[] textures;
     FreeParsedGLTF(&scene);
-    FreeParsedObj(&objScene);
+    // FreeParsedObj(&objScene);
     DeleteShader(fullScreenShader);
     DestroyRenderer();
 }
