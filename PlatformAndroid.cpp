@@ -20,7 +20,7 @@
 
 constexpr int NumTouch = 4;
 
-struct PlatformContextWin
+struct PlatformContextAndroid
 {
     // Callbacks
     void(*WindowResizeCallback)(int  , int)   = nullptr;

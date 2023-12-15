@@ -115,6 +115,7 @@ void SetDepthWrite(bool val);
 // Todo(Anil): lookup uniforms
 unsigned int GetUniformLocation(Shader shader, const char* name);
 
+void SetMaterial(AMaterial* material);
 
 // sets uniform to binded shader
 void SetShaderValue(const void* value, unsigned int location, GraphicType type);

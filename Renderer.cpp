@@ -44,6 +44,10 @@
 #include "Renderer.hpp"
 #include "Platform.hpp"
 
+static GLuint emptyVao;
+static GLuint defaultTexture;
+
+
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Texture                                  */
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -135,6 +139,16 @@ Texture LoadTexture(const char* path, bool mipmap)
 {
     int width, height, channels;
     unsigned char* image = nullptr;
+    Texture defTexture;
+    defTexture.width  = 32;
+    defTexture.height = 32;
+    defTexture.handle = defaultTexture;
+
+    if (!FileExist(path))
+    {
+        AX_ERROR("image is not exist! %s", path);
+        return defTexture;
+    }
 #ifdef __ANDROID__
     AAsset* asset = AAssetManager_open(g_android_app->activity->assetManager, path, 0);
     off_t size = AAsset_getLength(asset);
@@ -148,10 +162,8 @@ Texture LoadTexture(const char* path, bool mipmap)
 #endif
     if (image == nullptr)
     {
-        AX_ERROR("image is not exist! %s", path);
-        // todo: create default image.
-        // todo: return default image instead.
-        return {};
+        AX_ERROR("image load failed! %s", path);
+        return defTexture;
     }
     const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
     Texture texture = CreateTexture(width, height, image, mipmap, numCompToFormat[channels]);
@@ -290,6 +302,19 @@ void SetShaderValue(const void* value, unsigned int location, GraphicType type)
     }
 }
 
+void SetMaterial(AMaterial* material)
+{
+    unsigned int onlyColorLoc = glGetUniformLocation(currentShader, "uOnlyColor");
+    unsigned int colorLoc = glGetUniformLocation(currentShader, "uColor");
+    
+    int onlyColor = (int)(material->baseColorTexture.index == -1);
+    SetShaderValue(onlyColor, onlyColorLoc);
+    
+    float color[4];
+    UnpackColorRGBf(material->diffuseColor, color);
+    SetShaderValue(color, colorLoc, GraphicType_Vector4f);
+}
+
 void CheckShaderError(uint shader)
 {
     GLint isCompiled = 0;
@@ -379,7 +404,17 @@ void GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severi
     AX_LOG("\n");
 }
 
-static GLuint emptyVao;
+void CreateDefaultTexture()
+{
+    unsigned char img[32*32*3]{};
+    
+    for (int i = 0; i < (32 * 32 * 3); i++)
+    {
+        bool columnOdd = (i & 15) < 8;
+        img[i] = 200 * columnOdd;
+    }
+    defaultTexture = CreateTexture(32, 32, img, false, TextureType_RGB8).handle;
+}
 
 void InitRenderer()
 {
@@ -396,6 +431,7 @@ void InitRenderer()
     glGenVertexArrays(1, &emptyVao);
 
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
+    CreateDefaultTexture();
 }
 
 void SetDepthTest(bool val)

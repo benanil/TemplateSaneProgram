@@ -17,8 +17,6 @@
 #include "Platform.hpp"
 #include "External/glad.hpp"
 
-#define AX_LOG(...) printf(__VA_ARGS__)
-
 #pragma comment (lib, "gdi32.lib")
 #pragma comment (lib, "user32.lib")
 #pragma comment (lib, "opengl32.lib")
@@ -478,6 +476,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         PlatformCtx.DeltaTime = (double)(currentTime.QuadPart - prevTime.QuadPart) / frequency.QuadPart;
         prevTime = currentTime;
         
+        if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check
+            goto end_infinite_loop;
+
         // char fps[9]{};
         // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
         // SetWindowName(fps);
@@ -517,7 +518,7 @@ bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight)
     SetWindowLongPtr(PlatformCtx.hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW | WS_EX_TOPMOST);
     SetWindowLongPtr(PlatformCtx.hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     SetWindowPos(PlatformCtx.hwnd, HWND_TOPMOST, 0, 0, fullscreenWidth, fullscreenHeight, SWP_SHOWWINDOW);
-    bool success = ChangeDisplaySettings(&fullscreenSettings, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL;
+    bool success = ChangeDisplaySettings(&fullscreenSettings, CDS_FULLSCREEN) == DISP_CHANGE_SUCCESSFUL;
     ASSERT(success && "unable to make full screen");
     ShowWindow(PlatformCtx.hwnd, SW_MAXIMIZE);
     

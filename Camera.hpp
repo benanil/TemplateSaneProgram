@@ -12,7 +12,7 @@ struct Camera
 
 	float verticalFOV = 65.0f;
 	float nearClip = 0.1f;
-	float farClip = 500.0f;
+	float farClip = 1000.0f;
 
 	Vector2i viewportSize, monitorSize;
 
@@ -29,7 +29,7 @@ struct Camera
 	{
 		verticalFOV = 75.0f;
 		nearClip = 0.1f;
-		farClip = 500.0f;
+		farClip = 1000.0f;
 		pitch = 0.0f, yaw = -90.0f , senstivity = 20.0f;
 
 		viewportSize = xviewPortSize;
@@ -75,7 +75,7 @@ struct Camera
 		if (!pressing) { wasPressing = false; return; }
 
 		float dt = (float)GetDeltaTime() * 2.0f;
-		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 2.0f;
+		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 20.0f;
 
 		Vector2f mousePos;
 		GetMousePos(&mousePos.x, &mousePos.y);
@@ -96,8 +96,8 @@ struct Camera
 			Front.z = Sin(yaw * DegToRad) * Cos(pitch * DegToRad);
 			Front.NormalizeSelf();
 			// also re-calculate the Right and Up vector
-			Right = Vector3f::NormalizeEst(Vector3f::Cross(Front, Vector3f::Up()));  // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
-			Up = Vector3f::NormalizeEst(Vector3f::Cross(Right, Front));
+			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));  // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
+			Up = Vector3f::Normalize(Vector3f::Cross(Right, Front));
 		}
 		else if (wasPressing && diff.x + diff.y < 130.0f)
 		{

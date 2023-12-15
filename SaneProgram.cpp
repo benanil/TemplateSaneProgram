@@ -5,6 +5,7 @@
 //     #include "PlatformAndroid.cpp"
 // #endif
 
+
 #include <stdio.h>
 #include <math.h> // sin
 #include "ASTL/Math/Matrix.hpp"
@@ -13,17 +14,26 @@
 #include "Renderer.hpp"
 #include "Camera.hpp"
 #include "Platform.hpp"
+#include "AssetManager.hpp"
+#include "ASTL/String.hpp"
+#include "ASTL/Array.hpp"
+#include "ASTL/IO.hpp"
 
-ParsedObj objScene;
-ParsedGLTF scene;
+struct Scene
+{
+    ParsedGLTF data;
+    Mesh* meshes;
+    Texture* textures;
+};
 
-Mesh* objMeshes = nullptr;
-Mesh* meshes = nullptr;
+Scene GLTFScene{};
+Scene OBJScene{};
+Scene FBXScene{};
 
-Shader     shader;
-Texture*   textures = nullptr;
-Texture    skyTexture;
-Camera     camera{};
+Shader shader;
+       
+Texture skyTexture;
+Camera camera{};
 
 unsigned int colorUniform;
 
@@ -38,6 +48,52 @@ R"(
     }
 )";
 static Shader fullScreenShader{0};
+
+void LoadSceneMeshesAndTexturesToGPU(Scene* scene)
+{
+    ASSERT(scene != nullptr);
+    ParsedGLTF& data = scene->data;
+
+    int numMeshes = 0;
+    for (int i = 0; i < data.numMeshes; i++)
+        numMeshes += data.meshes[i].numPrimitives;
+
+    scene->meshes = numMeshes ? new Mesh[numMeshes]{} : nullptr;
+
+    for (int i = 0; i < numMeshes; i++)
+    {
+        scene->meshes[i] = CreateMeshFromPrimitive(&data.meshes[i].primitives[0]);
+    }
+
+    scene->textures = data.numImages ? new Texture[data.numImages]{} : nullptr;
+    for (int i = 0; i < data.numImages; i++)
+    {
+        if (data.images[i].path)
+            scene->textures[i] = LoadTexture(data.images[i].path, true);
+    }
+}
+
+int ImportScene(Scene* scene, const char* path)
+{
+    int length = StringLength(path);
+    if (FileHasExtension(path, length, "fbx"))  return LoadFBX(path, &scene->data);
+    if (FileHasExtension(path, length, "abm"))  return LoadGLTFBinary(path, &scene->data);
+    if (FileHasExtension(path, length, "gltf")) return ParseGLTF(path, &scene->data);
+    return 0;
+}
+
+void DestroyScene(Scene* scene)
+{
+    ParsedGLTF& data = scene->data;
+
+    for (int i = 0; i < data.numMeshes; i++) DeleteMesh(scene->meshes[i]);
+    for (int i = 0; i < data.numTextures; i++) DeleteTexture(scene->textures[i]);
+
+    delete[] scene->meshes;
+    delete[] scene->textures;
+
+    FreeParsedGLTF(&scene->data);
+}
 
 void AXInit()
 {
@@ -56,65 +112,65 @@ void WindowResizeCallback(int width, int height)
 // return 1 if success
 int AXStart()
 {
-    //ParseGLTF("Meshes/GroveStreet/GroveStreet.gltf", &scene);
     
-    // if (scene.error != AError_NONE)
-    // {
-    //     AX_ERROR("%s", ParsedSceneGetError(scene.error));
-    //     return 0;
-    // }
-    //SaveGLTFBinary(&scene, "Meshes/GroveStreet/GroveStreet.abn");
-    //FreeParsedGLTF(&scene);
-    MemsetZero(&scene, sizeof(ParsedGLTF));
-    LoadGLTFBinary(&scene, "Meshes/GroveStreet/GroveStreet.abn");
-   //  ParseObj("Meshes/bunny.obj", &objScene);
-    
-    if (objScene.error != AError_NONE)
+    if (!ImportScene(&GLTFScene, "Meshes/GroveStreet/GroveStreet.abm"))
     {
-        AX_ERROR("%s", ParsedSceneGetError(objScene.error));
+        AX_ERROR("gltf binary mesh load failed");
         return 0;
     }
+    
+    if (!ImportScene(&FBXScene, "Meshes/wooden_windmill.fbx"))
+    {
+        AX_ERROR("fbx mesh load failed");
+        return 0;
+    }
+    
+    LoadSceneMeshesAndTexturesToGPU(&GLTFScene);
+    LoadSceneMeshesAndTexturesToGPU(&FBXScene);
 
     skyTexture       = LoadTexture("Textures/orange-top-gradient-background.jpg", false);
     fullScreenShader = CreateFullScreenShader(fragmentShaderSource);
     shader           = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
     colorUniform     = GetUniformLocation(shader, "uColor");
 
-    int numMeshes = 0;
-    for (int i = 0; i < scene.numMeshes; i++)
-    {
-        numMeshes += scene.meshes[i].numPrimitives;
-    }
-    
-    numMeshes += objScene.numMeshes;
-
-    meshes = new Mesh[numMeshes]{};
-
-    int n = 0;
-    for (int i = 0; i < scene.numMeshes; i++)
-    {
-        for (int j = 0; j < scene.meshes[i].numPrimitives; ++j, ++n)
-        {
-            meshes[n] = CreateMeshFromPrimitive(&scene.meshes[i].primitives[j]);
-        }
-    }
-    
-    // objMeshes = new Mesh[objScene.numMeshes]{};
-    // 
-    // for (int i = 0; i < objScene.numMeshes; i++)
-    // {
-    //     objMeshes[i] = CreateMeshFromPrimitive(&objScene.meshes[i].primitives[0]);
-    // }
-
-    textures = new Texture[scene.numImages]{};
-    for (int i = 0; i < scene.numImages; i++)
-        textures[i] = LoadTexture(scene.images[i].path, true);
-
     Vector2i windowStartSize;
     GetMonitorSize(&windowStartSize.x, &windowStartSize.y);
 
     camera.Init(windowStartSize);
     return 1;
+}
+
+void RenderScene(Scene* scene)
+{
+    ParsedGLTF& data = scene->data;
+    for (int i = 0; i < data.numNodes; i++)
+    {
+        ANode node = data.nodes[i];
+        // if node is not mesh skip (camera)
+        if (node.type != 0 || node.index == -1) continue;
+
+        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+        Matrix4 mvp = model * camera.view * camera.projection;
+
+        SetModelViewProjection(mvp.GetPtr());
+        SetModelMatrix(model.GetPtr());
+
+        AMesh mesh = data.meshes[node.index];
+        
+        for (int j = 0; j < mesh.numPrimitives; ++j)
+        {
+            if (scene->meshes[node.index].numIndex == 0)
+                continue;
+
+            AMaterial material = data.materials[mesh.primitives[j].material];
+            SetMaterial(&material);
+            
+            if (material.baseColorTexture.index != -1) 
+                SetTexture(scene->textures[material.baseColorTexture.index], 0);
+    
+            RenderMesh(scene->meshes[node.index]);
+        }
+    }
 }
 
 // do rendering and main loop here
@@ -128,59 +184,21 @@ void AXLoop()
     camera.Update();
     BindShader(shader);
     
-    static Vector4f uColor{};
-    static double _time = 0.0;
+    RenderScene(&GLTFScene);
 
-    uColor.w = sin(_time);
-    _time += GetDeltaTime();
+    RenderScene(&FBXScene);
 
-    int n = 0;
-    for (int i = 0; i < scene.numNodes; i++)
-    {
-        ANode node = scene.nodes[i];
-        // if node is not mesh skip
-        if (node.type != 0) continue;
-
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        Matrix4 mvp = model * camera.view * camera.projection;
-
-        SetModelViewProjection(mvp.GetPtr());
-        SetModelMatrix(model.GetPtr());
-
-        // SetShaderValue(&uColor.x, colorUniform, GraphicType_Vector4f); 
-
-        AMesh mesh = scene.meshes[node.index];
-        for (int j = 0; j < mesh.numPrimitives; ++j, n++)
-        {
-            AMaterial material = scene.materials[mesh.primitives[j].material];
-            SetTexture(textures[material.textures[0].index], 0);
-            RenderMesh(meshes[node.index]);
-        }
-    }
-
-     // Matrix4 model = Matrix4::PositionRotationScale(Vector3f::Zero(), Quaternion::Identity(), Vector3f::One());
-     // Matrix4 mvp = model * camera.view * camera.projection;
-     // 
-     // SetModelViewProjection(mvp.GetPtr());
-     // SetModelMatrix(model.GetPtr());
-     // 
-     // for (int i = 0; i < objScene.numMeshes; i++)
-     // {
-     //     AMesh mesh = scene.meshes[i];
-     //     RenderMesh(objMeshes[i]);
-     // }
     // todo material and light system
 }
 
 void AXExit()
 {
     DeleteShader(shader);
-    for (int i = 0; i < scene.numMeshes; i++) DeleteMesh(meshes[i]);
-    for (int i = 0; i < scene.numImages; i++) DeleteTexture(textures[i]);
-    delete[] meshes;
-    delete[] textures;
-    FreeParsedGLTF(&scene);
-    // FreeParsedObj(&objScene);
+
+    DestroyScene(&FBXScene);
+    DestroyScene(&GLTFScene);
+
     DeleteShader(fullScreenShader);
+    
     DestroyRenderer();
 }

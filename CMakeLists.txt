@@ -13,9 +13,11 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build)
 set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     ASTL/Additional/OBJParser.cpp
+    External/ufbx.c
+	AssetManager.cpp
     SaneProgram.cpp
     Renderer.cpp
-		PlatformWindows.cpp
+    PlatformWindows.cpp
 )
 
 include_directories(${CMAKE_SOURCE_DIR})
