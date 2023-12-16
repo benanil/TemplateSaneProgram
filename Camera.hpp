@@ -30,11 +30,12 @@ struct Camera
 		verticalFOV = 75.0f;
 		nearClip = 0.1f;
 		farClip = 1000.0f;
-		pitch = 0.0f, yaw = -90.0f , senstivity = 20.0f;
+		pitch = 0.0f, yaw = -45.0f , senstivity = 20.0f;
 
 		viewportSize = xviewPortSize;
-		position = MakeVec3(0.0f, 1.0f, 15.0f);
-		Front = MakeVec3(0.0f, 0.0f, -1.0f);
+		position = MakeVec3(0.0f, 3.0f, 0.0f);
+		Front = MakeVec3(0.5f, 0.0f, -0.5f);
+
 		GetMonitorSize(&monitorSize.x, &monitorSize.y);
 
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
@@ -60,13 +61,17 @@ struct Camera
 		mouseOld = MakeVec2((float)x, (float)y);
 	}
 
+	// when you move the mouse out of window it will apear opposide side what I mean by that is:
+	// for example when your cursor goes to right like this |  ^->|   your mouse will apear at the left of the monitor |^    |
 	void InfiniteMouse(const Vector2f& point)
 	{
+#ifndef __ANDROID__
 		if (point.x > monitorSize.x - 2) SetCursorPos(3, (int)point.y);
 		if (point.y > monitorSize.y - 2) SetCursorPos((int)point.x, 3);
 
 		if (point.x < 2) SetCursorPos(monitorSize.x - 3, (int)point.y);
 		if (point.y < 2) SetCursorPos((int)point.x, monitorSize.y - 3);
+#endif
 	}
 
 	void Update()
@@ -75,13 +80,16 @@ struct Camera
 		if (!pressing) { wasPressing = false; return; }
 
 		float dt = (float)GetDeltaTime() * 2.0f;
-		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 20.0f;
+		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 2.0f;
 
 		Vector2f mousePos;
 		GetMousePos(&mousePos.x, &mousePos.y);
 		Vector2f diff = mousePos - mouseOld;
 
+		// if platform is android left side is for movement, right side is for rotating camera
+#ifdef __ANDROID__
 		if (mousePos.x > (monitorSize.x / 2.0f))
+#endif
 		{
 			if (wasPressing && diff.x + diff.y < 130.0f)
 			{
@@ -96,14 +104,15 @@ struct Camera
 			Front.z = Sin(yaw * DegToRad) * Cos(pitch * DegToRad);
 			Front.NormalizeSelf();
 			// also re-calculate the Right and Up vector
-			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));  // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
-			Up = Vector3f::Normalize(Vector3f::Cross(Right, Front));
+			// normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
+			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));  
+			Up = Vector3f::NormalizeEst(Vector3f::Cross(Right, Front));
 		}
+#ifdef __ANDROID__
 		else if (wasPressing && diff.x + diff.y < 130.0f)
-		{
 			position += (Right * diff.x * 0.02f) + (Front * -diff.y * 0.02f);
-		}
-
+#endif
+		
 #ifndef __ANDROID__
 		if (GetKeyDown('D')) position += Right * speed;
 		if (GetKeyDown('A')) position -= Right * speed;
@@ -115,7 +124,7 @@ struct Camera
 		mouseOld = mousePos;
 		wasPressing = true;
 
-		// InfiniteMouse(mousePos);
+		InfiniteMouse(mousePos);
 		RecalculateView();
 	}
 

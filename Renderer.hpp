@@ -92,7 +92,11 @@ void DeleteShader(Shader shader);
 
 void DeleteMesh(Mesh mesh);
 
+// renders an texture to screen with given shader
 void RenderFullScreen(Shader fullScreenShader, unsigned int texture);
+
+// renders an texture to screen
+void RenderFullScreen(unsigned int texture);
 
 void BindShader(Shader shader);
 

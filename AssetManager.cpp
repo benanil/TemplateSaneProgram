@@ -47,10 +47,10 @@ static char* GetNameFromFBX(ufbx_string ustr, FixedSizeGrowableAllocator<char>& 
 	char* name = stringAllocator.AllocateUninitialized(ustr.length + 1);
 	SmallMemCpy(name, ustr.data, ustr.length);
 	name[ustr.length] = 0;
-	return nullptr;
+	return name;
 }
 
-int LoadFBX(const char* path, ParsedGLTF* fbxScene)
+int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 {
 	ufbx_load_opts opts = { 0 };
 	opts.evaluate_skinning = false;
@@ -237,7 +237,7 @@ int LoadFBX(const char* path, ParsedGLTF* fbxScene)
 		amaterial.baseColorTexture.index = GetFBXTexture(umaterial, uscene, UFBX_MATERIAL_FEATURE_PBR,
 		                                                                    UFBX_MATERIAL_PBR_BASE_COLOR,
 		                                                                    UFBX_MATERIAL_FBX_DIFFUSE_COLOR);
-		if (amaterial.baseColorTexture.index == 0)
+		if (amaterial.baseColorTexture.index == -1)
 			amaterial.baseColorTexture.index = GetFBXTexture(umaterial, uscene, UFBX_MATERIAL_FEATURE_DIFFUSE,
 				                                                                UFBX_MATERIAL_PBR_BASE_COLOR,
 				                                                                UFBX_MATERIAL_FBX_DIFFUSE_COLOR);

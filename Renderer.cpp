@@ -40,13 +40,21 @@
 #define STBI_ASSERT(x) ASSERT(x)
 #define STB_IMAGE_IMPLEMENTATION
 #include "External/stb_image.h"
+#include "ASTL/String.hpp"
 
 #include "Renderer.hpp"
 #include "Platform.hpp"
 
-static GLuint emptyVao;
-static GLuint defaultTexture;
+GLuint g_DefaultTexture;
 
+namespace
+{
+    GLuint m_EmptyVAO;
+    Shader m_DefaultFragShader;
+
+    Matrix4 m_ModelViewProjection;
+    Matrix4 m_ModelMatrix;
+}
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Texture                                  */
@@ -142,7 +150,7 @@ Texture LoadTexture(const char* path, bool mipmap)
     Texture defTexture;
     defTexture.width  = 32;
     defTexture.height = 32;
-    defTexture.handle = defaultTexture;
+    defTexture.handle = g_DefaultTexture;
 
     if (!FileExist(path))
     {
@@ -297,7 +305,7 @@ void SetShaderValue(const void* value, unsigned int location, GraphicType type)
         case GraphicType_Matrix3: glUniformMatrix3fv(location, 1, GL_FALSE, (const float*)value); break;
         case GraphicType_Matrix4: glUniformMatrix4fv(location, 1, GL_FALSE, (const float*)value); break;
         default:
-            AX_ERROR("Shader set value Graphic type invalid. type: %i", type);
+            ASSERT(0 && "Shader set value Graphic type invalid. type:");
             break;
     }
 }
@@ -404,16 +412,32 @@ void GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severi
     AX_LOG("\n");
 }
 
-void CreateDefaultTexture()
+static void CreateDefaultTexture()
 {
     unsigned char img[32*32*3]{};
     
-    for (int i = 0; i < (32 * 32 * 3); i++)
+    for (int i = 0; i < (32 * 32); i++)
     {
-        bool columnOdd = (i & 15) < 8;
-        img[i] = 200 * columnOdd;
+        img[i * 3 + 0] = 240;
+        img[i * 3 + 1] = 220;
+        img[i * 3 + 2] = 185;
     }
-    defaultTexture = CreateTexture(32, 32, img, false, TextureType_RGB8).handle;
+    g_DefaultTexture = CreateTexture(32, 32, img, false, TextureType_RGB8).handle;
+}
+
+static void CreateDefaultScreenShader()
+{
+    const char* fragmentShaderSource =
+    AX_SHADER_VERSION_PRECISION()
+    R"(
+        in vec2 texCoord;
+        out vec4 color;
+        uniform sampler2D tex;
+        void main() {
+            color = texture(tex, texCoord);
+        }
+    )";
+    m_DefaultFragShader = CreateFullScreenShader(fragmentShaderSource);
 }
 
 void InitRenderer()
@@ -428,10 +452,11 @@ void InitRenderer()
     glDebugMessageCallback(GLDebugMessageCallback, nullptr);
 #endif
     // create empty vao unfortunately this step is necessary for ogl 3.2
-    glGenVertexArrays(1, &emptyVao);
+    glGenVertexArrays(1, &m_EmptyVAO);
 
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
     CreateDefaultTexture();
+    CreateDefaultScreenShader();
 }
 
 void SetDepthTest(bool val)
@@ -448,12 +473,17 @@ void SetDepthWrite(bool val)
 void RenderFullScreen(Shader fullScreenShader, unsigned int texture)
 {
     glUseProgram(fullScreenShader.handle);
-    glBindVertexArray(emptyVao);
+    glBindVertexArray(m_EmptyVAO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(0, 0);// glUniform1i(glGetUniformLocation(fullScreenShader.handle, "tex"), 0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     CHECK_GL_ERROR();
+}
+
+void RenderFullScreen(unsigned int texture)
+{
+    RenderFullScreen(m_DefaultFragShader, texture);
 }
 
 void BindShader(Shader shader)
@@ -468,22 +498,19 @@ void SetTexture(Texture texture, int index)
     glBindTexture(GL_TEXTURE_2D, texture.handle);
 }
 
-static Matrix4 modelViewProjection;
-static Matrix4 modelMatrix;
-
 void SetModelViewProjection(float* mvp) 
 {
-    SmallMemCpy(&modelViewProjection.m[0][0], mvp, 16 * sizeof(float)); 
+    SmallMemCpy(&m_ModelViewProjection.m[0][0], mvp, 16 * sizeof(float)); 
     GLint mvpLoc   = glGetUniformLocation(currentShader, "mvp");
-    glUniformMatrix4fv(mvpLoc  , 1, false, &modelViewProjection.m[0][0]);
+    glUniformMatrix4fv(mvpLoc  , 1, false, &m_ModelViewProjection.m[0][0]);
 }
 
 void SetModelMatrix(float* model)       
 {
     // Todo fix this, don't use uniform location like this
-    SmallMemCpy(&modelMatrix.m[0][0], model, 16 * sizeof(float)); 
+    SmallMemCpy(&m_ModelMatrix.m[0][0], model, 16 * sizeof(float)); 
     GLint modelLoc = glGetUniformLocation(currentShader, "model");
-    glUniformMatrix4fv(modelLoc, 1, false, &modelMatrix.m[0][0]);
+    glUniformMatrix4fv(modelLoc, 1, false, &m_ModelMatrix.m[0][0]);
 }
 
 void RenderMesh(Mesh mesh)
@@ -497,5 +524,6 @@ void RenderMesh(Mesh mesh)
 
 void DestroyRenderer()
 {
-
+    glDeleteTextures(1, &g_DefaultTexture);
+    DeleteShader(m_DefaultFragShader);
 }

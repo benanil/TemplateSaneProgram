@@ -1,7 +1,7 @@
 # Makefile for SaneProgram
 
 CXX = g++
-CXXFLAGS = -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mwindows -fno-rtti -s
+CXXFLAGS = -std=c++17 -O3 -mavx2 -march=native -msse4.2 -mwindows -fno-rtti -s 
 LDFLAGS = -lopengl32 -luser32 -lgdi32
 SRC_DIR = .
 ASTL_DIR = ASTL/Additional
@@ -14,7 +14,8 @@ SOURCES = $(SRC_DIR)/SaneProgram.cpp \
           $(EXT_DIR)/ufbx.c \
           $(SRC_DIR)/PlatformWindows.cpp \
           $(SRC_DIR)/Renderer.cpp \
-          $(SRC_DIR)/AssetManager.cpp
+          $(SRC_DIR)/AssetManager.cpp \
+          $(SRC_DIR)/Scene.cpp 
 
 OBJECTS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))
 
