@@ -15,6 +15,7 @@ struct Texture
 {
     int width, height;
     unsigned int handle;
+    unsigned char* buffer;
 };
 
 enum GraphicType_
@@ -76,7 +77,7 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
 Mesh CreateMeshFromPrimitive(APrimitive* mesh);
 
-Texture CreateTexture(int width, int height, void* data, bool mipmap, TextureType type);
+Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
 
 Texture LoadTexture(const char* path, bool mipmap);
 

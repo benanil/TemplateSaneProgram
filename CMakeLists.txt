@@ -14,10 +14,11 @@ set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     ASTL/Additional/OBJParser.cpp
     External/ufbx.c
-	AssetManager.cpp
+	  AssetManager.cpp
     SaneProgram.cpp
     Renderer.cpp
     PlatformWindows.cpp
+		Scene.cpp
 )
 
 include_directories(${CMAKE_SOURCE_DIR})

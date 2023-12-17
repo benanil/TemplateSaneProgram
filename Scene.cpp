@@ -25,7 +25,6 @@ namespace
 
     Array<WaitingTexture> waitingTextures(100, 0);
 
-    int numWaitingTextures = 0;
     int numProcessedTextures = 0;
     std::thread textureLoadThread;
     Camera camera;
@@ -34,6 +33,16 @@ namespace
 static void WindowResizeCallback(int width, int height)
 {
     camera.RecalculateProjection(width, height);
+}
+
+static void ChangeExtension(char* path, int pathLen, const char* newExt)
+{
+    bool extLen4 = path[pathLen-5] == '.';
+    
+    for (int i = pathLen-3-extLen4; i < pathLen; i++)
+    {
+        path[i] = *newExt++;
+    }
 }
 
 static void MultiThreadedTextureLoad2(Texture* textures, AImage* images, int numImages)
@@ -45,31 +54,34 @@ static void MultiThreadedTextureLoad2(Texture* textures, AImage* images, int num
     }
 
     const int textureSize = 1024 * 1024 * 4;
+    const int compressedSize = 1024 * 1024;
+    
     unsigned char* textureBuffer = new unsigned char[textureSize];
+    unsigned char* compressedBuffer = new unsigned char[compressedSize];
 
     for (int i = 0; i < numImages; i++)
     {
-        if (images[i].path)
+        WaitingTexture waitingTexture;
+        waitingTexture.img = nullptr;
+
+        AFile file{};
+        if (images[i].path != nullptr)
+            file = AFileOpen(images[i].path, AOpenFlag_Read);
+        
+        if (!AFileExist(file))
         {
-            WaitingTexture waitingTexture;
-            AFile file = AFileOpen(images[i].path, AOpenFlag_Read);
-
-            if (!AFileExist(file))
-            {
-                waitingTexture.img = nullptr;
-                waitingTextures.Add(waitingTexture);
-                numWaitingTextures++;
-                continue;
-            }
-
-            int bufferSize = AFileSize(file);
-            AFileRead(textureBuffer, bufferSize, file);
-
-            waitingTexture.img = stbi_load_from_memory(textureBuffer, bufferSize, &waitingTexture.width, &waitingTexture.height, &waitingTexture.channels, 0);
             waitingTextures.Add(waitingTexture);
-            numWaitingTextures++;
-            AFileClose(file);
+            continue;
         }
+        
+        int bufferSize = AFileSize(file);
+        AFileRead(textureBuffer, bufferSize, file);
+        
+        waitingTexture.img = stbi_load_from_memory(textureBuffer, bufferSize, 
+                                                   &waitingTexture.width, &waitingTexture.height, &waitingTexture.channels, 0);
+
+        waitingTextures.Add(waitingTexture);
+        AFileClose(file);
     }
 
     delete[] textureBuffer;
@@ -166,14 +178,19 @@ void RenderScene(Scene* scene)
 
 void UpdateScene(Scene* scene)
 {
-    if (numProcessedTextures < numWaitingTextures)
+    for (int j = 0; j < 3; j++)
+    if (numProcessedTextures < waitingTextures.Size())
     {
         int i = numProcessedTextures;
         if (waitingTextures[i].img != nullptr)
         {
             Texture* textures = scene->textures;
+            // unsigned long imageSize = (unsigned long)(waitingTextures[i].width) * waitingTextures[i].height;
+            // textures[i] = CreateCompressedTexture(waitingTextures[i].width, waitingTextures[i].height, waitingTextures[i].img, imageSize);
             const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
-            textures[i] = CreateTexture(waitingTextures[i].width, waitingTextures[i].height, waitingTextures[i].img, true, numCompToFormat[waitingTextures[i].channels]);
+            textures[i] = CreateTexture(waitingTextures[i].width, waitingTextures[i].height, waitingTextures[i].img, numCompToFormat[waitingTextures[i].channels], true, false);
+            
+            // delete[] waitingTextures[i].img;
             stbi_image_free(waitingTextures[i].img);
         }
         numProcessedTextures++;

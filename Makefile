@@ -1,7 +1,7 @@
 # Makefile for SaneProgram
 
 CXX = g++
-CXXFLAGS = -std=c++17 -O3 -mavx2 -march=native -msse4.2 -mwindows -fno-rtti -s 
+CXXFLAGS = -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mwindows -fno-rtti -s 
 LDFLAGS = -lopengl32 -luser32 -lgdi32
 SRC_DIR = .
 ASTL_DIR = ASTL/Additional
