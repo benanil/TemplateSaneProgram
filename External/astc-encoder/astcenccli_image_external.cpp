@@ -66,7 +66,7 @@ static void astcenc_runtime_assert(bool condition)
     }
 }
 
-#include "stb_image.h"
+#include "../stb_image.h"
 #include "stb_image_write.h"
 #include "tinyexr.h"
 

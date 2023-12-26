@@ -30,7 +30,7 @@
 
 #include "astcenccli_internal.h"
 
-#include "stb_image.h"
+#include "../stb_image.h"
 #include "stb_image_write.h"
 #include "tinyexr.h"
 
@@ -2392,6 +2392,8 @@ bool store_ncimage(
 	const char* filename,
 	int y_flip
 ) {
+	const char* eptr = strrchr(filename, '.');
+	assert(eptr);
 	for (int i = 0; i < storer_descr_count; i++)
 	{
 		if (strcmp(eptr, storer_descs[i].ending1) == 0
