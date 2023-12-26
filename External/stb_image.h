@@ -373,7 +373,10 @@ RECENT REVISION HISTORY:
 #define STBI_NO_HDR
 #define STBI_NO_PIC
 #define STBI_NO_PNM
-#define STBI_NO_STDIO
+
+#ifdef __ANDROID__
+    #define STBI_NO_STDIO
+#endif
 
 #ifndef STBI_NO_STDIO
 #include <stdio.h>

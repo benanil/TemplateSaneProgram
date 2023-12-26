@@ -13,13 +13,25 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build)
 set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     ASTL/Additional/OBJParser.cpp
+    
     External/ufbx.c
-	  AssetManager.cpp
+    External/zstd/zstd.c # compress files. by facebook (meta)
+    
+    External/etcpak/ProcessRGB.cpp # compress etc textures
+    External/etcpak/ProcessDxtc.cpp # compress dxt textures
+    
+    AssetManager.cpp
     SaneProgram.cpp
     Renderer.cpp
     PlatformWindows.cpp
-		Scene.cpp
+    Scene.cpp
 )
+
+# Add all .cpp files from External/astc-encoder to the SOURCES list
+file(GLOB ASTC_ENCODER_SOURCES External/astc-encoder/*.cpp)
+
+# Append the ASTC_ENCODER_SOURCES to the SOURCES list
+list(APPEND SOURCES ${ASTC_ENCODER_SOURCES})
 
 include_directories(${CMAKE_SOURCE_DIR})
 

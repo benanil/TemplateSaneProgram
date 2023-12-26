@@ -15,7 +15,8 @@ SOURCES = $(SRC_DIR)/SaneProgram.cpp \
           $(SRC_DIR)/PlatformWindows.cpp \
           $(SRC_DIR)/Renderer.cpp \
           $(SRC_DIR)/AssetManager.cpp \
-          $(SRC_DIR)/Scene.cpp 
+          $(SRC_DIR)/Scene.cpp \
+          $(SRC_DIR)/External/zstd/zstd.c 
 
 OBJECTS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))
 

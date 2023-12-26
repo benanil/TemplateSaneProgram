@@ -24,9 +24,6 @@
     #define GLAD_GL_IMPLEMENTATION
     #include "External/glad.hpp"
 
-    #define STB_DXT_IMPLEMENTATION
-    #include "External/stb_dxt.h"
-
     #if defined(_DEBUG) || defined(DEBUG)
         #define CHECK_GL_ERROR() if (GLenum error = glGetError()) \
                                  { FatalError("%s -line:%i message: %s" , __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0); }
@@ -51,6 +48,9 @@
 
 GLuint g_DefaultTexture;
 
+unsigned char* g_TextureLoadBuffer = nullptr;
+uint64_t g_TextureLoadBufferSize = 1024 * 1024 * 4;
+
 namespace
 {
     GLuint m_EmptyVAO;
@@ -58,9 +58,6 @@ namespace
 
     Matrix4 m_ModelViewProjection;
     Matrix4 m_ModelMatrix;
-
-    unsigned char* m_TextureLoadBuffer = nullptr;
-    uint64_t m_TextureLoadBufferSize = 1024 * 1024 * 4;
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -127,7 +124,7 @@ const char* GetGLErrorString(GLenum error)
     return "UNKNOWN_GL_ERROR";
 }
 
-// for now only .jpg files supported
+// type is either 0 or 1 if compressed. 1 means has alpha
 Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed)
 {
     Texture texture;
@@ -148,11 +145,30 @@ Texture CreateTexture(int width, int height, void* data, TextureType type, bool 
     }
     else
 #ifndef __ANDROID__ 
-        glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT, width, height, 0, width * height, data);
+    {
+        glCompressedTexImage2D(GL_TEXTURE_2D, 0, type == 1 ? GL_COMPRESSED_RGBA_S3TC_DXT5_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
+                               width, height, 0, type == 1 ? width * height : (width * height) >> 1, data);
+        if (mipmap)
+            glGenerateMipmap(GL_TEXTURE_2D);
+    }
+#else
+    {
+        // glTexParameteri(GL_TEXTURE_2D, 0x8F69, GL_RGBA8);
+        int numMips = MAX((int)Log2((unsigned)width) >> 1, 1) - 1;
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, numMips);
+        int mip = 0;
+        do
+        {
+            glCompressedTexImage2D(GL_TEXTURE_2D, mip, GL_COMPRESSED_RGBA_ASTC_4x4, width, height, 0, width * height, data);
+            data = ((char*)data) + (width * height);
+            width >>= 1;
+            height >>= 1;
+            mip++;
+        } while(numMips-- > 0);
+    }
 #endif
-    
-    if (mipmap)
-        glGenerateMipmap(GL_TEXTURE_2D);
     
     CHECK_GL_ERROR();
     return texture;
@@ -163,8 +179,19 @@ static bool IsCompressed(const char* path, int pathLen)
 #ifndef __ANDROID__ 
     return path[pathLen-1] == 't' && path[pathLen-2] == 'x' && path[pathLen-3] == 'd';
 #else
-    // todo: ktx
+    return path[pathLen-1] == 'c' && path[pathLen-2] == 't' && path[pathLen-3] == 's' && path[pathLen-4] == 'a';
+    
 #endif
+}
+
+void ResizeTextureLoadBufferIfNecessarry(unsigned long long size)
+{
+    if (g_TextureLoadBufferSize < size)
+    {
+        delete[] g_TextureLoadBuffer;
+        g_TextureLoadBufferSize = size;
+        g_TextureLoadBuffer = new unsigned char[g_TextureLoadBufferSize];
+    }
 }
 
 Texture LoadTexture(const char* path, bool mipmap)
@@ -185,25 +212,17 @@ Texture LoadTexture(const char* path, bool mipmap)
     AFile asset = AFileOpen(path, AOpenFlag_Read);
     uint64_t size = AFileSize(asset);
 
-    if (m_TextureLoadBufferSize < size)
-    {
-        delete[] m_TextureLoadBuffer;
-        m_TextureLoadBuffer = new unsigned char[m_TextureLoadBufferSize];
-    }
+    ResizeTextureLoadBufferIfNecessarry(size);
     
     bool compressed = IsCompressed(path, StringLength(path));
     if (!compressed)
     {
-        AFileRead(m_TextureLoadBuffer, size, asset);
-        image = stbi_load_from_memory(m_TextureLoadBuffer , size, &width, &height, &channels, 0);
+        AFileRead(g_TextureLoadBuffer, size, asset);
+        image = stbi_load_from_memory(g_TextureLoadBuffer , size, &width, &height, &channels, 0);
     }
     else
     {
-        // AFileRead(&width, sizeof(int), asset);
-        // AFileRead(&height, sizeof(int), asset);
-        // channels = 4;
-        // image = (unsigned char*)malloc(size);
-        // AFileRead(asset, image, size);
+        ASSERT(0 && "not implemented");
     }
     
     AFileClose(asset);
@@ -221,7 +240,7 @@ Texture LoadTexture(const char* path, bool mipmap)
 void DeleteTexture(Texture texture) 
 { 
     glDeleteTextures(1, &texture.handle); 
-    stbi_image_free(texture.buffer);
+    // stbi_image_free(texture.buffer);
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -431,8 +450,8 @@ Shader CreateFullScreenShader(const char* fragmentSource)
 
 Shader ImportShader(const char* vertexPath, const char* fragmentPath)
 {
-    char* vertexText   = ReadAllFile(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    char* fragmentText = ReadAllFile(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    char* vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    char* fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     
     Shader shader = LoadShader(vertexText, fragmentText);
     FreeAllText(vertexText);
@@ -465,7 +484,7 @@ static void CreateDefaultTexture()
         img[i * 3 + 1] = 220;
         img[i * 3 + 2] = 185;
     }
-    g_DefaultTexture = CreateTexture(32, 32, img, false, TextureType_RGB8).handle;
+    g_DefaultTexture = CreateTexture(32, 32, img, TextureType_RGB8, false).handle;
 }
 
 static void CreateDefaultScreenShader()
@@ -491,7 +510,7 @@ void InitRenderer()
 #if defined(_DEBUG) || defined(DEBUG)
     // enable debug message
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageControl(GL_DEBUG_SOURCE_API_ARB, GL_DEBUG_TYPE_ERROR, GL_DEBUG_SEVERITY_LOW, 0, NULL, GL_TRUE);
+    glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_ERROR, GL_DEBUG_SEVERITY_LOW, 0, NULL, GL_TRUE);
     glDebugMessageCallback(GLDebugMessageCallback, nullptr);
 #endif
     // create empty vao unfortunately this step is necessary for ogl 3.2
@@ -501,7 +520,7 @@ void InitRenderer()
     CreateDefaultTexture();
     CreateDefaultScreenShader();
 
-    m_TextureLoadBuffer = new unsigned char[m_TextureLoadBufferSize];
+    g_TextureLoadBuffer = new unsigned char[g_TextureLoadBufferSize];
 }
 
 void SetDepthTest(bool val)
@@ -572,5 +591,5 @@ void DestroyRenderer()
     glDeleteTextures(1, &g_DefaultTexture);
     DeleteShader(m_DefaultFragShader);
 
-    delete[] m_TextureLoadBuffer;
+    // delete[] m_TextureLoadBuffer;
 }

@@ -77,8 +77,12 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
 Mesh CreateMeshFromPrimitive(APrimitive* mesh);
 
+// type is either 0 or 1 if compressed. 1 means has alpha
 Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
 
+void ResizeTextureLoadBufferIfNecessarry(unsigned long long size);
+
+// Imports texture from disk and loads to GPU
 Texture LoadTexture(const char* path, bool mipmap);
 
 Shader LoadShader(const char* vertexSource, const char* fragmentSource);
