@@ -10,7 +10,7 @@ cmake . -Bbuild
 ```
 build with with gcc, by running build.bat
 # Windowing
-ASTL supports windowing which means you can create window in windows and android platforms <br>
+Template program supports windowing which means you can create window in windows and android platforms <br>
 it works like glfw and SDL, supports keyboard, mouse and touch input <br>
 to change the icon of the .exe edit info.rc <br>
 also application information(CompanyName, Version, Product name) in info.rc and execute this command <br>
