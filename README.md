@@ -24,7 +24,7 @@ Visual Studio go to SolutionExplorer-> right click SaneProgram->AddExisting->San
 
 feel free to contribute
 
-#Contact
+# Contact
 If you have any questions, feedback, or suggestions, feel free to reach out:<br>
 
 Email: anilcangulkaya7@gmail.com<br>
@@ -33,7 +33,7 @@ GitHub: @benanil<br>
 <br>
 Feel free to reach out regarding any inquiries related to the project.<br>
 
-#Building Android Project
+# Building Android Project
 copy Meshes, Shaders and Textures folders to TemplateSaneProgram/Android/app/src/main/assets folder <br>
 and open TemplateSaneProgram/Android folder with android studio hit build and run.
 this might be automated in the feature
