@@ -32,8 +32,8 @@ Twitter: @anilcanglk12<br>
 GitHub: @benanil<br>
 <br>
 Feel free to reach out regarding any inquiries related to the project.<br>
-## Related
 
-Here are some related and helpful links
- 
- - [Raylib](https://github.com/raysan5/raylib)
+#Building Android Project
+copy Meshes, Shaders and Textures folders to TemplateSaneProgram/Android/app/src/main/assets folder <br>
+and open TemplateSaneProgram/Android folder with android studio hit build and run.
+this might be automated in the feature
