@@ -350,6 +350,17 @@ static void WriteGLTFString(const char* str, AFile file)
 	if (str) AFileWrite(str, nameLen + 1, file);
 }
 
+const int ABMMeshVersion = 2;
+
+bool IsABMLastVersion(const char* path)
+{
+	AFile file = AFileOpen(path, AOpenFlag_Read);
+	int version = 0;
+	AFileRead(&version, sizeof(int), file);
+	AFileClose(file);
+	return version == ABMMeshVersion;
+}
+
 bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 {
 	if (zstdCompressorCTX == nullptr)
@@ -357,10 +368,10 @@ bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 
 	AFile file = AFileOpen(path, AOpenFlag_Write);
 
-	int version = 2;
+	int version = ABMMeshVersion;
 	AFileWrite(&version, sizeof(int), file);
     
-	uint64_t reserved[4] = { 0xDEADBEEF };
+	uint64_t reserved[4] = {};
 	AFileWrite(&reserved, sizeof(uint64_t) * 4, file);
    
 	AFileWrite(&gltf->numMeshes, sizeof(short), file);
@@ -550,6 +561,7 @@ void ReadGLTFString(char*& str, AFile file, FixedSizeGrowableAllocator<char>& st
 	}
 }
 
+
 bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 {
 	if (zstdCompressorCTX == nullptr)
@@ -565,9 +577,9 @@ bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	FixedSizeGrowableAllocator<char> stringAllocator(1024);
 	FixedSizeGrowableAllocator<int> intAllocator;
 
-	int version;
+	int version = ABMMeshVersion;
 	AFileRead(&version, sizeof(int), file);
-	ASSERT(version == 2);
+	ASSERT(version == ABMMeshVersion);
 
 	uint64_t reserved[4];
 	AFileRead(&reserved, sizeof(uint64_t) * 4, file);

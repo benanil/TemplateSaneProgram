@@ -59,7 +59,7 @@ static void ChangeExtension(char* path, int pathLen, const char* newExt)
 
 extern uint64_t astcenc_main(const char* input_filename, unsigned char* currentCompression);
 
-static void SaveSceneImagesGeneric(Scene* scene, char* path, const char* inPath, bool isMobile)
+static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
 {
 #ifndef __ANDROID__
     AFile file = AFileOpen(path, AOpenFlag_Write);
@@ -263,15 +263,28 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
     AFileClose(file);
 }
 
-static void SaveSceneImages(Scene* scene, char* path, const char* inPath)
+static std::thread CompressASTCImagesThread;
+
+void SaveAndroidCompressedImagesFn(Scene* scene, char* astcPath) 
+{
+    SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
+    delete[] astcPath;
+}
+
+static void SaveSceneImages(Scene* scene, char* path)
 {
     // // save dxt textures for desktop
-    // ChangeExtension(path, StringLength(path), "dxt");
-    // SaveSceneImagesGeneric(scene, path, inPath, false);
-    
+    ChangeExtension(path, StringLength(path), "dxt");
+    SaveSceneImagesGeneric(scene, path, false); // is mobile false
+
     // save astc textures for android
-    ChangeExtension(path, StringLength(path), "astc");
-    SaveSceneImagesGeneric(scene, path, inPath, true);
+    int len = StringLength(path);
+    ChangeExtension(path, len, "astc");
+    char* astcPath = new char[len + 2] {};
+    SmallMemCpy(astcPath, path, len + 1);
+
+    // save textures in other thread because we don't want to wait android textures while on windows platform
+    new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, scene, astcPath);
 }
 
 static void LoadSceneImages(char* path, Texture*& textures, int numImages)
@@ -292,27 +305,32 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
     bool parsed = true;
     char path[256]{};
     
-    // ParseGLTF(inPath, &scene->data, scale);
-    
     int pathLen = StringLength(inPath);
     SmallMemCpy(path, inPath, pathLen);
 
-    // save scene and the textures as binary
-    
     ChangeExtension(path, pathLen, "abm");
-    // SaveGLTFBinary(&scene->data, path);
+    bool firstLoad = !FileExist(path) || !IsABMLastVersion(path);
+    if (firstLoad)
+    {
+        ChangeExtension(path, StringLength(path), "gltf");
+        parsed &= ParseGLTF(path, &scene->data, scale); ASSERT(parsed);
+        ChangeExtension(path, StringLength(path), "abm");
+        parsed &= SaveGLTFBinary(&scene->data, path); ASSERT(parsed);
+        SaveSceneImages(scene, path); // save textures as binary
+    }
+    else
+    {
+        parsed = LoadGLTFBinary(path, &scene->data);
+    }
     
-    parsed = LoadGLTFBinary(path, &scene->data);
-
     if (!parsed)
         return 0;
-
-    SaveSceneImages(scene, path, inPath);
 
     if (LoadToGPU)
     {
         LoadSceneImages(path, scene->textures, scene->data.numImages);
     
+        // load scene meshes
         ParsedGLTF& data = scene->data;
 
         int numMeshes = 0;
