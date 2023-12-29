@@ -636,7 +636,7 @@ void rygCompress(unsigned char* dst, const unsigned char* src, int w, int h)
         for (x = 0; x < w; x += 4)
         {
             extractBlock(src, x, y, w, h, block);
-            stb_compress_dxt_block(dst, block, 10);
+            stb_compress_dxt_block(dst, block, STB_DXT_HIGHQUAL);
             dst += 8;
         }
     }

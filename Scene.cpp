@@ -25,21 +25,12 @@
 
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
+extern unsigned char* g_TextureLoadBuffer;
 
 namespace
 {
-    struct WaitingTexture
-    {
-        unsigned char* img;
-        int width, height, channels;
-    };
-
-    Array<WaitingTexture> waitingTextures(100, 0);
-
-    int numProcessedTextures = 0;
-    std::thread textureLoadThread;
     Camera camera;
-    
+
     struct ImageInfo
     {
         int width, height;
@@ -66,26 +57,21 @@ static void ChangeExtension(char* path, int pathLen, const char* newExt)
         path[i++] = '\0';
 }
 
-extern unsigned char* g_TextureLoadBuffer;
-
-typedef int (*ImageCompressFn)(const void* src, void* dst, int width, int height);
-typedef int (*ImageSizeFn)(int width, int height);
-
-static int WidthMulHeightFn    (int width, int height) { return width * height; }
-static int WidthMulHeightDiv2Fn(int width, int height) { return (width * height) >> 1; }
-
 extern uint64_t astcenc_main(const char* input_filename, unsigned char* currentCompression);
 
 static void SaveSceneImagesGeneric(Scene* scene, char* path, const char* inPath, bool isMobile)
 {
 #ifndef __ANDROID__
     AFile file = AFileOpen(path, AOpenFlag_Write);
-    Array<ImageInfo> imageInfos;
-    
+    int numImages = scene->data.numImages;
+    int currentInfo = 0;
+    ImageInfo* imageInfos = new ImageInfo[numImages];
+    uint64_t* currentCompressions = new uint64_t[numImages];
+
     uint64_t beforeCompressedSize = 0;
 
     // todo: make this multi threaded if texture count is greater than 4
-    for (int i = 0; i < scene->data.numImages; i++)
+    for (int i = 0; i < numImages; i++)
     {
         ImageInfo info;
         info.width = 32, info.height = 32, info.numComp = 4;
@@ -93,7 +79,8 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const char* inPath,
         if (scene->data.images[i].path == nullptr || !FileExist(scene->data.images[i].path))
         {    
             AFileWrite(&info, sizeof(ImageInfo), file);
-            imageInfos.Add(info);
+            imageInfos[currentInfo] = info;
+            currentCompressions[currentInfo++] = beforeCompressedSize;
             beforeCompressedSize += info.width * info.height;
             continue;
         }
@@ -102,9 +89,10 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const char* inPath,
         int res = stbi_info(imageFileName, &info.width, &info.height, &info.numComp);
         ASSERT(res);
         AFileWrite(&info, sizeof(ImageInfo), file);
-        imageInfos.Add(info);
-
-        int imageSize = info.width * info.height;
+        currentCompressions[currentInfo] = beforeCompressedSize;
+        imageInfos[currentInfo++] = info;
+        bool isDxt1 = (isMobile == false) && (info.numComp == 3);
+        int imageSize = (info.width * info.height) >> isDxt1;
         // we have got to include mipmap sizes if mobile
         if (isMobile)
         {
@@ -122,47 +110,83 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const char* inPath,
     }
 
     unsigned char* toCompressionBuffer = new unsigned char[beforeCompressedSize];
-    unsigned char* currentCompression = toCompressionBuffer;
 
-    for (int i = 0; i < imageInfos.Size(); i++)
+    auto execFn = [imageInfos, toCompressionBuffer, scene, isMobile](int numImages, uint64_t compressionStart, int i) -> void
     {
-        ImageInfo info = imageInfos[i];
-        const char* imagePath = scene->data.images[i].path;
+        unsigned char* textureLoadBuffer = !isMobile ? new unsigned char[1024 * 1024] : nullptr;
+        uint64_t loadBufferSize = 1024 * 1024;
+        unsigned char* currentCompression = toCompressionBuffer + compressionStart;
+        
+        for (int end = i + numImages; i < end; i++)
+        { 
+            ImageInfo info = imageInfos[i];
+            const char* imagePath = scene->data.images[i].path;
 
-        if (imagePath == nullptr || !FileExist(imagePath))
-        {
-            currentCompression += 32 * 32;
-            continue;
-        }
-
-        if (!isMobile)
-        {
-            unsigned char* stbImage = stbi_load(imagePath, &info.width, &info.height, 0, STBI_rgb_alpha);
-            ResizeTextureLoadBufferIfNecessarry(info.width * info.height);
-
-            int imageSize = info.width * info.height;
-            if (info.numComp == 4) {
-                CompressDxt5((const uint32_t*)stbImage, (uint64_t*)g_TextureLoadBuffer, info.width, info.height);
+            if (imagePath == nullptr || !FileExist(imagePath))
+            {
+                currentCompression += 32 * 32;
+                continue;
             }
-            else {
-                rygCompress(g_TextureLoadBuffer, stbImage, info.width, info.height);
-                imageSize >>= 1;
-            }
-            stbi_image_free(stbImage);
 
-            SmallMemCpy(currentCompression, g_TextureLoadBuffer, imageSize);
-            currentCompression += imageSize;
+            if (!isMobile)
+            {
+                bool was3 = info.numComp == 3;
+                unsigned char* stbImage = stbi_load(imagePath, &info.width, &info.height, 0, STBI_rgb_alpha);
+                int imageSize = info.width * info.height;
+                assert(stbImage);
+
+                if (loadBufferSize < imageSize)
+                {
+                    delete[] textureLoadBuffer;
+                    textureLoadBuffer = new unsigned char[imageSize];
+                    loadBufferSize = imageSize;
+                }
+                
+                if (info.numComp == 4) 
+                {
+                    uint32_t numBlocks = (info.width >> 2) * (info.height >> 2);
+                    CompressDxt5((const uint32_t*)stbImage, (uint64_t*)textureLoadBuffer, numBlocks, info.height);
+                }
+                else {
+                    rygCompress(textureLoadBuffer, stbImage, info.width, info.height);
+                    imageSize >>= 1;
+                }
+
+                SmallMemCpy(currentCompression, textureLoadBuffer, imageSize);
+                currentCompression += imageSize;
+            }
+            else
+            {
+                uint64_t numBytes = astcenc_main(imagePath, currentCompression);
+                ASSERT(numBytes != 1);
+                currentCompression += numBytes;
+            }
         }
-        else
-        {
-            uint64_t numBytes = astcenc_main(imagePath, currentCompression);
-            ASSERT(numBytes != 1);
-            currentCompression += numBytes;
-        }
-    }
+        delete[] textureLoadBuffer;
+    };
     
-    unsigned char* end = (toCompressionBuffer + beforeCompressedSize);
-    ASSERT(end == currentCompression);
+    int numTask = numImages;
+    int taskPerThread = MAX(numImages / 8, 1);
+    std::thread threads[9];
+
+    int threadIndex = 0;
+
+    while (numTask > 0)
+    {
+        int start = MAX(numTask - taskPerThread, 0);
+        int end = numTask;
+        new(threads + threadIndex)std::thread(execFn, end - start, currentCompressions[start], start);
+        threadIndex++;
+        numTask -= taskPerThread;
+    }
+
+    for (int i = 0; i < taskPerThread + 1; i++)
+    {
+        threads[i].join();
+    }
+
+    // unsigned char* end = (toCompressionBuffer + beforeCompressedSize);
+    // ASSERT(end == currentCompression);
 
     uint64_t compressedSize = beforeCompressedSize * 0.92;
     char* compressedBuffer = new char[compressedSize];
@@ -177,13 +201,12 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const char* inPath,
 
     AFileClose(file);
 
-    delete[] toCompressionBuffer;
-    delete[] compressedBuffer;
+    delete[] toCompressionBuffer; delete[] compressedBuffer;
+    delete[] imageInfos;          delete[] currentCompressions;
 #endif
 }
 
-static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, int numImages,
-                                   ImageSizeFn rgbaFn, ImageSizeFn rgbFn, bool isMobile)
+static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, int numImages, bool isMobile)
 {
     AFile file = AFileOpen(texturePath, AOpenFlag_Read);
     
@@ -208,7 +231,6 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
     ASSERT(!ZSTD_isError(decompressedSize));
 
     unsigned char* currentImage = decompressedBuffer;
-    ImageSizeFn imageSizeFns[] = { rgbFn, rgbaFn };
 
     for (int i = 0; i < numImages; i++)
     {
@@ -218,10 +240,12 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
             currentImage += 32 * 32;
             continue;
         }
+        int imageSize = info.width * info.height;
         bool hasAlpha = info.numComp == 4;
-        int imageSize = imageSizeFns[hasAlpha](info.width, info.height);
+        bool isDxt1 = (hasAlpha == false) && (isMobile == false);
         textures[i] = CreateTexture(info.width, info.height, currentImage, hasAlpha, true, true);
-        currentImage += imageSize;
+        currentImage += imageSize >> isDxt1;
+
         if (isMobile)
         {
             int mip = MAX((int)Log2((unsigned int)info.width) >> 1, 1) - 1;
@@ -243,7 +267,7 @@ static void SaveSceneImages(Scene* scene, char* path, const char* inPath)
 {
     // // save dxt textures for desktop
     // ChangeExtension(path, StringLength(path), "dxt");
-    // SaveSceneImagesGeneric(scene, path, inPath, CompressDxt5fn, CompressDxt1fn);
+    // SaveSceneImagesGeneric(scene, path, inPath, false);
     
     // save astc textures for android
     ChangeExtension(path, StringLength(path), "astc");
@@ -255,10 +279,10 @@ static void LoadSceneImages(char* path, Texture*& textures, int numImages)
     textures = new Texture[numImages]();
 #ifdef __ANDROID__
     ChangeExtension(path, StringLength(path), "astc");
-    LoadSceneImagesGeneric(path, textures, numImages, WidthMulHeightFn, WidthMulHeightFn, true);
+    LoadSceneImagesGeneric(path, textures, numImages, true);
 #else
     ChangeExtension(path, StringLength(path), "dxt");
-    LoadSceneImagesGeneric(path, textures, numImages, WidthMulHeightFn, WidthMulHeightDiv2Fn, false);
+    LoadSceneImagesGeneric(path, textures, numImages, false);
 #endif
 }
 
