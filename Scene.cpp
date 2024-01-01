@@ -130,7 +130,6 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
 
             if (!isMobile)
             {
-                bool was3 = info.numComp == 3;
                 unsigned char* stbImage = stbi_load(imagePath, &info.width, &info.height, 0, STBI_rgb_alpha);
                 int imageSize = info.width * info.height;
                 assert(stbImage);
@@ -276,7 +275,7 @@ static void SaveSceneImages(Scene* scene, char* path)
     // // save dxt textures for desktop
     ChangeExtension(path, StringLength(path), "dxt");
     SaveSceneImagesGeneric(scene, path, false); // is mobile false
-
+    
     // save astc textures for android
     int len = StringLength(path);
     ChangeExtension(path, len, "astc");
@@ -299,7 +298,6 @@ static void LoadSceneImages(char* path, Texture*& textures, int numImages)
 #endif
 }
 
-
 int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
 {
     bool parsed = true;
@@ -314,6 +312,8 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
     {
         ChangeExtension(path, StringLength(path), "gltf");
         parsed &= ParseGLTF(path, &scene->data, scale); ASSERT(parsed);
+        CreateVerticesIndices(&scene->data);
+
         ChangeExtension(path, StringLength(path), "abm");
         parsed &= SaveGLTFBinary(&scene->data, path); ASSERT(parsed);
         SaveSceneImages(scene, path); // save textures as binary
@@ -341,9 +341,13 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
 
         scene->meshes = numMeshes ? new Mesh[numMeshes]{} : nullptr;
 
-        for (int i = 0; i < numMeshes; i++)
+        for (int i = 0, k=0; i < data.numMeshes; i++)
         {
-            scene->meshes[i] = CreateMeshFromPrimitive(&data.meshes[i].primitives[0]);
+            AMesh& mesh = data.meshes[i];
+            for (int j = 0; j < mesh.numPrimitives; j++, k++)
+            {
+                scene->meshes[k] = CreateMeshFromPrimitive(&data.meshes[i].primitives[j]);
+            }
         }
     }
 

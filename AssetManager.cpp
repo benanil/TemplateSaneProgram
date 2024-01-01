@@ -323,14 +323,19 @@ int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
+const int ABMMeshVersion = 2;
 
-static int GetVertexSize(int attributes)
+bool IsABMLastVersion(const char* path)
 {
-	const int attribIndexToNumComp[6] = { 3, 2, 3, 3, 2 };     
-	int stride = 0;
-	for (int i = 0; attributes > 0; i += NextSetBit(&attributes))
-		stride += sizeof(float) * attribIndexToNumComp[i];
-	return stride;
+	AFile file = AFileOpen(path, AOpenFlag_Read);
+	if (AFileSize(file) < sizeof(short) * 12) 
+		return false;
+	int version = 0;
+	AFileRead(&version, sizeof(int), file);
+	uint64_t hex;
+	AFileRead(&hex, sizeof(uint64_t), file);
+	AFileClose(file);
+	return version == ABMMeshVersion && hex == 0xABFABF;
 }
 
 static void WriteAMaterialTexture(AMaterial::Texture texture, AFile file)
@@ -338,7 +343,7 @@ static void WriteAMaterialTexture(AMaterial::Texture texture, AFile file)
 	uint64_t data = texture.scale; data <<= sizeof(short) * 8;
 	data |= texture.strength;      data <<= sizeof(short) * 8;
 	data |= texture.index;         data <<= sizeof(short) * 8;
-	data |= texture.texCoord; 
+	data |= texture.texCoord;
 
 	AFileWrite(&data, sizeof(uint64_t), file);
 }
@@ -346,19 +351,83 @@ static void WriteAMaterialTexture(AMaterial::Texture texture, AFile file)
 static void WriteGLTFString(const char* str, AFile file)
 {
 	int nameLen = str ? StringLength(str) : 0;
-	AFileWrite(&nameLen,  sizeof(int), file);
+	AFileWrite(&nameLen, sizeof(int), file);
 	if (str) AFileWrite(str, nameLen + 1, file);
 }
 
-const int ABMMeshVersion = 2;
-
-bool IsABMLastVersion(const char* path)
+struct AVertex
 {
-	AFile file = AFileOpen(path, AOpenFlag_Read);
-	int version = 0;
-	AFileRead(&version, sizeof(int), file);
-	AFileClose(file);
-	return version == ABMMeshVersion;
+	Vector3f position;
+	Vector2f texCoord;
+	Vector3f normal;
+};
+
+void CreateVerticesIndices(ParsedGLTF* gltf)
+{
+	AMesh* meshes = gltf->meshes;
+
+	// BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
+	const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
+
+	uint32_t totalVertices = 0;
+	uint64_t totalIndexSize = 0;
+	// Calculate total vertices, and indices
+	for (int m = 0; m < gltf->numMeshes; ++m)
+	{
+		// get number of vertex, getting first attribute count because all of the others are same
+		AMesh mesh = meshes[m];
+		for (uint64_t p = 0; p < mesh.numPrimitives; p++)
+		{
+			APrimitive& primitive = mesh.primitives[p];
+			totalIndexSize += primitive.numIndices * TypeToSize[primitive.indexType];
+			totalVertices += primitive.numVertices;
+		}
+	}
+
+	// pre allocate all vertices and indices 
+	gltf->allVertices = new AVertex[totalVertices];
+	gltf->allIndices  = AllocAligned(totalIndexSize + 16, alignof(uint32)); // 16->give little bit of space for memcpy
+	
+	AVertex* currVertex = (AVertex*)gltf->allVertices;
+	char* currIndices = (char*)gltf->allIndices;
+
+	for (int m = 0; m < gltf->numMeshes; ++m)
+	{
+		// get number of vertex, getting first attribute count because all of the others are same
+		AMesh mesh = meshes[m];
+		for (uint64_t p = 0; p < mesh.numPrimitives; p++)
+		{
+			APrimitive& primitive = mesh.primitives[p];
+			void* beforeCopy = primitive.indices;
+			primitive.indices = currIndices;
+			uint64_t indexSize = uint64_t(primitive.numIndices) * TypeToSize[primitive.indexType];
+			MemCpy<alignof(uint32)>(primitive.indices, beforeCopy, indexSize);
+			currIndices += indexSize;
+			
+			primitive.vertices = currVertex;
+
+			Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
+			Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
+			Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
+
+			for (int v = 0; v < primitive.numVertices; v++)
+			{
+				currVertex[v].position = positions[v];
+				currVertex[v].texCoord = texCoords[v];
+				currVertex[v].normal   = normals[v];
+			}
+			currVertex += primitive.numVertices;
+		}
+	}
+
+	for (int i = 0; i < gltf->numBuffers; i++)
+	{
+		FreeAllText((char*)gltf->buffers[i].uri);
+		gltf->buffers[i].uri = nullptr;
+	}
+	delete[] gltf->buffers;
+	gltf->numBuffers = 0;
+	gltf->buffers = nullptr;
 }
 
 bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
@@ -371,7 +440,7 @@ bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 	int version = ABMMeshVersion;
 	AFileWrite(&version, sizeof(int), file);
     
-	uint64_t reserved[4] = {};
+	uint64_t reserved[4] = { 0xABFABF };
 	AFileWrite(&reserved, sizeof(uint64_t) * 4, file);
    
 	AFileWrite(&gltf->numMeshes, sizeof(short), file);
@@ -393,7 +462,7 @@ bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 		{
 			APrimitive& primitive = mesh.primitives[j];
 			const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
-			allVertexSize += uint64_t(primitive.numVertices) * GetVertexSize(primitive.attributes);
+			allVertexSize += uint64_t(primitive.numVertices) * sizeof(AVertex);
 			allIndexSize += uint64_t(primitive.numIndices) * TypeToSize[primitive.indexType];
 			totalIndices += primitive.numIndices;
 		}
@@ -402,15 +471,8 @@ bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 	AFileWrite(&allVertexSize, sizeof(uint64_t), file);
 	AFileWrite(&allIndexSize, sizeof(uint64_t), file);
 
-	// delta coding for better compression
-	int lastIndex = 0;
-	// for (uint32_t i = 0; i < totalIndices; i++)
-	{
-		
-	}
-
 	// Compress and write, vertices and indices
-	uint64_t compressedSize = allVertexSize * 0.8;
+	uint64_t compressedSize = allVertexSize * 0.9;
 	char* compressedBuffer = new char[compressedSize];
 	
 	size_t afterCompSize = ZSTD_compress(compressedBuffer, compressedSize, gltf->allVertices, allVertexSize, 5);
@@ -438,11 +500,6 @@ bool SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 			AFileWrite(&primitive.numIndices , sizeof(int), file);
 			AFileWrite(&primitive.numVertices, sizeof(int), file);
             
-			const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
-			AFileWrite(primitive.indices, TypeToSize[primitive.indexType] * primitive.numIndices, file);
-            
-			int stride = GetVertexSize(primitive.attributes);
-			AFileWrite(primitive.vertices, uint64_t(primitive.numVertices) * stride, file);
 			int material = primitive.material;
 			AFileWrite(&material, sizeof(int), file);
 		}
@@ -598,18 +655,18 @@ bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 		uint64_t allVertexSize, allIndexSize;
 		AFileRead(&allVertexSize, sizeof(uint64_t), file);
 		AFileRead(&allIndexSize, sizeof(uint64_t), file);
-		gltf->allVertices = new float[allVertexSize >> 2]; // divide / 4 to get number of floats
+		gltf->allVertices = new AVertex[allVertexSize / sizeof(AVertex)]; // divide / 4 to get number of floats
 		gltf->allIndices = AllocAligned(allIndexSize, alignof(uint32_t));
 		
 		char* compressedBuffer = new char[allVertexSize];
 		uint64_t compressedSize;
 		AFileRead(&compressedSize, sizeof(uint64_t), file);
 		AFileRead(compressedBuffer, compressedSize, file);
-		ZSTD_decompress(compressedBuffer, compressedSize, gltf->allVertices, allVertexSize);
+		ZSTD_decompress(gltf->allVertices, allVertexSize, compressedBuffer, compressedSize);
 		
 		AFileRead(&compressedSize, sizeof(uint64_t), file);
 		AFileRead(compressedBuffer, compressedSize, file);
-		ZSTD_decompress(compressedBuffer, compressedSize, gltf->allIndices, allIndexSize);
+		ZSTD_decompress(gltf->allIndices, allIndexSize, compressedBuffer, compressedSize);
 		
 		delete[] compressedBuffer;
 	}
@@ -639,13 +696,10 @@ bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 			const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
 			uint64_t indexSize = uint64_t(TypeToSize[primitive.indexType]) * primitive.numIndices;
 			primitive.indices = (void*)currIndices;
-			AFileRead(primitive.indices, indexSize, file);
 			currIndices += indexSize;
             
-			int stride = GetVertexSize(primitive.attributes);
-			uint64_t vertexSize = uint64_t(primitive.numVertices) * stride;
+			uint64_t vertexSize = uint64_t(primitive.numVertices) * sizeof(AVertex);
 			primitive.vertices = currVertices;
-			AFileRead(primitive.vertices, vertexSize, file);
 			currVertices += vertexSize;
 			int material;
 			AFileRead(&material, sizeof(int), file);

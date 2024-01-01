@@ -256,7 +256,7 @@ inline GLenum GLTypeToSize(GraphicType type)
 {
     // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
     const int TypeToSize[8]={ 1, 1, 2, 2, 4, 4, 4 };
-    return TypeToSize[type];
+    return TypeToSize[type ];
 }
 
 inline char GLTFFilterToOGLFilter(char filter) {
@@ -297,7 +297,8 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
     {
         InputLayout layout = layoutDesc->layout[i];
         bool isNormalized = !!(layout.type & GraphicTypeNormalizeBit);
-        
+        layout.type &= ~GraphicTypeNormalizeBit;
+
         glVertexAttribPointer(i, layout.numComp, GL_BYTE + layout.type, i, layoutDesc->stride, offset); 
         glEnableVertexAttribArray(i);
         offset += layout.numComp * GLTypeToSize(layout.type);
@@ -311,21 +312,18 @@ Mesh CreateMeshFromPrimitive(APrimitive* primitive)
     InputLayoutDesc desc;
     InputLayout inputLayout[6]{};
     desc.layout = inputLayout;
-    desc.stride = 0;
+    desc.stride = 32; // sizeof(Vertex)
 
-    // Position 3, TexCoord 2, Normal 3, Tangent 3, TexCoord2 2
-    const int attribIndexToNumComp[6] = { 3, 2, 3, 3, 2 };     
-    int v = 0, attributes = primitive->attributes;
+    desc.layout[0].numComp = 3;
+    desc.layout[0].type = GraphicType_Float;
     
-    for (int i = 0; attributes > 0; i += NextSetBit(&attributes), v++)
-    {
-        uint64_t size = sizeof(float) * attribIndexToNumComp[i];
-        desc.layout[v].numComp = attribIndexToNumComp[v];
-        desc.layout[v].type = GraphicType_Float;
-        desc.stride += size;
-    }
+    desc.layout[1].numComp = 2;
+    desc.layout[1].type = GraphicType_Float;
 
-    desc.numLayout = v;
+    desc.layout[2].numComp = 3;
+    desc.layout[2].type = GraphicType_Float | GraphicTypeNormalizeBit;
+
+    desc.numLayout = 3;
     Mesh mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
     return mesh;
 }
