@@ -52,7 +52,7 @@ struct Mesh
     unsigned int vertexHandle; // opengl handles for, POSITION, TexCoord...
     // usefull for knowing which attributes are there
     // POSITION, TexCoord... AAttribType_ bitmask
-    int attributes; 
+    int attributes;
 };
 
 constexpr int GraphicTypeNormalizeBit = 1 << 31;
@@ -75,7 +75,7 @@ typedef int TextureType;
 // only uint32 indices accepted
 Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
-Mesh CreateMeshFromPrimitive(APrimitive* mesh);
+void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh);
 
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);

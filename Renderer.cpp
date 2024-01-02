@@ -307,7 +307,7 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
     return mesh;
 }
 
-Mesh CreateMeshFromPrimitive(APrimitive* primitive)
+void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh)
 {
     InputLayoutDesc desc;
     InputLayout inputLayout[6]{};
@@ -324,8 +324,7 @@ Mesh CreateMeshFromPrimitive(APrimitive* primitive)
     desc.layout[2].type = GraphicType_Float | GraphicTypeNormalizeBit;
 
     desc.numLayout = 3;
-    Mesh mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
-    return mesh;
+    *mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 
 void DeleteMesh(Mesh mesh)

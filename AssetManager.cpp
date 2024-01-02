@@ -765,7 +765,7 @@ bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	if (gltf->numTextures > 0) gltf->textures = new ATexture[gltf->numTextures]{};
 	for (int i = 0; i < gltf->numTextures; i++)
 	{
-		ATexture texture = gltf->textures[i];
+		ATexture& texture = gltf->textures[i];
 		AFileRead(&texture.sampler, sizeof(int), file);
 		AFileRead(&texture.source, sizeof(int), file);
 		ReadGLTFString(texture.name, file, stringAllocator);
@@ -785,7 +785,7 @@ bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	if (gltf->numCameras > 0) gltf->cameras = new ACamera[gltf->numCameras]{};
 	for (int i = 0; i < gltf->numCameras; i++)
 	{
-		ACamera camera = gltf->cameras[i];
+		ACamera& camera = gltf->cameras[i];
 		AFileRead(&camera.aspectRatio, sizeof(float), file);
 		AFileRead(&camera.yFov, sizeof(float), file);
 		AFileRead(&camera.zFar, sizeof(float), file);
@@ -797,7 +797,7 @@ bool LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	if (gltf->numScenes > 0) gltf->scenes = new AScene[gltf->numScenes]{};
 	for (int i = 0; i < gltf->numScenes; i++)
 	{
-		AScene scene = gltf->scenes[i];
+		AScene& scene = gltf->scenes[i];
 		ReadGLTFString(scene.name, file, stringAllocator);
 		AFileRead(&scene.numNodes, sizeof(int), file);
 		scene.nodes = intAllocator.Allocate(scene.numNodes);

@@ -77,14 +77,14 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
         info.width = 32, info.height = 32, info.numComp = 4;
 
         if (scene->data.images[i].path == nullptr || !FileExist(scene->data.images[i].path))
-        {    
+        {
             AFileWrite(&info, sizeof(ImageInfo), file);
             imageInfos[currentInfo] = info;
             currentCompressions[currentInfo++] = beforeCompressedSize;
             beforeCompressedSize += info.width * info.height;
             continue;
         }
-     
+
         const char* imageFileName = scene->data.images[i].path;
         int res = stbi_info(imageFileName, &info.width, &info.height, &info.numComp);
         ASSERT(res);
@@ -100,7 +100,7 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
             int numMips = MAX(Log2((unsigned int)info.width) >> 1u, 1u) - 1;
             while (numMips--)
             {
-                info.width  >>= 1;
+                info.width >>= 1;
                 info.height >>= 1;
                 imageSize += info.width * info.height;
             }
@@ -112,58 +112,58 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
     unsigned char* toCompressionBuffer = new unsigned char[beforeCompressedSize];
 
     auto execFn = [imageInfos, toCompressionBuffer, scene, isMobile](int numImages, uint64_t compressionStart, int i) -> void
-    {
-        unsigned char* textureLoadBuffer = !isMobile ? new unsigned char[1024 * 1024] : nullptr;
-        uint64_t loadBufferSize = 1024 * 1024;
-        unsigned char* currentCompression = toCompressionBuffer + compressionStart;
-        
-        for (int end = i + numImages; i < end; i++)
-        { 
-            ImageInfo info = imageInfos[i];
-            const char* imagePath = scene->data.images[i].path;
+        {
+            unsigned char* textureLoadBuffer = !isMobile ? new unsigned char[1024 * 1024] : nullptr;
+            uint64_t loadBufferSize = 1024 * 1024;
+            unsigned char* currentCompression = toCompressionBuffer + compressionStart;
 
-            if (imagePath == nullptr || !FileExist(imagePath))
+            for (int end = i + numImages; i < end; i++)
             {
-                currentCompression += 32 * 32;
-                continue;
-            }
+                ImageInfo info = imageInfos[i];
+                const char* imagePath = scene->data.images[i].path;
 
-            if (!isMobile)
-            {
-                unsigned char* stbImage = stbi_load(imagePath, &info.width, &info.height, 0, STBI_rgb_alpha);
-                int imageSize = info.width * info.height;
-                assert(stbImage);
-
-                if (loadBufferSize < imageSize)
+                if (imagePath == nullptr || !FileExist(imagePath))
                 {
-                    delete[] textureLoadBuffer;
-                    textureLoadBuffer = new unsigned char[imageSize];
-                    loadBufferSize = imageSize;
-                }
-                
-                if (info.numComp == 4) 
-                {
-                    uint32_t numBlocks = (info.width >> 2) * (info.height >> 2);
-                    CompressDxt5((const uint32_t*)stbImage, (uint64_t*)textureLoadBuffer, numBlocks, info.height);
-                }
-                else {
-                    rygCompress(textureLoadBuffer, stbImage, info.width, info.height);
-                    imageSize >>= 1;
+                    currentCompression += 32 * 32;
+                    continue;
                 }
 
-                SmallMemCpy(currentCompression, textureLoadBuffer, imageSize);
-                currentCompression += imageSize;
+                if (!isMobile)
+                {
+                    unsigned char* stbImage = stbi_load(imagePath, &info.width, &info.height, 0, STBI_rgb_alpha);
+                    int imageSize = info.width * info.height;
+                    assert(stbImage);
+
+                    if (loadBufferSize < imageSize)
+                    {
+                        delete[] textureLoadBuffer;
+                        textureLoadBuffer = new unsigned char[imageSize];
+                        loadBufferSize = imageSize;
+                    }
+
+                    if (info.numComp == 4)
+                    {
+                        uint32_t numBlocks = (info.width >> 2) * (info.height >> 2);
+                        CompressDxt5((const uint32_t*)stbImage, (uint64_t*)textureLoadBuffer, numBlocks, info.height);
+                    }
+                    else {
+                        rygCompress(textureLoadBuffer, stbImage, info.width, info.height);
+                        imageSize >>= 1;
+                    }
+
+                    SmallMemCpy(currentCompression, textureLoadBuffer, imageSize);
+                    currentCompression += imageSize;
+                }
+                else
+                {
+                    uint64_t numBytes = astcenc_main(imagePath, currentCompression);
+                    ASSERT(numBytes != 1);
+                    currentCompression += numBytes;
+                }
             }
-            else
-            {
-                uint64_t numBytes = astcenc_main(imagePath, currentCompression);
-                ASSERT(numBytes != 1);
-                currentCompression += numBytes;
-            }
-        }
-        delete[] textureLoadBuffer;
-    };
-    
+            delete[] textureLoadBuffer;
+        };
+
     int numTask = numImages;
     int taskPerThread = MAX(numImages / 8, 1);
     std::thread threads[9];
@@ -189,7 +189,7 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
 
     uint64_t compressedSize = beforeCompressedSize * 0.92;
     char* compressedBuffer = new char[compressedSize];
-    
+
     compressedSize = ZSTD_compress(compressedBuffer, compressedSize, toCompressionBuffer, beforeCompressedSize, 9);
     ASSERT(!ZSTD_isError(compressedSize));
 
@@ -208,7 +208,7 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
 static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, int numImages, bool isMobile)
 {
     AFile file = AFileOpen(texturePath, AOpenFlag_Read);
-    
+
     Array<ImageInfo> imageInfos(numImages);
 
     for (int i = 0; i < numImages; i++)
@@ -221,10 +221,10 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
     uint64_t decompressedSize, compressedSize;
     AFileRead(&decompressedSize, sizeof(uint64_t), file);
     AFileRead(&compressedSize, sizeof(uint64_t), file);
-    
+
     unsigned char* compressedBuffer = new unsigned char[compressedSize];
     AFileRead(compressedBuffer, compressedSize, file);
-    
+
     unsigned char* decompressedBuffer = new unsigned char[decompressedSize];
     decompressedSize = ZSTD_decompress(decompressedBuffer, decompressedSize, compressedBuffer, compressedSize);
     ASSERT(!ZSTD_isError(decompressedSize));
@@ -253,10 +253,10 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
                 info.width >>= 1;
                 info.height >>= 1;
                 currentImage += info.width * info.height;
-            } 
+            }
         }
     }
-    
+
     delete[] decompressedBuffer;
     delete[] compressedBuffer;
     AFileClose(file);
@@ -264,7 +264,7 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 
 static std::thread CompressASTCImagesThread;
 
-void SaveAndroidCompressedImagesFn(Scene* scene, char* astcPath) 
+void SaveAndroidCompressedImagesFn(Scene* scene, char* astcPath)
 {
     SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
     delete[] astcPath;
@@ -275,7 +275,7 @@ static void SaveSceneImages(Scene* scene, char* path)
     // // save dxt textures for desktop
     ChangeExtension(path, StringLength(path), "dxt");
     SaveSceneImagesGeneric(scene, path, false); // is mobile false
-    
+
     // save astc textures for android
     int len = StringLength(path);
     ChangeExtension(path, len, "astc");
@@ -302,7 +302,7 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
 {
     bool parsed = true;
     char path[256]{};
-    
+
     int pathLen = StringLength(inPath);
     SmallMemCpy(path, inPath, pathLen);
 
@@ -322,14 +322,14 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
     {
         parsed = LoadGLTFBinary(path, &scene->data);
     }
-    
+
     if (!parsed)
         return 0;
 
     if (LoadToGPU)
     {
         LoadSceneImages(path, scene->textures, scene->data.numImages);
-    
+
         // load scene meshes
         ParsedGLTF& data = scene->data;
 
@@ -341,12 +341,12 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
 
         scene->meshes = numMeshes ? new Mesh[numMeshes]{} : nullptr;
 
-        for (int i = 0, k=0; i < data.numMeshes; i++)
+        for (int i = 0, k = 0; i < data.numMeshes; i++)
         {
             AMesh& mesh = data.meshes[i];
             for (int j = 0; j < mesh.numPrimitives; j++, k++)
             {
-                scene->meshes[k] = CreateMeshFromPrimitive(&data.meshes[i].primitives[j]);
+                CreateMeshFromPrimitive(&data.meshes[i].primitives[j], &scene->meshes[k]);
             }
         }
     }
@@ -370,14 +370,15 @@ void RenderScene(Scene* scene)
         // if node is not mesh skip (camera)
         if (node.type != 0 || node.index == -1) continue;
 
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+        float identity[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        Matrix4 model = Matrix4::PositionRotationScale(node.translation, identity, node.scale);
         Matrix4 mvp = model * camera.view * camera.projection;
 
         SetModelViewProjection(mvp.GetPtr());
         SetModelMatrix(model.GetPtr());
 
         AMesh mesh = data.meshes[node.index];
-        
+
         for (int j = 0; j < mesh.numPrimitives; ++j)
         {
             if (scene->meshes[node.index].numIndex == 0)
@@ -385,10 +386,10 @@ void RenderScene(Scene* scene)
 
             AMaterial material = data.materials[mesh.primitives[j].material];
             SetMaterial(&material);
-            
+
             if (scene->textures && material.baseColorTexture.index != -1)
                 SetTexture(scene->textures[material.baseColorTexture.index], 0);
-    
+
             RenderMesh(scene->meshes[node.index]);
         }
     }

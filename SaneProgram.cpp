@@ -31,7 +31,7 @@ void AXInit()
 // return 1 if success
 int AXStart()
 {
-    if (!ImportScene(&GLTFScene, "Meshes/SponzaGLTF/scene.gltf", 0.01f, true))
+    if (!ImportScene(&GLTFScene, "Meshes/SponzaGLTF/scene.gltf", 0.02f, true))
     {
         AX_ERROR("gltf scene load failed");
         return 0;
