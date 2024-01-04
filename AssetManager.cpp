@@ -323,7 +323,7 @@ int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 2;
+const int ABMMeshVersion = 6;
 
 bool IsABMLastVersion(const char* path)
 {
@@ -355,12 +355,15 @@ static void WriteGLTFString(const char* str, AFile file)
 	if (str) AFileWrite(str, nameLen + 1, file);
 }
 
-struct AVertex
+// https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
+AX_PACK(struct AVertex
 {
 	Vector3f position;
-	Vector2f texCoord;
-	Vector3f normal;
-};
+	half3 normal;
+	half3 tangent;
+	half2 texCoord;
+	int padd;
+});
 
 void CreateVerticesIndices(ParsedGLTF* gltf)
 {
@@ -409,12 +412,16 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
 			Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
 			Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
 			Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
-
+			Vector3f* tangents  = (Vector3f*)primitive.vertexAttribs[3];
+			
 			for (int v = 0; v < primitive.numVertices; v++)
 			{
+				Vector3f tangent = tangents ? tangents[v] : Vector3f::Zero();
+				
 				currVertex[v].position = positions[v];
-				currVertex[v].texCoord = texCoords[v];
-				currVertex[v].normal   = normals[v];
+				currVertex[v].texCoord = ConvertToHalf2(&texCoords[v].x);
+				currVertex[v].normal   = ConvertToHalf3(&normals[v].x);
+				currVertex[v].tangent  = ConvertToHalf3(&tangent.x);
 			}
 			currVertex += primitive.numVertices;
 		}

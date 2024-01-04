@@ -163,10 +163,10 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
             }
             delete[] textureLoadBuffer;
         };
-
+    
     int numTask = numImages;
-    int taskPerThread = MAX(numImages / 8, 1);
-    std::thread threads[9];
+    int taskPerThread = MAX(numImages / 9, 1);
+    std::thread threads[8];
 
     int threadIndex = 0;
 
@@ -179,7 +179,7 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
         numTask -= taskPerThread;
     }
 
-    for (int i = 0; i < taskPerThread + 1; i++)
+    for (int i = 0; i < threadIndex; i++)
     {
         threads[i].join();
     }
@@ -275,7 +275,7 @@ static void SaveSceneImages(Scene* scene, char* path)
     // // save dxt textures for desktop
     ChangeExtension(path, StringLength(path), "dxt");
     SaveSceneImagesGeneric(scene, path, false); // is mobile false
-
+    
     // save astc textures for android
     int len = StringLength(path);
     ChangeExtension(path, len, "astc");
@@ -364,14 +364,37 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
 void RenderScene(Scene* scene)
 {
     ParsedGLTF& data = scene->data;
-    for (int i = 0; i < data.numNodes; i++)
+    Shader currentShader = GetCurrentShader();
+    
+    unsigned int viewPosLoc      = GetUniformLocation(currentShader, "viewPos");
+    unsigned int lightPosLoc     = GetUniformLocation(currentShader, "lightPos");
+    unsigned int albedoLoc       = GetUniformLocation(currentShader, "albedo");
+    unsigned int normalMapLoc    = GetUniformLocation(currentShader, "normalMap");
+    unsigned int hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
+
+    static float time = 5.2f;
+    // time += GetDeltaTime() * 0.4f;
+    Vector3f lightPos = MakeVec3(0.0f, cosf(time), sinf(time)) * 100.0f;
+
+    SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
+    SetShaderValue(&lightPos.x, lightPosLoc, GraphicType_Vector3f);
+    
+    int numNodes  = data.numNodes;
+    bool hasScene = data.numScenes > 0;
+    AScene defaultScene;
+    if (data.numScenes > 0)
     {
-        ANode node = data.nodes[i];
+        defaultScene = data.scenes[data.defaultSceneIndex];
+        numNodes = defaultScene.numNodes;
+    }
+
+    for (int i = 0; i < numNodes; i++)
+    {
+        ANode node = hasScene ? data.nodes[defaultScene.nodes[i]] : data.nodes[i];
         // if node is not mesh skip (camera)
         if (node.type != 0 || node.index == -1) continue;
 
-        float identity[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, identity, node.scale);
+        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
         Matrix4 mvp = model * camera.view * camera.projection;
 
         SetModelViewProjection(mvp.GetPtr());
@@ -384,11 +407,21 @@ void RenderScene(Scene* scene)
             if (scene->meshes[node.index].numIndex == 0)
                 continue;
 
-            AMaterial material = data.materials[mesh.primitives[j].material];
-            SetMaterial(&material);
+            APrimitive& primitive = mesh.primitives[j];
+            AMaterial material = data.materials[primitive.material];
+            // SetMaterial(&material);
+
+            int normalIndex = material.GetNormalTexture().index;
+            if (scene->textures && normalIndex != -1)
+                SetTexture(scene->textures[normalIndex], 1, normalMapLoc);
+            
+            int hasNormalMap = primitive.attributes & AAttribType_TANGENT;
+            hasNormalMap    &= normalIndex != -1;
+
+            SetShaderValue(hasNormalMap, hasNormalMapLoc);
 
             if (scene->textures && material.baseColorTexture.index != -1)
-                SetTexture(scene->textures[material.baseColorTexture.index], 0);
+                SetTexture(scene->textures[material.baseColorTexture.index], 0, albedoLoc);
 
             RenderMesh(scene->meshes[node.index]);
         }

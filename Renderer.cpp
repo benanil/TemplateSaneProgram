@@ -146,14 +146,15 @@ Texture CreateTexture(int width, int height, void* data, TextureType type, bool 
     else
 #ifndef __ANDROID__ 
     {
-        glCompressedTexImage2D(GL_TEXTURE_2D, 0, type == 1 ? GL_COMPRESSED_RGBA_S3TC_DXT5_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
-                               width, height, 0, type == 1 ? width * height : (width * height) >> 1, data);
+        bool isDXT5 = type == 1;
+        int blockSize = isDXT5 ? (width * height) : ((width * height) >> 1);
+        glCompressedTexImage2D(GL_TEXTURE_2D, 0, isDXT5 ? GL_COMPRESSED_RGBA_S3TC_DXT5_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
+                               width, height, 0, blockSize, data);
         if (mipmap)
             glGenerateMipmap(GL_TEXTURE_2D);
     }
 #else
     {
-        // glTexParameteri(GL_TEXTURE_2D, 0x8F69, GL_RGBA8);
         int numMips = MAX((int)Log2((unsigned)width) >> 1, 1) - 1;
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
@@ -255,8 +256,8 @@ inline GLenum ToGLType(GraphicType type)
 inline GLenum GLTypeToSize(GraphicType type)
 {
     // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
-    const int TypeToSize[8]={ 1, 1, 2, 2, 4, 4, 4 };
-    return TypeToSize[type ];
+    const int TypeToSize[12]={ 1, 1, 2, 2, 4, 4, 4, 2, 4, 4, 8, 2 };
+    return TypeToSize[type];
 }
 
 inline char GLTFFilterToOGLFilter(char filter) {
@@ -264,7 +265,7 @@ inline char GLTFFilterToOGLFilter(char filter) {
 }
 
 inline unsigned int GLTFWrapToOGLWrap(int wrap) {
-    unsigned int values[5] { 0x2901, 0x812F, 0x812D, 0x8370 }; // GL_REPEAT GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT
+    unsigned int values[] = { 0x2901, 0x812F, 0x812D, 0x8370 }; // GL_REPEAT GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT
     ASSERT(wrap < 5 && "wrong or undefined sampler type!"); 
     return values[wrap];
 }
@@ -299,7 +300,7 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
         bool isNormalized = !!(layout.type & GraphicTypeNormalizeBit);
         layout.type &= ~GraphicTypeNormalizeBit;
 
-        glVertexAttribPointer(i, layout.numComp, GL_BYTE + layout.type, i, layoutDesc->stride, offset); 
+        glVertexAttribPointer(i, layout.numComp, GL_BYTE + layout.type, isNormalized, layoutDesc->stride, offset); 
         glEnableVertexAttribArray(i);
         offset += layout.numComp * GLTypeToSize(layout.type);
     }
@@ -309,21 +310,33 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
 void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh)
 {
+    AX_PACK(struct XVertex
+    {
+        Vector3f position;
+        half3 normal;
+        half3 tangent;
+        half2 texCoord;
+        int padd;
+    });
+
     InputLayoutDesc desc;
     InputLayout inputLayout[6]{};
     desc.layout = inputLayout;
-    desc.stride = 32; // sizeof(Vertex)
+    desc.stride = sizeof(XVertex); // sizeof(Vertex)
 
     desc.layout[0].numComp = 3;
     desc.layout[0].type = GraphicType_Float;
-    
-    desc.layout[1].numComp = 2;
-    desc.layout[1].type = GraphicType_Float;
+
+    desc.layout[1].numComp = 3;
+    desc.layout[1].type = GraphicType_Half;
 
     desc.layout[2].numComp = 3;
-    desc.layout[2].type = GraphicType_Float | GraphicTypeNormalizeBit;
+    desc.layout[2].type = GraphicType_Half;
+    
+    desc.layout[3].numComp = 2;
+    desc.layout[3].type = GraphicType_Half;
 
-    desc.numLayout = 3;
+    desc.numLayout = 4;
     *mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 
@@ -340,13 +353,25 @@ void DeleteMesh(Mesh mesh)
 
 static unsigned int currentShader = 0;
 
+Shader GetCurrentShader()
+{
+    return {currentShader};
+}
+
 unsigned int GetUniformLocation(Shader shader, const char* name)
 {
     return glGetUniformLocation(shader.handle, name);
 }
 
-void SetShaderValue(int   value, unsigned int location) { glUniform1i(location, value);}
-void SetShaderValue(float value, unsigned int location) { glUniform1f(location, value);}
+void SetShaderValue(int   value, unsigned int location)
+{ 
+    glUniform1i(location, value);
+}
+
+void SetShaderValue(float value, unsigned int location)
+{ 
+    glUniform1f(location, value);
+}
 
 void SetShaderValue(const void* value, unsigned int location, GraphicType type)
 {
@@ -371,27 +396,33 @@ void SetShaderValue(const void* value, unsigned int location, GraphicType type)
 
 void SetMaterial(AMaterial* material)
 {
-    unsigned int onlyColorLoc = glGetUniformLocation(currentShader, "uOnlyColor");
-    unsigned int colorLoc = glGetUniformLocation(currentShader, "uColor");
-    
-    int onlyColor = (int)(material->baseColorTexture.index == -1);
-    SetShaderValue(onlyColor, onlyColorLoc);
-    
-    float color[4];
-    UnpackColorRGBf(material->diffuseColor, color);
-    SetShaderValue(color, colorLoc, GraphicType_Vector4f);
+    // TODO: set material
 }
 
-void CheckShaderError(uint shader)
+static void CheckShaderError(uint shader)
 {
     GLint isCompiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
     if (isCompiled == GL_FALSE)
     {
-        GLint maxLength = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &maxLength);
+        GLint maxLength = 1024;
         char infoLog[1024]{};
         glGetShaderInfoLog(shader, maxLength, &maxLength, infoLog);
+        AX_ERROR("shader compile error: %s", infoLog);
+        glDeleteShader(shader);
+        DestroyRenderer();
+    }
+}
+
+static void CheckLinkerError(uint shader)
+{
+    GLint isCompiled = 0;
+    glGetProgramiv(shader, GL_LINK_STATUS, &isCompiled);
+    if (isCompiled == GL_FALSE)
+    {
+        GLint maxLength = 1024;
+        char infoLog[1024]{};
+        glGetProgramInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);
         DestroyRenderer();
@@ -421,7 +452,7 @@ Shader LoadShader(const char* vertexSource, const char* fragmentSource)
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
     // Check for linking errors
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success); ASSERT(success);
+    CheckLinkerError(shaderProgram);
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
@@ -553,10 +584,11 @@ void BindShader(Shader shader)
     currentShader = shader.handle;
 }
 
-void SetTexture(Texture texture, int index)
+void SetTexture(Texture texture, int index, unsigned int location)
 {
     glActiveTexture(GL_TEXTURE0 + index);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
+    glUniform1i(location, index);
 }
 
 void SetModelViewProjection(float* mvp) 
@@ -564,7 +596,7 @@ void SetModelViewProjection(float* mvp)
     SmallMemCpy(&m_ModelViewProjection.m[0][0], mvp, 16 * sizeof(float)); 
     GLint mvpLoc   = glGetUniformLocation(currentShader, "mvp");
     glUniformMatrix4fv(mvpLoc  , 1, false, &m_ModelViewProjection.m[0][0]);
-}
+}   
 
 void SetModelMatrix(float* model)       
 {

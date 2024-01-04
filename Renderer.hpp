@@ -4,7 +4,10 @@
 #include "ASTL/Additional/GLTFParser.hpp"
 
 #ifdef __ANDROID__  
-#define AX_SHADER_VERSION_PRECISION() "#version 300 es\n" "precision highp float;\n" "precision mediump sampler2D;\n"
+#define AX_SHADER_VERSION_PRECISION() "#version 300 es\n"              \
+                                      "precision highp float;\n"       \
+                                      "precision mediump sampler2D;\n" \
+                                      "precision mediump int;\n"     
 #else
 #define AX_SHADER_VERSION_PRECISION() "#version 330\n"
 #endif
@@ -20,13 +23,18 @@ struct Texture
 
 enum GraphicType_
 {
-    GraphicType_Byte,
+    GraphicType_Byte, // -> 0x1400 in opengl 
     GraphicType_UnsignedByte, 
     GraphicType_Short,
     GraphicType_UnsignedShort, 
     GraphicType_Int,
     GraphicType_UnsignedInt,
     GraphicType_Float,
+    GraphicType_TwoByte,
+    GraphicType_ThreeByte,
+    GraphicType_FourByte,
+    GraphicType_Double,
+    GraphicType_Half, // -> 0x140B in opengl
 
     GraphicType_Vector2f,
     GraphicType_Vector3f,
@@ -105,7 +113,7 @@ void RenderFullScreen(unsigned int texture);
 
 void BindShader(Shader shader);
 
-void SetTexture(Texture texture, int index);
+void SetTexture(Texture texture, int index, unsigned int loc);
 
 void SetModelViewProjection(float* mvp);
 
@@ -123,6 +131,8 @@ void SetDepthWrite(bool val);
 
 // Todo(Anil): lookup uniforms
 unsigned int GetUniformLocation(Shader shader, const char* name);
+
+Shader GetCurrentShader();
 
 void SetMaterial(AMaterial* material);
 
