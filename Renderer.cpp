@@ -253,6 +253,11 @@ inline GLenum ToGLType(GraphicType type)
     return GL_BYTE + (GLenum)type;
 }
 
+inline bool IsTypeInt(GraphicType type)
+{
+    return type != GraphicType_Float && type != GraphicType_Double && type != GraphicType_Half;
+}
+
 inline GLenum GLTypeToSize(GraphicType type)
 {
     // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
@@ -300,7 +305,19 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
         bool isNormalized = !!(layout.type & GraphicTypeNormalizeBit);
         layout.type &= ~GraphicTypeNormalizeBit;
 
-        glVertexAttribPointer(i, layout.numComp, GL_BYTE + layout.type, isNormalized, layoutDesc->stride, offset); 
+        if (layout.type == GraphicType_XYZ10W2)
+        {
+            glVertexAttribPointer(i, 4, GL_INT_2_10_10_10_REV, true, layoutDesc->stride, offset);
+            glEnableVertexAttribArray(i);
+            offset += 4; //sizeof(int);
+            continue;
+        }
+
+        if (!IsTypeInt(layout.type) || isNormalized)
+            glVertexAttribPointer(i, layout.numComp, GL_BYTE + layout.type, isNormalized, layoutDesc->stride, offset);
+        else 
+            glVertexAttribIPointer(i, layout.numComp, GL_BYTE + layout.type, layoutDesc->stride, offset);
+
         glEnableVertexAttribArray(i);
         offset += layout.numComp * GLTypeToSize(layout.type);
     }
@@ -310,33 +327,33 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
 
 void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh)
 {
-    AX_PACK(struct XVertex
+    struct XVertex
     {
         Vector3f position;
-        half3 normal;
-        half3 tangent;
+        int normal;
+        int tangent;
         half2 texCoord;
-        int padd;
-    });
+    };
 
     InputLayoutDesc desc;
-    InputLayout inputLayout[6]{};
+    const int NumLayout = 4;
+    InputLayout inputLayout[NumLayout]{};
     desc.layout = inputLayout;
     desc.stride = sizeof(XVertex); // sizeof(Vertex)
 
     desc.layout[0].numComp = 3;
     desc.layout[0].type = GraphicType_Float;
 
-    desc.layout[1].numComp = 3;
-    desc.layout[1].type = GraphicType_Half;
+    desc.layout[1].numComp = 4;
+    desc.layout[1].type = GraphicType_XYZ10W2;
 
-    desc.layout[2].numComp = 3;
-    desc.layout[2].type = GraphicType_Half;
+    desc.layout[2].numComp = 4;
+    desc.layout[2].type = GraphicType_XYZ10W2;
     
     desc.layout[3].numComp = 2;
     desc.layout[3].type = GraphicType_Half;
 
-    desc.numLayout = 4;
+    desc.numLayout = NumLayout;
     *mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 

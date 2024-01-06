@@ -165,21 +165,27 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, bool isMobile)
         };
     
     int numTask = numImages;
-    int taskPerThread = MAX(numImages / 9, 1);
-    std::thread threads[8];
+    int taskPerThread = MAX(numImages / 8, 1);
+    std::thread threads[9];
 
-    int threadIndex = 0;
-
-    while (numTask > 0)
+    int numThreads = 0;
+    for (int i = 0; i <= numTask - taskPerThread; i += taskPerThread)
     {
-        int start = MAX(numTask - taskPerThread, 0);
-        int end = numTask;
-        new(threads + threadIndex)std::thread(execFn, end - start, currentCompressions[start], start);
-        threadIndex++;
-        numTask -= taskPerThread;
+        int start = i;
+        int end = taskPerThread;
+        new (threads + numThreads)std::thread(execFn, taskPerThread, currentCompressions[start], start);
+        numThreads++;
     }
 
-    for (int i = 0; i < threadIndex; i++)
+    int remainingTasks = numTask % taskPerThread;
+    if (remainingTasks > 0)
+    {
+        int start = numImages - remainingTasks;
+        new (threads + numThreads)std::thread(execFn, remainingTasks, currentCompressions[start], start);
+        numThreads++;
+    }
+
+    for (int i = 0; i < numThreads; i++)
     {
         threads[i].join();
     }
@@ -275,7 +281,7 @@ static void SaveSceneImages(Scene* scene, char* path)
     // // save dxt textures for desktop
     ChangeExtension(path, StringLength(path), "dxt");
     SaveSceneImagesGeneric(scene, path, false); // is mobile false
-    
+    return;
     // save astc textures for android
     int len = StringLength(path);
     ChangeExtension(path, len, "astc");
@@ -373,16 +379,16 @@ void RenderScene(Scene* scene)
     unsigned int hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
 
     static float time = 5.2f;
-    // time += GetDeltaTime() * 0.4f;
+    time += GetDeltaTime() * 0.2f;
     Vector3f lightPos = MakeVec3(0.0f, cosf(time), sinf(time)) * 100.0f;
 
     SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
     SetShaderValue(&lightPos.x, lightPosLoc, GraphicType_Vector3f);
     
     int numNodes  = data.numNodes;
-    bool hasScene = data.numScenes > 0;
+    bool hasScene = data.numScenes > 0 && data.scenes[data.defaultSceneIndex].numNodes > 1;
     AScene defaultScene;
-    if (data.numScenes > 0)
+    if (hasScene)
     {
         defaultScene = data.scenes[data.defaultSceneIndex];
         numNodes = defaultScene.numNodes;
@@ -415,7 +421,7 @@ void RenderScene(Scene* scene)
             if (scene->textures && normalIndex != -1)
                 SetTexture(scene->textures[normalIndex], 1, normalMapLoc);
             
-            int hasNormalMap = primitive.attributes & AAttribType_TANGENT;
+            int hasNormalMap = !!(primitive.attributes & AAttribType_TANGENT);
             hasNormalMap    &= normalIndex != -1;
 
             SetShaderValue(hasNormalMap, hasNormalMapLoc);

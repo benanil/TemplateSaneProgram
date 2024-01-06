@@ -323,7 +323,7 @@ int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 6;
+const int ABMMeshVersion = 8;
 
 bool IsABMLastVersion(const char* path)
 {
@@ -355,15 +355,27 @@ static void WriteGLTFString(const char* str, AFile file)
 	if (str) AFileWrite(str, nameLen + 1, file);
 }
 
+// https://copyprogramming.com/howto/how-to-pack-normals-into-gl-int-2-10-10-10-rev
+inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v)
+{
+	const uint32_t xs = v.x < 0;
+	const uint32_t ys = v.y < 0;
+	const uint32_t zs = v.z < 0;
+	uint32_t vi =
+	       zs << 29 | ((uint32_t)(v.z * 511 + (zs << 9)) & 511) << 20 |
+	       ys << 19 | ((uint32_t)(v.y * 511 + (ys << 9)) & 511) << 10 |
+	       xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);
+	return vi;
+}
+
 // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
-AX_PACK(struct AVertex
+struct AVertex
 {
 	Vector3f position;
-	half3 normal;
-	half3 tangent;
+	int normal;
+	int tangent;
 	half2 texCoord;
-	int padd;
-});
+};
 
 void CreateVerticesIndices(ParsedGLTF* gltf)
 {
@@ -413,15 +425,16 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
 			Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
 			Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
 			Vector3f* tangents  = (Vector3f*)primitive.vertexAttribs[3];
-			
+
 			for (int v = 0; v < primitive.numVertices; v++)
 			{
 				Vector3f tangent = tangents ? tangents[v] : Vector3f::Zero();
 				
-				currVertex[v].position = positions[v];
+				currVertex[v].position  = positions[v];
+
 				currVertex[v].texCoord = ConvertToHalf2(&texCoords[v].x);
-				currVertex[v].normal   = ConvertToHalf3(&normals[v].x);
-				currVertex[v].tangent  = ConvertToHalf3(&tangent.x);
+				currVertex[v].normal   = Pack_INT_2_10_10_10_REV(normals[v]);
+				currVertex[v].tangent  = Pack_INT_2_10_10_10_REV(tangent);
 			}
 			currVertex += primitive.numVertices;
 		}

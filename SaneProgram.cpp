@@ -36,7 +36,6 @@ int AXStart()
         AX_ERROR("gltf scene load failed");
         return 0;
     }
-
     skyTexture = LoadTexture("Textures/orange-top-gradient-background.jpg", false);
     shader     = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
     

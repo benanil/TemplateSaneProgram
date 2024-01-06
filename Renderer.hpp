@@ -7,9 +7,9 @@
 #define AX_SHADER_VERSION_PRECISION() "#version 300 es\n"              \
                                       "precision highp float;\n"       \
                                       "precision mediump sampler2D;\n" \
-                                      "precision mediump int;\n"     
+                                      "precision highp int;\n"      
 #else
-#define AX_SHADER_VERSION_PRECISION() "#version 330\n"
+#define AX_SHADER_VERSION_PRECISION() "#version 330\n" 
 #endif
 
 struct Shader { unsigned int handle; };
@@ -35,6 +35,7 @@ enum GraphicType_
     GraphicType_FourByte,
     GraphicType_Double,
     GraphicType_Half, // -> 0x140B in opengl
+    GraphicType_XYZ10W2, // GL_INT_2_10_10_10_REV
 
     GraphicType_Vector2f,
     GraphicType_Vector3f,
