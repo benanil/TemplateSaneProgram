@@ -1,13 +1,8 @@
 
-// #if defined(__ANDROID__) 
-//     #include "PlatformAndroid.cpp"
-// #else
-//     #include "PlatformAndroid.cpp"
-// #endif
 
 #include <stdio.h>
 
-#include "ASTL/Additional/GLTFParser.hpp"
+#include "../ASTL/Additional/GLTFParser.hpp"
 
 #include "Renderer.hpp"
 #include "Platform.hpp"
@@ -19,9 +14,11 @@ Scene GLTFScene{};
 Shader shader;
 Texture skyTexture;
 
+static Texture normal, metallic, roughness, albedo;
+
 void AXInit()
 {
-    SetWindowName("Duck Window");
+    SetWindowName("Engine");
     SetWindowSize(1920, 1080);
 
     SetWindowPosition(0, 0);
@@ -36,8 +33,9 @@ int AXStart()
         AX_ERROR("gltf scene load failed");
         return 0;
     }
+    
     skyTexture = LoadTexture("Textures/orange-top-gradient-background.jpg", false);
-    shader     = ImportShader("Shaders/3DFirstVert.glsl", "Shaders/3DFirstFrag.glsl");
+    shader     = ImportShader("Shaders/3DVert.glsl", "Shaders/PBRFrag.glsl");
     
     return 1;
 }
@@ -55,7 +53,6 @@ void AXLoop()
     BindShader(shader);
     
     RenderScene(&GLTFScene);
-
     // RenderScene(&FBXScene);
 
     // todo material and light system

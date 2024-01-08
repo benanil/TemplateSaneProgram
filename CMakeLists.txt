@@ -20,11 +20,11 @@ set(SOURCES
     External/etcpak/ProcessRGB.cpp # compress etc textures
     External/etcpak/ProcessDxtc.cpp # compress dxt textures
     
-    AssetManager.cpp
-    SaneProgram.cpp
-    Renderer.cpp
-    PlatformWindows.cpp
-    Scene.cpp
+    src/AssetManager.cpp
+    src/SaneProgram.cpp
+    src/Renderer.cpp
+    src/PlatformWindows.cpp
+    src/Scene.cpp
 )
 
 # Add all .cpp files from External/astc-encoder to the SOURCES list
@@ -43,14 +43,12 @@ set_target_properties(SaneProgram PROPERTIES
     VS_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/SaneProgram.rc"
 )
 
+set_property(TARGET SaneProgram PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
 target_link_libraries(SaneProgram 
     user32
     gdi32
     opengl32
 )
-
-file(COPY ${CMAKE_SOURCE_DIR}/Meshes DESTINATION ${CMAKE_BINARY_DIR})
-file(COPY ${CMAKE_SOURCE_DIR}/Textures DESTINATION ${CMAKE_BINARY_DIR})
-file(COPY ${CMAKE_SOURCE_DIR}/Shaders DESTINATION ${CMAKE_BINARY_DIR})
 
 file(COPY ${CMAKE_SOURCE_DIR}/SaneProgram.res DESTINATION ${CMAKE_BINARY_DIR})

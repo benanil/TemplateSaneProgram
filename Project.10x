@@ -8,7 +8,7 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>build.bat</BuildCommand>
+		<BuildCommand>make</BuildCommand>
 		<RebuildCommand></RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand></CleanCommand>
@@ -16,8 +16,8 @@
 		<CancelBuild></CancelBuild>
 		<RunCommand>SaneProgram.exe</RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
-		<DebugCommand></DebugCommand>
-		<ExePathCommand></ExePathCommand>
+		<DebugCommand>SaneProgram.exe</DebugCommand>
+		<ExePathCommand>SaneProgram.exe</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
 		<Configurations>

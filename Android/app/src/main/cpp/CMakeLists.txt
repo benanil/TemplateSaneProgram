@@ -8,15 +8,14 @@ project("game")
 #support neon
 ENABLE_LANGUAGE(ASM)
 
-
 # Creates your game shared library. The name must be the same as the
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.
 add_library(game SHARED
-        ../../../../../PlatformAndroid.cpp
-        ../../../../../SaneProgram.cpp
-        ../../../../../Renderer.cpp
-        ../../../../../Scene.cpp
-        ../../../../../AssetManager.cpp
+        ../../../../../src/PlatformAndroid.cpp
+        ../../../../../src/SaneProgram.cpp
+        ../../../../../src/Renderer.cpp
+        ../../../../../src/Scene.cpp
+        ../../../../../src/AssetManager.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp
         ../../../../../ASTL/Additional/GLTFParser.cpp
         ../../../../../External/zstd/zstd.c)

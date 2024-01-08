@@ -47,7 +47,7 @@
 #define WUFFS_CONFIG__MODULE__DEFLATE
 #define WUFFS_CONFIG__MODULE__PNG
 #define WUFFS_CONFIG__MODULE__ZLIB
-#include "wuffs-v0.3.c"
+#include "wuffs-v0.3.cpp"
 
 // For both libraries force asserts (which can be triggered by corrupt input
 // images) to be handled at runtime in release builds to avoid security issues.
