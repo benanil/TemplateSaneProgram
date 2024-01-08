@@ -15,10 +15,10 @@ set(SOURCES
     ASTL/Additional/OBJParser.cpp
     
     External/ufbx.c
-    External/zstd/zstd.c # compress files. by facebook (meta)
+    External/zstd.c # compress files. by facebook (meta)
     
-    External/etcpak/ProcessRGB.cpp # compress etc textures
-    External/etcpak/ProcessDxtc.cpp # compress dxt textures
+    External/ProcessRGB.cpp # compress etc textures
+    External/ProcessDxtc.cpp # compress dxt textures
     
     src/AssetManager.cpp
     src/SaneProgram.cpp
