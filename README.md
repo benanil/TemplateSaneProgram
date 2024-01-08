@@ -35,3 +35,10 @@ GitHub: @benanil<br>
 copy Meshes, Shaders and Textures folders to TemplateSaneProgram/Android/app/src/main/assets folder <br>
 and open TemplateSaneProgram/Android folder with android studio hit build and run.
 this might be automated in the feature
+
+# Used Libraries
+[ufbx for fbx scenes](https://github.com/ufbx/ufbx)
+[stb libraries](https://github.com/nothings/stb)
+[astc-encoder](https://github.com/ARM-software/astc-encoder)
+[zstandard fast compression library by facebook](https://github.com/facebook/zstd)
+[etcpak for dxt texture compression](https://github.com/wolfpld/etcpak)
