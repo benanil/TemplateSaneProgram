@@ -37,8 +37,8 @@ and open TemplateSaneProgram/Android folder with android studio hit build and ru
 this might be automated in the feature
 
 # Used Libraries
-for fbx scenes [ufbx](https://github.com/ufbx/ufbx)
-importing and resizing textures [stb libraries](https://github.com/nothings/stb)
-astc texture format codec for android textures [astc-encoder](https://github.com/ARM-software/astc-encoder)
-fast compression library by facebook [zstandard](https://github.com/facebook/zstd)
-for dxt texture compression [etcpak](https://github.com/wolfpld/etcpak)
+for fbx scenes [ufbx](https://github.com/ufbx/ufbx)<br>
+importing and resizing textures [stb libraries](https://github.com/nothings/stb)<br>
+astc texture format codec for android textures [astc-encoder](https://github.com/ARM-software/astc-encoder)<br>
+fast compression library by facebook [zstandard](https://github.com/facebook/zstd)<br>
+for dxt texture compression [etcpak](https://github.com/wolfpld/etcpak)<br>
