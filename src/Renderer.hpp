@@ -10,10 +10,7 @@
                                       "precision highp   int;\n"       \
                                       "#define __ANDROID__ 1\n"
 #else
-#define AX_SHADER_VERSION_PRECISION() "#version 330 \n"                \
-                                      "precision highp   float;\n"     \
-                                      "precision mediump sampler2D;\n" \
-                                      "precision highp   int;\n"       
+#define AX_SHADER_VERSION_PRECISION() "#version 330 \n"                
 #endif
 
 struct Shader { unsigned int handle; };
@@ -55,7 +52,7 @@ enum GraphicType_
 };
 typedef int GraphicType;
 
-struct Mesh
+struct GPUMesh
 {
     int numVertex, numIndex;
     // unsigned because opengl accepts unsigned
@@ -86,9 +83,9 @@ struct InputLayoutDesc
 typedef int TextureType;
 
 // only uint32 indices accepted
-Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
+GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
-void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh);
+void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh);
 
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
@@ -108,7 +105,7 @@ void DeleteTexture(Texture texture);
 
 void DeleteShader(Shader shader);
 
-void DeleteMesh(Mesh mesh);
+void DeleteMesh(GPUMesh mesh);
 
 // renders an texture to screen with given shader
 void RenderFullScreen(Shader fullScreenShader, unsigned int texture);
@@ -124,7 +121,7 @@ void SetModelViewProjection(float* mvp);
 
 void SetModelMatrix(float* model);
 
-void RenderMesh(Mesh mesh);
+void RenderMesh(GPUMesh mesh);
 
 void InitRenderer();
 
@@ -154,43 +151,46 @@ void SetShaderValue(float value, unsigned int location);
 // Warning! Order is important
 enum TextureType_
 {
-    TextureType_R8	         = 0,
-    TextureType_R8_SNORM	 = 1,
-    TextureType_R16F	     = 2,
-    TextureType_R32F	     = 3,
-    TextureType_R8UI	     = 4,
-    TextureType_R16UI	     = 5,
-    TextureType_R32UI	     = 6,
+    TextureType_R8           = 0,
+    TextureType_R8_SNORM     = 1,
+    TextureType_R16F         = 2,
+    TextureType_R32F         = 3,
+    TextureType_R8UI         = 4,
+    TextureType_R16UI        = 5,
+    TextureType_R32UI        = 6,
 
-    TextureType_RG8	         = 7,
-    TextureType_RG8_SNORM	 = 8,
-    TextureType_RG16F	     = 9,
-    TextureType_RG32F	     = 10,
-    TextureType_RG16UI	     = 11,
-    TextureType_RG32UI	     = 12,
+    TextureType_RG8          = 7,
+    TextureType_RG8_SNORM    = 8,
+    TextureType_RG16F        = 9,
+    TextureType_RG32F        = 10,
+    TextureType_RG16UI       = 11,
+    TextureType_RG32UI       = 12,
     
-    TextureType_RGB8	     = 13,
-    TextureType_SRGB8	     = 14,
+    TextureType_RGB8         = 13,
+    TextureType_SRGB8        = 14,
     TextureType_RGB8_SNORM	 = 15,
     TextureType_R11F_G11F_B1 = 16,
-    TextureType_RGB9_E5	     = 17,
-    TextureType_RGB16F	     = 18,
-    TextureType_RGB32F	     = 19,
-    TextureType_RGB8UI	     = 20,
-    TextureType_RGB16UI	     = 21,
-    TextureType_RGB32UI	     = 22,
+    TextureType_RGB9_E5      = 17,
+    TextureType_RGB16F       = 18,
+    TextureType_RGB32F       = 19,
+    TextureType_RGB8UI       = 20,
+    TextureType_RGB16UI      = 21,
+    TextureType_RGB32UI      = 22,
     
-    TextureType_RGBA8	     = 23,
+    TextureType_RGBA8        = 23,
     TextureType_SRGB8_ALPHA8 = 24,
     TextureType_RGBA8_SNORM	 = 25,
-    TextureType_RGB5_A1	     = 26,
-    TextureType_RGBA4	     = 27,
-    TextureType_RGB10_A2	 = 28,
+    TextureType_RGB5_A1      = 26,
+    TextureType_RGBA4        = 27,
+    TextureType_RGB10_A2     = 28,
     TextureType_RGBA16F	     = 29,
     TextureType_RGBA32F	     = 30,
     TextureType_RGBA8UI	     = 31,
-    TextureType_RGBA16UI	 = 33,
-    TextureType_RGBA32UI	 = 34,
+    TextureType_RGBA16UI     = 33,
+    TextureType_RGBA32UI     = 34,
+
+	TextureType_CompressedRGB  = 35,
+	TextureType_CompressedRGBA = 36
 };
 
 #endif //AX_RENDERER_H

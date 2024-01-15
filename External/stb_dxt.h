@@ -467,7 +467,7 @@ static void stb__CompressColorBlock(unsigned char *dest, unsigned char *block, i
    int i;
    int refinecount;
    unsigned short max16, min16;
-   unsigned char dblock[16*4],color[4*4];
+   unsigned char color[4*4];
    
    refinecount = (mode & STB_DXT_HIGHQUAL) ? 2 : 1;
 
@@ -570,7 +570,7 @@ inline int imin(int x, int y) { return (x < y) ? x : y; }
 
 static void extractBlock(const unsigned char *src, int x, int y, int w, int h, unsigned char *block)
 {
-   int i, j;
+   int i;
 
 #ifdef NEW_OPTIMISATIONS
    if ((w-x >=4) && (h-y >=4))

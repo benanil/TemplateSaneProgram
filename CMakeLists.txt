@@ -17,7 +17,6 @@ set(SOURCES
     External/ufbx.c
     External/zstd.c # compress files. by facebook (meta)
     
-    External/ProcessRGB.cpp # compress etc textures
     External/ProcessDxtc.cpp # compress dxt textures
     
     src/AssetManager.cpp
@@ -50,5 +49,8 @@ target_link_libraries(SaneProgram
     gdi32
     opengl32
 )
+
+# Set the source files for ASTC encoder in Visual Studio
+source_group("ASTC Encoder" FILES ${ASTC_ENCODER_SOURCES})
 
 file(COPY ${CMAKE_SOURCE_DIR}/SaneProgram.res DESTINATION ${CMAKE_BINARY_DIR})

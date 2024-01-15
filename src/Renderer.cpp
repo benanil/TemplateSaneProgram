@@ -74,40 +74,40 @@ struct TextureFormat
 // https://www.khronos.org/opengles/sdk/docs/man31/html/glTexImage2D.xhtml
 static const TextureFormat TextureFormatTable[] =
 {
-    {   GL_R8             , GL_RED,             GL_UNSIGNED_BYTE	             }, //  TextureType_R8	         = 0,
-    {   GL_R8_SNORM       , GL_RED,             GL_BYTE                          }, //  TextureType_R8_SNORM	 = 1,
-    {   GL_R16F           , GL_RED,             GL_HALF_FLOAT                    }, //  TextureType_R16F	     = 2,
-    {   GL_R32F           , GL_RED,             GL_FLOAT	                     }, //  TextureType_R32F	     = 3,
-    {   GL_R8UI           , GL_RED_INTEGER ,    GL_UNSIGNED_BYTE	             }, //  TextureType_R8UI	     = 4,
-    {   GL_R16UI          , GL_RED_INTEGER ,    GL_UNSIGNED_SHORT	             }, //  TextureType_R16UI	     = 5,
-    {   GL_R32UI          , GL_RED_INTEGER ,    GL_UNSIGNED_INT                  }, //  TextureType_R32UI	     = 6,
-    {   GL_RG8            , GL_RG,              GL_UNSIGNED_BYTE	             }, //  TextureType_RG8	         = 7,
-    {   GL_RG8_SNORM      , GL_RG,              GL_BYTE                          }, //  TextureType_RG8_SNORM	 = 8,
-    {   GL_RG16F          , GL_RG,              GL_HALF_FLOAT                    }, //  TextureType_RG16F	     = 9,
-    {   GL_RG32F          , GL_RG,              GL_FLOAT	                     }, //  TextureType_RG32F	     = 10,
-    {   GL_RG16UI         , GL_RG_INTEGER,      GL_UNSIGNED_SHORT	             }, //  TextureType_RG16UI	     = 11,
-    {   GL_RG32UI         , GL_RG_INTEGER,      GL_UNSIGNED_INT	                 }, //  TextureType_RG32UI	     = 12,
-    {   GL_RGB8           , GL_RGB,             GL_UNSIGNED_BYTE	             }, //  TextureType_RGB8	     = 13,
-    {   GL_SRGB8          , GL_RGB,             GL_UNSIGNED_BYTE	             }, //  TextureType_SRGB8	     = 14,
-    {   GL_RGB8_SNORM     , GL_RGB,             GL_BYTE                          }, //  TextureType_RGB8_SNORM	 = 15,
+    {   GL_R8             , GL_RED,             GL_UNSIGNED_BYTE                 }, //  TextureType_R8           = 0,
+    {   GL_R8_SNORM       , GL_RED,             GL_BYTE                          }, //  TextureType_R8_SNORM     = 1,
+    {   GL_R16F           , GL_RED,             GL_HALF_FLOAT                    }, //  TextureType_R16F         = 2,
+    {   GL_R32F           , GL_RED,             GL_FLOAT                         }, //  TextureType_R32F         = 3,
+    {   GL_R8UI           , GL_RED_INTEGER ,    GL_UNSIGNED_BYTE                 }, //  TextureType_R8UI         = 4,
+    {   GL_R16UI          , GL_RED_INTEGER ,    GL_UNSIGNED_SHORT                }, //  TextureType_R16UI        = 5,
+    {   GL_R32UI          , GL_RED_INTEGER ,    GL_UNSIGNED_INT                  }, //  TextureType_R32UI        = 6,
+    {   GL_RG8            , GL_RG,              GL_UNSIGNED_BYTE                 }, //  TextureType_RG8	         = 7,
+    {   GL_RG8_SNORM      , GL_RG,              GL_BYTE                          }, //  TextureType_RG8_SNORM    = 8,
+    {   GL_RG16F          , GL_RG,              GL_HALF_FLOAT                    }, //  TextureType_RG16F        = 9,
+    {   GL_RG32F          , GL_RG,              GL_FLOAT                         }, //  TextureType_RG32F        = 10,
+    {   GL_RG16UI         , GL_RG_INTEGER,      GL_UNSIGNED_SHORT                }, //  TextureType_RG16UI       = 11,
+    {   GL_RG32UI         , GL_RG_INTEGER,      GL_UNSIGNED_INT                  }, //  TextureType_RG32UI       = 12,
+    {   GL_RGB8           , GL_RGB,             GL_UNSIGNED_BYTE                 }, //  TextureType_RGB8         = 13,
+    {   GL_SRGB8          , GL_RGB,             GL_UNSIGNED_BYTE                 }, //  TextureType_SRGB8        = 14,
+    {   GL_RGB8_SNORM     , GL_RGB,             GL_BYTE                          }, //  TextureType_RGB8_SNORM   = 15,
     {   GL_R11F_G11F_B10F , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_R11F_G11F_B1 = 16,
-    {   GL_RGB9_E5        , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_RGB9_E5	     = 17,
-    {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_RGB16F	     = 18,
-    {   GL_RGB32F         , GL_RGB,             GL_FLOAT	                     }, //  TextureType_RGB32F	     = 19,
-    {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, //  TextureType_RGB8UI	     = 20,
-    {   GL_RGB16UI        , GL_RGB_INTEGER,     GL_UNSIGNED_SHORT                }, //  TextureType_RGB16UI	     = 21,
-    {   GL_RGB32UI        , GL_RGB_INTEGER,     GL_UNSIGNED_INT                  }, //  TextureType_RGB32UI	     = 22,
-    {   GL_RGBA8          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_RGBA8	     = 23,
+    {   GL_RGB9_E5        , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_RGB9_E5      = 17,
+    {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, //  TextureType_RGB16F       = 18,
+    {   GL_RGB32F         , GL_RGB,             GL_FLOAT                         }, //  TextureType_RGB32F       = 19,
+    {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, //  TextureType_RGB8UI       = 20,
+    {   GL_RGB16UI        , GL_RGB_INTEGER,     GL_UNSIGNED_SHORT                }, //  TextureType_RGB16UI      = 21,
+    {   GL_RGB32UI        , GL_RGB_INTEGER,     GL_UNSIGNED_INT                  }, //  TextureType_RGB32UI      = 22,
+    {   GL_RGBA8          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_RGBA8        = 23,
     {   GL_SRGB8_ALPHA8   , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_SRGB8_ALPHA8 = 24,
-    {   GL_RGBA8_SNORM    , GL_RGBA,            GL_BYTE                          }, //  TextureType_RGBA8_SNORM	 = 25,
-    {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_RGB5_A1	     = 26,
-    {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_RGBA4	     = 27,
-    {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, //  TextureType_RGB10_A2	 = 28,
-    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, //  TextureType_RGBA16F	     = 29,
-    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, //  TextureType_RGBA32F	     = 30,
-    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, //  TextureType_RGBA8UI	     = 31,
-    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, //  TextureType_RGBA16UI	 = 33,
-    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }  //  TextureType_RGBA32UI	 = 34,
+    {   GL_RGBA8_SNORM    , GL_RGBA,            GL_BYTE                          }, //  TextureType_RGBA8_SNORM  = 25,
+    {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_RGB5_A1      = 26,
+    {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, //  TextureType_RGBA4        = 27,
+    {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, //  TextureType_RGB10_A2     = 28,
+    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, //  TextureType_RGBA16F      = 29,
+    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, //  TextureType_RGBA32F      = 30,
+    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, //  TextureType_RGBA8UI      = 31,
+    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, //  TextureType_RGBA16UI     = 33,
+    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }  //  TextureType_RGBA32UI     = 34,
 };
 
 const char* GetGLErrorString(GLenum error) 
@@ -132,7 +132,7 @@ Texture CreateTexture(int width, int height, void* data, TextureType type, bool 
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, IsAndroid() ? GL_NEAREST : GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmap ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR);
     texture.width  = width;
     texture.height = height;
@@ -146,7 +146,7 @@ Texture CreateTexture(int width, int height, void* data, TextureType type, bool 
     else
 #ifndef __ANDROID__ 
     {
-        bool isDXT5 = type == 1;
+        bool isDXT5 = type == TextureType_CompressedRGBA;
         int blockSize = isDXT5 ? (width * height) : ((width * height) >> 1);
         glCompressedTexImage2D(GL_TEXTURE_2D, 0, isDXT5 ? GL_COMPRESSED_RGBA_S3TC_DXT5_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
                                width, height, 0, blockSize, data);
@@ -276,9 +276,9 @@ inline unsigned int GLTFWrapToOGLWrap(int wrap) {
     return values[wrap];
 }
 
-Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
+GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
 {
-    Mesh mesh;
+    GPUMesh mesh;
     glGenBuffers(1, &mesh.vertexHandle);
     glGenBuffers(1, &mesh.indexHandle);
 
@@ -326,13 +326,13 @@ Mesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numInd
     return mesh;
 }
 
-void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh)
+void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
 {
     struct XVertex
     {
         Vector3f position;
-        half3    normal;
-        half3    tangent;
+        int      normal;
+        half     tangent[4];
         Vector2f texCoord;
     };
 
@@ -346,10 +346,10 @@ void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh)
     desc.layout[0].type = GraphicType_Float;
 
     desc.layout[1].numComp = 3;
-    desc.layout[1].type = GraphicType_Half;
+    desc.layout[1].type = GraphicType_XYZ10W2;
 
-    desc.layout[2].numComp = 3;
-    desc.layout[2].type = GraphicType_Half;
+    desc.layout[2].numComp = 4;
+    desc.layout[2].type = GraphicType_Half; 
     
     desc.layout[3].numComp = 2;
     desc.layout[3].type = GraphicType_Float;
@@ -358,7 +358,7 @@ void CreateMeshFromPrimitive(APrimitive* primitive, Mesh* mesh)
     *mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 
-void DeleteMesh(Mesh mesh)
+void DeleteMesh(GPUMesh mesh)
 {
     glDeleteVertexArrays(1, &mesh.vertexLayoutHandle);
     glDeleteBuffers(1, &mesh.vertexHandle);
@@ -522,15 +522,14 @@ void GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severi
 
 static void CreateDefaultTexture()
 {
-    unsigned char img[32*32*3]{};
+    unsigned char img[32*32*2]{};
     
     for (int i = 0; i < (32 * 32); i++)
     {
-        img[i * 3 + 0] = 50;  // metallic 
-        img[i * 3 + 1] = 120; // roughness
-        img[i * 3 + 2] = 0;
+        img[i * 2 + 0] = 45;  // metallic 
+        img[i * 2 + 1] = 110; // roughness
     }
-    g_DefaultTexture = CreateTexture(32, 32, img, TextureType_RGB8, false).handle;
+    g_DefaultTexture = CreateTexture(32, 32, img, TextureType_RG8, false).handle;
 }
 
 static void CreateDefaultScreenShader()
@@ -624,7 +623,7 @@ void SetModelMatrix(float* model)
     glUniformMatrix4fv(modelLoc, 1, false, &m_ModelMatrix.m[0][0]);
 }
 
-void RenderMesh(Mesh mesh)
+void RenderMesh(GPUMesh mesh)
 {
     glBindVertexArray(mesh.vertexLayoutHandle);
 

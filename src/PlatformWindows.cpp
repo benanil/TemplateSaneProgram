@@ -442,13 +442,13 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     
     ShowWindow(PlatformCtx.hwnd, show);
     UpdateWindow(PlatformCtx.hwnd);
-    InitRenderer();
     // first thing that we will see is going to be black color instead of white
     // if we clear before starting the engine
     SwapBuffers(dc);
-
-    if (AXStart() == 0) return 1; // user defined startup failed
     InitRenderer();
+
+    if (AXStart() == 0)
+        return 1; // user defined startup failed
 
     LARGE_INTEGER frequency, prevTime, currentTime;
     QueryPerformanceFrequency(&frequency);

@@ -18,7 +18,6 @@ uniform int hasNormalMap;
 const float PI = 3.1415926535;
 
 #ifndef __ANDROID__
-
 // pbr code directly copied from here
 // https://github.com/JoeyDeVries/LearnOpenGL/blob/master/src/6.pbr/1.2.lighting_textured/1.2.pbr.fs
 // ----------------------------------------------------------------------------
@@ -64,35 +63,16 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 vec3 ACESFilm(vec3 x)
 {
-    const float a = 2.51f;
-    const float b = 0.03f;
-    const float c = 2.43f;
-    const float d = 0.59f;
-    const float e = 0.14f;
-    return clamp( (x * (a * x + b)) / (x * (c * x + d) + e) , vec3(0.0), vec3(1.0) );
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
 }
 
-void main()
+vec3 BRDF(vec3 normal, vec3 color, float metallic, float roughness)
 {
-    // get diffuse color
-    vec4 color = texture(albedo, vTexCoords);
-    if (color.a < 0.001)
-        discard;
-
-    vec2 metalRoughness = texture(metallicRoughnessMap, vTexCoords).rg;
-    float metallic  = metalRoughness.r;
-    float roughness = metalRoughness.g;
-
-    vec3 normal = vTBN[2];
-    if (hasNormalMap == 1)
-    {
-        // obtain normal from normal map in range [0,1]
-        normal = texture(normalMap, vTexCoords).rgb;
-        //normal.r = 1.0 - normal.r;
-        normal = normal * 2.0 - 1.0;
-        // transform normal vector to range [-1,1]
-        normal = normalize(vTBN * normal);  // this normal is in tangent space
-    }
     vec3 N = normal;
     vec3 V = normalize(viewPos - vFragPos);
     vec3 L = normalize(lightPos - vFragPos);
@@ -100,11 +80,11 @@ void main()
     // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
     // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
     vec3 F0 = vec3(0.04); 
-    F0 = mix(F0, color.rgb, metallic);
+    F0 = mix(F0, color, metallic);
     vec3 H = normalize(V + L);
 
-    vec3 lightColor = vec3(0.9, 0.80, 0.70);
-    const float intensity = 1.2;
+    vec3 lightColor = vec3(0.9, 0.80, 0.76);
+    const float intensity = 1.4;
     vec3 radiance = lightColor * intensity;
 
     // Cook-Torrance BRDF
@@ -122,30 +102,23 @@ void main()
     kD *= 1.0 - metallic;	  
     float NdotL = max(dot(N, L), 0.0);        
 
-    vec3 lighting = (kD * color.rgb / PI + specular) * radiance * NdotL; 
-    vec3 ambient = 0.02 * color.rgb * (1.0 - dot(normal, L));
+    vec3 lighting = (kD * color / PI + specular) * radiance * NdotL; 
+    vec3 ambient = 0.02 * color * (1.0 - dot(normal, L));
     
     lighting += ambient;
 
     lighting = ACESFilm(lighting);
     // gamma correct
-    lighting = pow(lighting , vec3(1.0/2.2)); 
-    
-    FragColor = vec4(lighting, 1.0);
+    lighting = pow(lighting , vec3(1.0/2.0)); 
+    return lighting;
 }
-#else // Android
 
-void main()
+#endif // __ANDROID__ // android don't have brdf
+
+vec3 PhongLighting(vec3 normal, vec3 color)
 {
-    // get diffuse color
-    vec4 color = texture(albedo, vTexCoords);
-    if (color.a < 0.012)
-        discard;
-
     // ambient
-    vec3 ambient = 0.1 * color.rgb;
-    vec3 normal = vTBN[2];
-
+    vec3 ambient = 0.1 * color;
     // diffuse
     vec3 lightDir = normalize(lightPos - vFragPos);
     float diff    = max(dot(lightDir, normal), 0.0) ;
@@ -157,7 +130,38 @@ void main()
     float spec      = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
     
     vec3 specular = vec3(0.4) * spec;
-    FragColor = vec4(ambient + diffuse + specular, 1.0);
+    return ambient + diffuse + specular;
 }
 
+void main()
+{
+    // get diffuse color
+    vec4 color = texture(albedo, vTexCoords);
+    if (color.a < 0.001)
+        discard;
+
+    vec3 normal = vTBN[2];
+    vec3 lighting = vec3(0.0);
+#ifndef __ANDROID__
+    if (hasNormalMap == 1)
+    {
+        // obtain normal from normal map in range [0,1]
+        vec2  c = texture(normalMap, vTexCoords).rg * 2.0 - 1.0;
+        float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
+        
+        normal  = vec3(c, z);
+        // transform normal vector to range [-1,1]
+        normal  = normalize(vTBN * normal);  // this normal is in tangent space
+        
+        vec2 metalRoughness = texture(metallicRoughnessMap, vTexCoords).rg;
+        float metallic  = metalRoughness.r;
+        float roughness = metalRoughness.g;
+
+        lighting = BRDF(normal, color.rgb, metallic, roughness);
+    }
+    else
 #endif
+        lighting = PhongLighting(normal, color.rgb);
+
+    FragColor = vec4(lighting, 1.0);
+}
