@@ -889,7 +889,7 @@ static etcpak_force_inline uint64_t ProcessAlpha_SSE( __m128i px0, __m128i px1, 
 void CompressDxt5( const uint32_t* src, uint64_t* dst, uint32_t blocks, size_t width )
 {
     int i = 0;
-    auto ptr = dst;
+    uint64_t* ptr = dst;
     do
     {
 #ifdef __SSE4_1__
@@ -907,7 +907,7 @@ void CompressDxt5( const uint32_t* src, uint64_t* dst, uint32_t blocks, size_t w
 
         *ptr++ = ProcessAlpha_SSE( px0, px1, px2, px3 );
 
-        const auto c = ProcessRGB_SSE( px0, px1, px2, px3 );
+        const uint64_t c = ProcessRGB_SSE( px0, px1, px2, px3 );
         uint8_t fix[8];
         memcpy( fix, &c, 8 );
         for( int j=4; j<8; j++ ) fix[j] = DxtcIndexTable[fix[j]];

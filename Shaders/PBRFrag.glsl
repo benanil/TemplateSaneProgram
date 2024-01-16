@@ -148,20 +148,20 @@ void main()
         // obtain normal from normal map in range [0,1]
         vec2  c = texture(normalMap, vTexCoords).rg * 2.0 - 1.0;
         float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
-        
-        normal  = vec3(c, z);
+        const float bumpiness = 1.1f;
+        normal  = normalize(vec3(c * bumpiness, z));
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
-        
+
         vec2 metalRoughness = texture(metallicRoughnessMap, vTexCoords).rg;
         float metallic  = metalRoughness.r;
         float roughness = metalRoughness.g;
-
+        
         lighting = BRDF(normal, color.rgb, metallic, roughness);
     }
     else
 #endif
         lighting = PhongLighting(normal, color.rgb);
-
+    
     FragColor = vec4(lighting, 1.0);
 }

@@ -6,8 +6,8 @@ if "%1"=="Debug" (
     devenv build/SaneProgram.vcxproj /Build "Debug|x64"
 ) else (
     echo Release build is running
-    make
-	start "" "SaneProgram.exe"
+    devenv build/SaneProgram.vcxproj /Build "Release|x64"
+    start "" "build/Release/SaneProgram.exe"
 )
 
 REM REM Compile the C++ code using clang++
@@ -53,6 +53,7 @@ REM src/PlatformWindows.cpp ^
 REM src/AssetManager.cpp ^
 REM src/Renderer.cpp ^
 REM src/Scene.cpp ^
+REM src/Texture.cpp ^
 REM -o SaneProgram ^
 REM -lopengl32 -lgdi32  SaneProgram.res
 
@@ -99,5 +100,6 @@ REM src/PlatformWindows.cpp ^
 REM src/AssetManager.cpp ^
 REM src/Renderer.cpp ^
 REM src/Scene.cpp ^
+REM src/Texture.cpp ^
 REM -o SaneProgram ^
 REM -lopengl32 -lgdi32 -mno-needed SaneProgram.res

@@ -189,8 +189,10 @@ enum TextureType_
     TextureType_RGBA16UI     = 33,
     TextureType_RGBA32UI     = 34,
 
-	TextureType_CompressedRGB  = 35,
-	TextureType_CompressedRGBA = 36
+    TextureType_CompressedR    = 35,
+    TextureType_CompressedRG   = 36,
+	TextureType_CompressedRGB  = 37,
+	TextureType_CompressedRGBA = 38
 };
 
 #endif //AX_RENDERER_H

@@ -38,6 +38,17 @@
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/String.hpp"
 
+inline void* stbi_realloc(void* p, size_t newsz)
+{
+    delete[] p;
+    p = (void*)new char[newsz];
+    return p;
+}
+
+#define STBI_MALLOC(sz) (void*)new char[sz]
+#define STBI_REALLOC(p,newsz) stbi_realloc(p, newsz)
+#define STBI_FREE(p) delete[] p;
+
 #define STBI_ASSERT(x) ASSERT(x)
 #define STB_IMAGE_IMPLEMENTATION
 
@@ -134,6 +145,10 @@ Texture CreateTexture(int width, int height, void* data, TextureType type, bool 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, IsAndroid() ? GL_NEAREST : GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmap ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR);
+#ifndef __ANDROID__ 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, 8);
+#endif //__ANDROID__ 
+
     texture.width  = width;
     texture.height = height;
     texture.buffer = (unsigned char*)data;
@@ -146,10 +161,18 @@ Texture CreateTexture(int width, int height, void* data, TextureType type, bool 
     else
 #ifndef __ANDROID__ 
     {
-        bool isDXT5 = type == TextureType_CompressedRGBA;
-        int blockSize = isDXT5 ? (width * height) : ((width * height) >> 1);
-        glCompressedTexImage2D(GL_TEXTURE_2D, 0, isDXT5 ? GL_COMPRESSED_RGBA_S3TC_DXT5_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
-                               width, height, 0, blockSize, data);
+        int blockSize = width * height;
+        blockSize >>= type == TextureType_CompressedR; // bc4 is 0.5 byte per pixel
+
+        const int compressedMap[] =
+        {
+            GL_COMPRESSED_RED_RGTC1, // BC4 
+            GL_COMPRESSED_RG_RGTC2,  // BC5 
+            GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, // I'm using dxt5 for rgb textures because it has better quality compared to dxt1
+            GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+        };
+        int arrIndex = type-TextureType_CompressedR;
+        glCompressedTexImage2D(GL_TEXTURE_2D, 0, compressedMap[arrIndex], width, height, 0, blockSize, data);
     }
 #else
     {

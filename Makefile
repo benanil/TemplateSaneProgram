@@ -1,8 +1,8 @@
 # Makefile for SaneProgram
 
 CXX = g++
-CXXFLAGS = -std=c++14 -O2 -mavx2 -march=native -msse4.2 -mf16c -mwindows -fno-rtti -s -fno-stack-protector -fno-exceptions -fno-unwind-tables
-LDFLAGS = -lopengl32 -luser32 -lgdi32 -mno-needed 
+CXXFLAGS = -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mf16c -Wall -mwindows -fno-rtti -s -fno-stack-protector -fno-exceptions -fno-unwind-tables
+LDFLAGS = -lopengl32 -luser32 -lgdi32
 SRC_DIR = src
 ASTL_DIR = ASTL/Additional
 EXT_DIR = External

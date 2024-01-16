@@ -109,7 +109,7 @@ void RenderOneMesh(GPUMesh mesh, Texture albedo, Texture normal, Texture metalli
 
     static float time = 5.2f;
     // time += GetDeltaTime() * 0.2f;
-    Vector3f lightPos = MakeVec3(0.0f, Cos(time), Sin(time)) * 100.0f;
+    Vector3f lightPos = MakeVec3(0.0f, Abs(Cos(time)), Sin(time)) * 100.0f;
 
     SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
     SetShaderValue(&lightPos.x, lightPosLoc, GraphicType_Vector3f);
@@ -146,7 +146,7 @@ void RenderScene(Scene* scene)
 
     static float time = 5.2f;
     time += GetDeltaTime() * 0.2f;
-    Vector3f lightPos = MakeVec3(0.0f, cosf(time), Abs(sinf(time))) * 100.0f;
+    Vector3f lightPos = MakeVec3(0.0f, Abs(cosf(time)) + 0.1f, sinf(time)) * 100.0f;
     
     SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
     SetShaderValue(&lightPos.x, lightPosLoc, GraphicType_Vector3f);

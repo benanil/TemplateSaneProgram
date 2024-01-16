@@ -51,7 +51,6 @@
 
 // For both libraries force asserts (which can be triggered by corrupt input
 // images) to be handled at runtime in release builds to avoid security issues.
-#define STBI_ASSERT(x) astcenc_runtime_assert(x)
 #define TEXR_ASSERT(x) astcenc_runtime_assert(x)
 
 /**
