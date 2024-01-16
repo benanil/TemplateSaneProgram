@@ -110,14 +110,14 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 		for (int j = 0; j < width; j += 4)
 		{
 			int j2 = (j * 2);
-            const int rowSize = 4 * sizeof(short);
+			const int rowSize = 4 * sizeof(short);
 
-            SmallMemCpy(rg +  0, src + ((i + 0) * width2) + j2, 4 * 2);
-            SmallMemCpy(rg +  8, src + ((i + 1) * width2) + j2, 4 * 2);
-            SmallMemCpy(rg + 16, src + ((i + 2) * width2) + j2, 4 * 2);
-            SmallMemCpy(rg + 24, src + ((i + 3) * width2) + j2, 4 * 2);
+			SmallMemCpy(rg +  0, src + ((i + 0) * width2) + j2, 4 * 2);
+			SmallMemCpy(rg +  8, src + ((i + 1) * width2) + j2, 4 * 2);
+			SmallMemCpy(rg + 16, src + ((i + 2) * width2) + j2, 4 * 2);
+			SmallMemCpy(rg + 24, src + ((i + 3) * width2) + j2, 4 * 2);
 			stb_compress_bc5_block(bc5, rg);
-            bc5 += 16; // 16 byte per block
+			bc5 += 16; // 16 byte per block
 		}
 	}
 }
@@ -398,7 +398,7 @@ void SaveSceneImages(Scene* scene, char* path)
 	ChangeExtension(path, StringLength(path), "dxt");
 	SaveSceneImagesGeneric(scene, path, false); // is mobile false
 	
-    // save astc textures for android
+	// save astc textures for android
 	int len = StringLength(path);
 	ChangeExtension(path, len, "astc");
 	char* astcPath = new char[len + 2] {};
