@@ -226,12 +226,12 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const bool isMobile
 
 	ScopedPtr<unsigned char> toCompressionBuffer = new unsigned char[beforeCompressedSize];
 
-	auto execFn = [&](int numImages, uint64_t compressionStart, int i) -> void
+	auto execFn = [&](int numTextures, uint64_t compressionStart, int i) -> void
 	{
 		Array<unsigned char> textureLoadBuffer(!isMobile * 1024 * 1024);
 		unsigned char* currentCompression = toCompressionBuffer + compressionStart;
 
-		for (int end = i + numImages; i < end; i++)
+		for (int end = i + numTextures; i < end; i++)
 		{
 			ImageInfo info = imageInfos[i];
 			const char* imagePath = images[i].path;
@@ -325,7 +325,7 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const bool isMobile
 	
 	AFileWrite(imageInfos.ptr, numImages * sizeof(ImageInfo), file);
 
-	uint64_t compressedSize = uint64_t(beforeCompressedSize * 0.92);
+	uint64_t compressedSize = uint64_t(beforeCompressedSize * 0.90);
 	ScopedPtr<char> compressedBuffer = new char[compressedSize];
 
 	compressedSize = ZSTD_compress(compressedBuffer, compressedSize, toCompressionBuffer, beforeCompressedSize, 9);

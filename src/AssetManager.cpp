@@ -1,3 +1,11 @@
+/*********************************************************************************
+*    Purpose:                                                                    *
+*         Saves or Loads given FBX or GLTF scene, as binary                      *
+*         Compresses Vertices using half precison and xyz10w2 format.            *
+*         Uses zstd to reduce size on disk                                       *
+*    Author:                                                                     *
+*        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil          *
+*********************************************************************************/
 
 #include "Platform.hpp"
 #include "AssetManager.hpp"
