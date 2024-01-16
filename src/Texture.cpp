@@ -1,3 +1,23 @@
+/********************************************************************************
+*    Purpose:                                                                   *
+*        Gets all of the textures in GLTF or FBX scene compresses them to       *
+*        to make textures smaller on GPU and Disk I'm compressing them          *
+*        using BCn texture compression on Windows                               *
+*        and using ASTC texture compression for storing textures on android     *
+*        also compressing further with zstd to reduce the size on disk.         *
+*                                                                               *
+*    Textures and Corresponding Formats:                                        *
+*        R  = BC4                                                               *
+*        RG = BC5                                                               *
+*        RGB, RGBA = DXT5                                                       *
+*    Android:                                                                   *
+*        All Textures are using ASTC 4X4 format because:                        *
+*        android doesn't have normal maps I haven't use other than ASTC4X4      *
+*        but in feature I might use ETC2 format because it has                  *
+*        faster compile times and faster compress speed. (etcpak)               *
+*    Author:                                                                    *
+*        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil         *
+********************************************************************************/
 
 #include <thread>
 #include <bitset>
@@ -103,7 +123,7 @@ static void CompressBC4(const unsigned char* RESTRICT src, unsigned char* bc4, i
 static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, int width, int height)
 {
 	unsigned char rg[4 * 4 * 2];
-    int width2 = width * sizeof(short);
+	int width2 = width * sizeof(short);
 
 	for (int i = 0; i < height; i += 4)
 	{
@@ -343,14 +363,14 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 	AFileRead(&decompressedSize, sizeof(uint64_t), file);
 	AFileRead(&compressedSize, sizeof(uint64_t), file);
 
-	unsigned char* compressedBuffer = new unsigned char[compressedSize];
-	AFileRead(compressedBuffer, compressedSize, file);
+	ScopedPtr<unsigned char> compressedBuffer = new unsigned char[compressedSize];
+	AFileRead(compressedBuffer.ptr, compressedSize, file);
 
-	unsigned char* decompressedBuffer = new unsigned char[decompressedSize];
-	decompressedSize = ZSTD_decompress(decompressedBuffer, decompressedSize, compressedBuffer, compressedSize);
+	ScopedPtr<unsigned char> decompressedBuffer = new unsigned char[decompressedSize];
+	decompressedSize = ZSTD_decompress(decompressedBuffer.ptr, decompressedSize, compressedBuffer, compressedSize);
 	ASSERT(!ZSTD_isError(decompressedSize));
 
-	unsigned char* currentImage = decompressedBuffer;
+	unsigned char* currentImage = decompressedBuffer.ptr;
 
 	for (int i = 0; i < numImages; i++)
 	{
@@ -381,8 +401,6 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 		}
 	}
 
-	delete[] decompressedBuffer;
-	delete[] compressedBuffer;
 	AFileClose(file);
 }
 

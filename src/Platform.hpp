@@ -2,7 +2,7 @@
 /********************************************************************
 *    Purpose: Creating Window, Keyboard and Mouse input, Main Loop  *
 *             Touch Input(Android).                                 *
-*             Functions are implemented in Platform.cpp             *
+*             Functions are implemented in PlatformX.cpp            *
 *    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com        *
 ********************************************************************/
 
