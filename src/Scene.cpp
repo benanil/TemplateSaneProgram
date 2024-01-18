@@ -55,32 +55,13 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
         // load scene meshes
         ParsedGLTF& data = scene->data;
 
-        int numMeshes = 0;
-        for (int i = 0; i < data.numMeshes; i++)
-        {
-            numMeshes += data.meshes[i].numPrimitives;
-        }
-
-        scene->meshes = numMeshes ? new SceneMesh[numMeshes]{} : nullptr;
-
-        for (int i = 0; i < data.numMeshes; i++)
-        {
-            AMesh& mesh = data.meshes[i];
-
-            if (mesh.numPrimitives == 1)
-            {
-                CreateMeshFromPrimitive(&data.meshes[i].primitives[0], &scene->meshes[i].primitive);
-            }
-            else
-            {
-                scene->meshes[i].primitives = new GPUMesh[mesh.numPrimitives]{};
-
-                for (int j = 0; j < mesh.numPrimitives; j++)
-                {
-                    CreateMeshFromPrimitive(&data.meshes[i].primitives[j], &scene->meshes[i].primitives[j]);
-                }
-            }
-        }
+        APrimitive primitive = data.meshes[0].primitives[0];
+        primitive.indices  = data.allIndices;
+        primitive.vertices = data.allVertices;
+        primitive.numIndices  = data.totalIndices;
+        primitive.numVertices = data.totalVertices;
+        primitive.indexType   = GraphicType_UnsignedInt;
+        CreateMeshFromPrimitive(&primitive, &scene->bigMesh);
     }
 
     // init scene function ?
@@ -145,7 +126,7 @@ void RenderScene(Scene* scene)
     unsigned int metallicMapLoc  = GetUniformLocation(currentShader, "metallicRoughnessMap");
 
     static float time = 5.2f;
-    time += GetDeltaTime() * 0.2f;
+    time += (float)GetDeltaTime() * 0.2f;
     Vector3f lightPos = MakeVec3(0.0f, Abs(cosf(time)) + 0.1f, sinf(time)) * 100.0f;
     
     SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
@@ -159,14 +140,21 @@ void RenderScene(Scene* scene)
         defaultScene = data.scenes[data.defaultSceneIndex];
         numNodes = defaultScene.numNodes;
     }
+    Matrix4 model = Matrix4::CreateScale(0.02f,0.02f,0.02f);
+    Matrix4 mvp = model * camera.view * camera.projection;
+
+    SetModelViewProjection(mvp.GetPtr());
+    SetModelMatrix(model.GetPtr());
+
+    BindMesh(scene->bigMesh);
 
     for (int i = 0; i < numNodes; i++)
     {
         ANode node = hasScene ? data.nodes[defaultScene.nodes[i]] : data.nodes[i];
-        // if node is not me    sh skip (camera)
-        if (node.type != 0 || node.index == -1) continue;
+        // if node is not mesh skip (camera)
+        if (node.type != 0 || node.index == -1) 
+            continue;
 
-        float identity[4] = {0.0f, 0.0f, 0.0f, 1.0f };
         Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
         Matrix4 mvp = model * camera.view * camera.projection;
 
@@ -177,11 +165,11 @@ void RenderScene(Scene* scene)
 
         for (int j = 0; j < mesh.numPrimitives; ++j)
         {
-            GPUMesh gpuMesh = mesh.numPrimitives == 1 ? scene->meshes[node.index].primitive : scene->meshes[node.index].primitives[j];
-            if (gpuMesh.numIndex == 0)
+            APrimitive& primitive = mesh.primitives[j];
+            
+            if (primitive.numIndices == 0)
                 continue;
 
-            APrimitive& primitive = mesh.primitives[j];
             AMaterial material = data.materials[primitive.material];
             // SetMaterial(&material);
 
@@ -207,8 +195,8 @@ void RenderScene(Scene* scene)
                 texture.handle = g_DefaultTexture;
                 SetTexture(texture, 2, metallicMapLoc);
             }
-
-            RenderMesh(gpuMesh);
+            int offset = primitive.indexOffset;
+            RenderMeshIndexOffset(scene->bigMesh, primitive.numIndices, offset);
         }
     }
 }
@@ -223,19 +211,7 @@ void DestroyScene(Scene* scene)
 {
     ParsedGLTF& data = scene->data;
 
-    if (scene->meshes) 
-    {
-        for (int i = 0; i < data.numMeshes; i++) 
-        {
-            if (data.meshes[i].numPrimitives == 1)
-                DeleteMesh(scene->meshes[i].primitive);
-            else
-                for (int j = 0; j < data.meshes[i].numPrimitives; j++) 
-                    DeleteMesh(scene->meshes[i].primitives[j]);
-        }
-        delete[] scene->meshes;
-        scene->meshes = nullptr;
-    }
+    DeleteMesh(scene->bigMesh);
     
     if (scene->textures) {
         for (int i = 0; i < data.numTextures; i++) {
@@ -243,7 +219,6 @@ void DestroyScene(Scene* scene)
         }
     }
 
-    delete[] scene->meshes;
     delete[] scene->textures;
 
     FreeParsedGLTF(&scene->data);

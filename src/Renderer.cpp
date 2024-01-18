@@ -351,33 +351,21 @@ GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int num
 
 void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
 {
-    struct XVertex
-    {
-        Vector3f position;
-        int      normal;
-        half     tangent[4];
-        Vector2f texCoord;
-    };
-
     InputLayoutDesc desc;
     const int NumLayout = 4;
-    InputLayout inputLayout[NumLayout]{};
+
+    InputLayout inputLayout[NumLayout] = 
+    {
+        { 3, GraphicType_Float   },
+        { 3, GraphicType_XYZ10W2 },
+        { 4, GraphicType_Half    },
+        { 2, GraphicType_Float   }
+    };
+
     desc.layout = inputLayout;
-    desc.stride = sizeof(XVertex); // sizeof(Vertex)
+    desc.stride = sizeof(AVertex); 
+    desc.numLayout = ArraySize(inputLayout);
 
-    desc.layout[0].numComp = 3;
-    desc.layout[0].type = GraphicType_Float;
-
-    desc.layout[1].numComp = 3;
-    desc.layout[1].type = GraphicType_XYZ10W2;
-
-    desc.layout[2].numComp = 4;
-    desc.layout[2].type = GraphicType_Half; 
-    
-    desc.layout[3].numComp = 2;
-    desc.layout[3].type = GraphicType_Float;
-
-    desc.numLayout = NumLayout;
     *mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 
@@ -638,7 +626,7 @@ void SetModelViewProjection(float* mvp)
     glUniformMatrix4fv(mvpLoc  , 1, false, &m_ModelViewProjection.m[0][0]);
 }   
 
-void SetModelMatrix(float* model)       
+void SetModelMatrix(float* model)
 {
     // Todo fix this, don't use uniform location like this
     SmallMemCpy(&m_ModelMatrix.m[0][0], model, 16 * sizeof(float)); 
@@ -646,11 +634,22 @@ void SetModelMatrix(float* model)
     glUniformMatrix4fv(modelLoc, 1, false, &m_ModelMatrix.m[0][0]);
 }
 
-void RenderMesh(GPUMesh mesh)
+void BindMesh(GPUMesh mesh)
 {
     glBindVertexArray(mesh.vertexLayoutHandle);
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
+    CHECK_GL_ERROR();
+}
+
+void RenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset)
+{
+    glDrawElements(GL_TRIANGLES, numIndex, mesh.indexType, (void*)((size_t)offset * sizeof(uint32)));
+    CHECK_GL_ERROR();
+}
+
+void RenderMesh(GPUMesh mesh)
+{
+    BindMesh(mesh);
     glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
     CHECK_GL_ERROR();
 }
@@ -660,5 +659,6 @@ void DestroyRenderer()
     glDeleteTextures(1, &g_DefaultTexture);
     DeleteShader(m_DefaultFragShader);
 
-    // delete[] m_TextureLoadBuffer;
+    delete[] g_TextureLoadBuffer;
+    g_TextureLoadBuffer = nullptr;
 }

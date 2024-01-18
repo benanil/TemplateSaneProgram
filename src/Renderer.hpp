@@ -2,6 +2,8 @@
 #define AX_RENDERER_H
 
 #include "../ASTL/Additional/GLTFParser.hpp"
+#include "../ASTL/Math/Vector.hpp"
+#include "../ASTL/Common.hpp"
 
 #ifdef __ANDROID__  
 #define AX_SHADER_VERSION_PRECISION() "#version 300 es\n"              \
@@ -82,6 +84,15 @@ struct InputLayoutDesc
 
 typedef int TextureType;
 
+// https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
+struct AVertex
+{
+    Vector3f position;
+    int      normal;
+    half     tangent[4];
+    Vector2f texCoord;
+};
+
 // only uint32 indices accepted
 GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
@@ -121,7 +132,11 @@ void SetModelViewProjection(float* mvp);
 
 void SetModelMatrix(float* model);
 
+void BindMesh(GPUMesh mesh);
+
 void RenderMesh(GPUMesh mesh);
+
+void RenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
 
 void InitRenderer();
 

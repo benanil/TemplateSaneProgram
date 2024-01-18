@@ -11,8 +11,9 @@ struct SceneMesh
 struct Scene
 {
     ParsedGLTF data;
-    SceneMesh* meshes;
     Texture* textures;
+    
+    GPUMesh bigMesh; // contains all of the vertices and indices of an scene
 };
 
 int ImportScene(Scene* scene, const char* path, float scale, bool LoadToGPU);

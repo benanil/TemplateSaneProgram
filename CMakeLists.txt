@@ -24,6 +24,7 @@ set(SOURCES
     src/Renderer.cpp
     src/PlatformWindows.cpp
     src/Scene.cpp
+	src/Texture.cpp
 )
 
 # Add all .cpp files from External/astc-encoder to the SOURCES list

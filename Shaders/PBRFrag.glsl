@@ -115,30 +115,12 @@ vec3 BRDF(vec3 normal, vec3 color, float metallic, float roughness)
 
 #endif // __ANDROID__ // android don't have brdf
 
-vec3 PhongLighting(vec3 normal, vec3 color)
-{
-    // ambient
-    vec3 ambient = 0.1 * color;
-    // diffuse
-    vec3 lightDir = normalize(lightPos - vFragPos);
-    float diff    = max(dot(lightDir, normal), 0.0) ;
-    vec3 diffuse  = diff * color.rgb;
-    // specular
-    vec3 viewDir    = normalize(viewPos - vFragPos);
-    vec3 reflectDir = reflect(-lightDir, normal);
-    vec3 halfwayDir = normalize(lightDir + viewDir);  
-    float spec      = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
-    
-    vec3 specular = vec3(0.4) * spec;
-    return ambient + diffuse + specular;
-}
-
 void main()
 {
     // get diffuse color
     vec4 color = texture(albedo, vTexCoords);
     if (color.a < 0.001)
-        discard;
+    discard;
 
     vec3 normal = vTBN[2];
     vec3 lighting = vec3(0.0);
@@ -159,9 +141,14 @@ void main()
         
         lighting = BRDF(normal, color.rgb, metallic, roughness);
     }
-    else
+#else
+    {
+        vec3 diffuse  = color.rgb * vTBN[0].x;
+        vec3 specular = vec3(vTBN[0].y * 0.4);
+        vec3 ambient = color.rgb * 0.14;
+        lighting = diffuse + specular + ambient;
+    }
 #endif
-        lighting = PhongLighting(normal, color.rgb);
-    
+
     FragColor = vec4(lighting, 1.0);
 }

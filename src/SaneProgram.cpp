@@ -64,6 +64,4 @@ void AXExit()
 
     // DestroyScene(&FBXScene);
     DestroyScene(&GLTFScene);
-
-    DestroyRenderer();
 }

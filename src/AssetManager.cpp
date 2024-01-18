@@ -344,85 +344,71 @@ inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v)
 	return vi;
 }
 
-// https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
-struct AVertex
-{
-	Vector3f position;
-	int      normal;
-	half     tangent[4];
-	Vector2f texCoord;
-};
-
 void CreateVerticesIndices(ParsedGLTF* gltf)
 {
-    AMesh* meshes = gltf->meshes;
-    
-    // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
-    const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
-    
-    uint32_t totalVertices = 0;
-    uint64_t totalIndexSize = 0;
-    // Calculate total vertices, and indices
-    for (int m = 0; m < gltf->numMeshes; ++m)
-    {
-        // get number of vertex, getting first attribute count because all of the others are same
-        AMesh mesh = meshes[m];
-        for (uint64_t p = 0; p < mesh.numPrimitives; p++)
-        {
-            APrimitive& primitive = mesh.primitives[p];
-            totalIndexSize += primitive.numIndices * TypeToSize[primitive.indexType];
-            totalVertices += primitive.numVertices;
-        }
-    }
-    
-    // pre allocate all vertices and indices 
-    gltf->allVertices = new AVertex[totalVertices];
-    gltf->allIndices  = AllocAligned(totalIndexSize + 16, alignof(uint32)); // 16->give little bit of space for memcpy
-    
-    AVertex* currVertex = (AVertex*)gltf->allVertices;
-    char* currIndices = (char*)gltf->allIndices;
-    
-    for (int m = 0; m < gltf->numMeshes; ++m)
-    {
-        // get number of vertex, getting first attribute count because all of the others are same
-        AMesh mesh = meshes[m];
-        for (uint64_t p = 0; p < mesh.numPrimitives; p++)
-        {
-            APrimitive& primitive = mesh.primitives[p];
-            void* beforeCopy = primitive.indices;
-            primitive.indices = currIndices;
-            uint64_t indexSize = uint64_t(primitive.numIndices) * TypeToSize[primitive.indexType];
-            MemCpy<alignof(uint32)>(primitive.indices, beforeCopy, indexSize);
-            currIndices += indexSize;
-            
-            primitive.vertices = currVertex;
-            
-            Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
-            Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
-            Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
-            Vector4f* tangents  = (Vector4f*)primitive.vertexAttribs[3];
-            
-            for (int v = 0; v < primitive.numVertices; v++)
-            {
-                Vector4f tangent = tangents ? tangents[v] : Vector4f::Zero();
-                currVertex[v].position  = positions[v];
-                
-                currVertex[v].texCoord = texCoords[v];
-                currVertex[v].normal   = Pack_INT_2_10_10_10_REV(normals[v]);
-                ConvertFloatToHalf(currVertex[v].tangent, &tangent.x, 4);
-            }
-            currVertex += primitive.numVertices;
-        }
-    }
+	AMesh* meshes = gltf->meshes;
+	
+	// BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT
+	const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
+	
+	// pre allocate all vertices and indices 
+	gltf->allVertices = new AVertex[gltf->totalVertices];
+	gltf->allIndices  = AllocAligned(gltf->totalIndices * sizeof(uint32_t) + 16, alignof(uint32)); // 16->give little bit of space for memcpy
+	
+	AVertex* currVertex = (AVertex*)gltf->allVertices;
+	uint32_t* currIndices = (uint32_t*)gltf->allIndices;
+	
+	int vertexCursor = 0;
+	int indexCursor = 0;
 
-    for (int i = 0; i < gltf->numBuffers; i++)
-    {
-        FreeAllText((char*)gltf->buffers[i].uri);
-        gltf->buffers[i].uri = nullptr;
-    }
-    delete[] gltf->buffers;
-    gltf->numBuffers = 0;
-    gltf->buffers = nullptr;
+	for (int m = 0; m < gltf->numMeshes; ++m)
+	{
+		// get number of vertex, getting first attribute count because all of the others are same
+		AMesh mesh = meshes[m];
+		for (uint64_t p = 0; p < mesh.numPrimitives; p++)
+		{
+			APrimitive& primitive = mesh.primitives[p];
+			uint32_t* beforeCopy = (uint32_t*)primitive.indices;
+			primitive.indices = currIndices;
+			
+			for (int i = 0; i < primitive.numIndices; i++)
+			{
+				currIndices[i] = beforeCopy[i] + vertexCursor;
+			}
+
+			primitive.indexOffset = indexCursor;
+			indexCursor += primitive.numIndices;
+
+			vertexCursor += primitive.numVertices;
+			currIndices  += primitive.numIndices;
+
+			// https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
+			primitive.vertices = currVertex;
+			Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
+			Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
+			Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
+			Vector4f* tangents  = (Vector4f*)primitive.vertexAttribs[3];
+			
+			for (int v = 0; v < primitive.numVertices; v++)
+			{
+				Vector4f tangent = tangents ? tangents[v] : Vector4f::Zero();
+				currVertex[v].position  = positions[v];
+				currVertex[v].texCoord  = texCoords[v];
+				currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normals[v]);
+				ConvertFloatToHalf(currVertex[v].tangent, &tangent.x, 4);
+			}
+			currVertex += primitive.numVertices;
+		}
+	}
+
+	for (int i = 0; i < gltf->numBuffers; i++)
+	{
+		FreeAllText((char*)gltf->buffers[i].uri);
+		gltf->buffers[i].uri = nullptr;
+	}
+	delete[] gltf->buffers;
+	gltf->numBuffers = 0;
+	gltf->buffers = nullptr;
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -430,7 +416,7 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 9;
+const int ABMMeshVersion = 15;
 
 bool IsABMLastVersion(const char* path)
 {
@@ -483,25 +469,13 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 	AFileWrite(&gltf->numSamplers, sizeof(short), file);
 	AFileWrite(&gltf->numCameras, sizeof(short), file);
 	AFileWrite(&gltf->numScenes, sizeof(short), file);
-	AFileWrite(&gltf->defaultSceneIndex,  sizeof(short), file);
+	AFileWrite(&gltf->defaultSceneIndex, sizeof(short), file);
 	
-	uint64_t allVertexSize = 0, allIndexSize = 0;
-	uint32_t totalIndices = 0;
-	for (int i = 0; i < gltf->numMeshes; i++)
-	{
-		AMesh mesh = gltf->meshes[i];
-		for (int j = 0; j < mesh.numPrimitives; j++)
-		{
-			APrimitive& primitive = mesh.primitives[j];
-			const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
-			allVertexSize += uint64_t(primitive.numVertices) * sizeof(AVertex);
-			allIndexSize += uint64_t(primitive.numIndices) * TypeToSize[primitive.indexType];
-			totalIndices += primitive.numIndices;
-		}
-	}
-
-	AFileWrite(&allVertexSize, sizeof(uint64_t), file);
-	AFileWrite(&allIndexSize, sizeof(uint64_t), file);
+	AFileWrite(&gltf->totalIndices, sizeof(int), file);
+	AFileWrite(&gltf->totalVertices, sizeof(int), file);
+	
+	uint64_t allVertexSize = (uint64_t)gltf->totalVertices * sizeof(AVertex);
+	uint64_t allIndexSize = (uint64_t)gltf->totalIndices * sizeof(uint32_t);
 
 	// Compress and write, vertices and indices
 	uint64_t compressedSize = allVertexSize * 0.9;
@@ -531,6 +505,7 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 			AFileWrite(&primitive.indexType  , sizeof(int), file);
 			AFileWrite(&primitive.numIndices , sizeof(int), file);
 			AFileWrite(&primitive.numVertices, sizeof(int), file);
+			AFileWrite(&primitive.indexOffset, sizeof(int), file);
             
 			int material = primitive.material;
 			AFileWrite(&material, sizeof(int), file);
@@ -630,7 +605,7 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 void ReadAMaterialTexture(AMaterial::Texture& texture, AFile file)
 {
 	uint64_t data;
-	AFileRead(&data, sizeof(uint64_t), file);    
+	AFileRead(&data, sizeof(uint64_t), file);
 
 	texture.texCoord = data & 0xFFFF; data >>= sizeof(short) * 8;
 	texture.index    = data & 0xFFFF; data >>= sizeof(short) * 8;
@@ -680,16 +655,19 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	AFileRead(&gltf->numSamplers, sizeof(short), file);
 	AFileRead(&gltf->numCameras, sizeof(short), file);
 	AFileRead(&gltf->numScenes, sizeof(short), file);
-	AFileRead(&gltf->defaultSceneIndex,  sizeof(short), file);
+	AFileRead(&gltf->defaultSceneIndex, sizeof(short), file);
+	
+	AFileRead(&gltf->totalIndices, sizeof(int), file);
+	AFileRead(&gltf->totalVertices, sizeof(int), file);
 
 	{
-		uint64_t allVertexSize, allIndexSize;
-		AFileRead(&allVertexSize, sizeof(uint64_t), file);
-		AFileRead(&allIndexSize, sizeof(uint64_t), file);
-		gltf->allVertices = new AVertex[allVertexSize / sizeof(AVertex)]; // divide / 4 to get number of floats
+		uint64_t allVertexSize = gltf->totalVertices * sizeof(AVertex);
+		uint64_t allIndexSize  = gltf->totalIndices * sizeof(uint32_t);
+
+		gltf->allVertices = new AVertex[gltf->totalVertices]; // divide / 4 to get number of floats
 		gltf->allIndices = AllocAligned(allIndexSize, alignof(uint32_t));
 		
-		char* compressedBuffer = new char[allVertexSize];
+		char* compressedBuffer = new char[allVertexSize * 0.92];
 		uint64_t compressedSize;
 		AFileRead(&compressedSize, sizeof(uint64_t), file);
 		AFileRead(compressedBuffer, compressedSize, file);
@@ -723,6 +701,7 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 			AFileRead(&primitive.indexType  , sizeof(int), file);
 			AFileRead(&primitive.numIndices , sizeof(int), file);
 			AFileRead(&primitive.numVertices, sizeof(int), file);
+			AFileRead(&primitive.indexOffset, sizeof(int), file);
 
 			const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
 			uint64_t indexSize = uint64_t(TypeToSize[primitive.indexType]) * primitive.numIndices;
