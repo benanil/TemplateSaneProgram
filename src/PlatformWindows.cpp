@@ -479,9 +479,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check
             goto end_infinite_loop;
 
-        // char fps[9]{};
-        // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
-        // SetWindowName(fps);
+        char fps[9]{};
+        IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
+        SetWindowName(fps);
 
         // Do OpenGL rendering here
         AXLoop();

@@ -16,21 +16,7 @@ uniform vec3 lightPos;
 uniform int hasNormalMap;
 
 const float PI = 3.1415926535;
-
-#ifdef __ANDROID__
 const float gamma = 2.0;
-#else 
-const float gamma = 2.2;
-#endif
-
-// https://www.shadertoy.com/view/lslGzl
-vec3 ReinhardToneMapping(vec3 color)
-{
-    const float exposure = 1.5;
-    color *= exposure/(1. + color / exposure);
-    color = pow(color, vec3(1. / gamma));
-    return color;
-}
 
 #ifndef __ANDROID__
 // pbr code directly copied from here
@@ -61,10 +47,13 @@ float GeometrySchlickGGX(float NdotV, float roughness)
     return nom / denom;
 }
 // ----------------------------------------------------------------------------
-float GeometrySmith(float NdotV, float NdotL, float roughness)
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
     float ggx2 = GeometrySchlickGGX(NdotV, roughness);
     float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
     return ggx1 * ggx2;
 }
 // ----------------------------------------------------------------------------
@@ -75,14 +64,17 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 vec3 ACESFilm(vec3 x)
 {
-    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-    vec3 color = clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
-    color = pow(color, vec3(1. / gamma));
-    return color;
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
 }
 
-vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
+vec3 BRDF(vec3 normal, vec3 color, float metallic, float roughness)
 {
+    vec3 N = normal;
     vec3 V = normalize(viewPos - vFragPos);
     vec3 L = normalize(lightPos - vFragPos);
 
@@ -91,44 +83,52 @@ vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, color, metallic);
     vec3 H = normalize(V + L);
-    
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
+
+    vec3 lightColor = vec3(0.9, 0.80, 0.76);
+    const float intensity = 1.0;
+    vec3 radiance = lightColor * intensity;
 
     // Cook-Torrance BRDF
-    float NDF = DistributionGGX(N, H, roughness);
-    float G   = GeometrySmith(NdotV, NdotL, roughness);
+    float NDF = DistributionGGX(N, H, roughness);   
+    float G   = GeometrySmith(N, V, L, roughness);      
     vec3  F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
     vec3 numerator    = NDF * G * F; 
-    float denominator = 4.0 * NdotV * NdotL + 0.0001; // + 0.0001 to prevent divide by zero
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001; // + 0.0001 to prevent divide by zero
     vec3 specular = numerator / denominator;
         
     // kS is equal to Fresnel
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;
-    
-    vec3 lightColor = vec3(0.98, 0.91, 0.88);
-    const float intensity = 1.0;
-    vec3 radiance = lightColor * intensity;
-    
+    kD *= 1.0 - metallic;	  
+    float NdotL = max(dot(N, L), 0.0);        
+
     vec3 lighting = (kD * color / PI + specular) * radiance * NdotL; 
-    vec3 ambient = 0.02 * color * (1.0 - NdotL);
+    vec3 ambient = 0.02 * color * (1.0 - dot(normal, L));
     
     lighting += ambient;
-    lighting = ReinhardToneMapping(lighting);
+
+    lighting = ACESFilm(lighting);
+    // gamma correct
+    lighting = pow(lighting , vec3(1.0/gamma));
     return lighting;
 }
 
 #endif // __ANDROID__ // android don't have brdf
 
+vec3 ReinhardToneMapping(vec3 color)
+{
+    const float exposure = 1.5;
+    color *= exposure/(1. + color / exposure);
+    color = pow(color, vec3(1. / gamma));
+    return color;
+}
 
 void main()
 {
     // get diffuse color
     vec4 color = texture(albedo, vTexCoords);
-#if ALPHA_CUTOFF
+#ifndef __ANDROID__
     if (color.a < 0.001)
         discard;
 #endif
@@ -141,10 +141,8 @@ void main()
         // obtain normal from normal map in range [0,1]
         vec2  c = texture(normalMap, vTexCoords).rg * 2.0 - 1.0;
         float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
-        c.y = 1.0 * c.y;
-        const float bumpiness = 1.2f;
+        const float bumpiness = 1.1f;
         normal  = normalize(vec3(c * bumpiness, z));
-        
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
 

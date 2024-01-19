@@ -562,7 +562,8 @@ void InitRenderer()
 {
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CCW);
-    
+    glDepthFunc(GL_LEQUAL);
+
 #if defined(_DEBUG) || defined(DEBUG)
     // enable debug message
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);

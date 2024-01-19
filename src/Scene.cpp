@@ -125,8 +125,8 @@ void RenderScene(Scene* scene)
     unsigned int hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
     unsigned int metallicMapLoc  = GetUniformLocation(currentShader, "metallicRoughnessMap");
 
-    static float time = 5.2f;
-    time += (float)GetDeltaTime() * 0.2f;
+    static float time = 2.2f;
+    // time += (float)GetDeltaTime() * 0.2f;
     Vector3f lightPos = MakeVec3(0.0f, Abs(cosf(time)) + 0.1f, sinf(time)) * 100.0f;
     
     SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);

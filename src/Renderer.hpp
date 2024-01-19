@@ -10,9 +10,11 @@
                                       "precision highp   float;\n"     \
                                       "precision mediump sampler2D;\n" \
                                       "precision highp   int;\n"       \
-                                      "#define __ANDROID__ 1\n"
+                                      "#define __ANDROID__ 1\n"        \
+                                      "#define ALPHA_CUTOFF 0\n"
 #else
-#define AX_SHADER_VERSION_PRECISION() "#version 330 \n"                
+#define AX_SHADER_VERSION_PRECISION() "#version 330 \n"          \
+                                      "#define ALPHA_CUTOFF 0\n"
 #endif
 
 struct Shader { unsigned int handle; };

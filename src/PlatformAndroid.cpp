@@ -138,7 +138,6 @@ static void InitWindow()
     // figure out how many configs there are
     EGLint numConfigs;
     eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
-
     // get the list of configurations
     EGLConfig supportedConfigs[32]{};
     eglChooseConfig(display, attribs, supportedConfigs, numConfigs, &numConfigs);

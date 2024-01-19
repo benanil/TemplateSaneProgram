@@ -27,9 +27,9 @@ struct Camera
 
 	void Init(Vector2i xviewPortSize)
 	{
-		verticalFOV = 75.0f;
+		verticalFOV = 55.0f;
 		nearClip = 0.1f;
-		farClip = 1000.0f;
+		farClip = 500.0f;
 		pitch = 0.0f, yaw = -45.0f , senstivity = 20.0f;
 
 		viewportSize = xviewPortSize;
