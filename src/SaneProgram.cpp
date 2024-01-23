@@ -9,12 +9,10 @@
 
 #include "Scene.hpp"
 
-Scene GLTFScene{};
+SubSceneID GLTFScene = 0;
 
 Shader shader;
 Texture skyTexture;
-
-static Texture normal, metallic, roughness, albedo;
 
 void AXInit()
 {
@@ -28,7 +26,7 @@ void AXInit()
 // return 1 if success
 int AXStart()
 {
-    if (!ImportScene(&GLTFScene, "Meshes/SponzaGLTF/scene.gltf", 0.02f, true))
+    if (!g_CurrentScene.ImportSubScene(&GLTFScene, "Meshes/SponzaGLTF/scene.gltf", 0.02f))
     {
         AX_ERROR("gltf scene load failed");
         return 0;
@@ -48,11 +46,11 @@ void AXLoop()
     RenderFullScreen(skyTexture.handle);
     SetDepthTest(true);
 
-    UpdateScene(&GLTFScene);
+    g_CurrentScene.UpdateSubScene(GLTFScene);
 
     BindShader(shader);
     
-    RenderScene(&GLTFScene);
+    g_CurrentScene.RenderSubScene(GLTFScene);
     // RenderScene(&FBXScene);
 
     // todo material and light system
@@ -61,7 +59,5 @@ void AXLoop()
 void AXExit()
 {
     DeleteShader(shader);
-
-    // DestroyScene(&FBXScene);
-    DestroyScene(&GLTFScene);
+    DeleteTexture(skyTexture);
 }

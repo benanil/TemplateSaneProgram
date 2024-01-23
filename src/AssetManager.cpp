@@ -7,8 +7,9 @@
 *        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil          *
 *********************************************************************************/
 
-#include "Platform.hpp"
 #include "AssetManager.hpp"
+#include "Platform.hpp"
+
 #include "../External/ufbx.h"
 #include "../ASTL/Array.hpp"
 #include "../ASTL/String.hpp"
@@ -667,7 +668,7 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 		gltf->allVertices = new AVertex[gltf->totalVertices]; // divide / 4 to get number of floats
 		gltf->allIndices = AllocAligned(allIndexSize, alignof(uint32_t));
 		
-		char* compressedBuffer = new char[allVertexSize * 0.92];
+		char* compressedBuffer = new char[allVertexSize];
 		uint64_t compressedSize;
 		AFileRead(&compressedSize, sizeof(uint64_t), file);
 		AFileRead(compressedBuffer, compressedSize, file);

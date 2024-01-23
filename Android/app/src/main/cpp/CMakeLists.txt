@@ -19,7 +19,8 @@ add_library(game SHARED
         ../../../../../src/Texture.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp
         ../../../../../ASTL/Additional/GLTFParser.cpp
-        ../../../../../External/zstd.c)
+        ../../../../../External/zstd.c
+        ../../../../../External/bitset.c)
 
 include_directories(${../../../../../})
 

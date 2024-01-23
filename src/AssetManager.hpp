@@ -14,6 +14,6 @@ void CreateVerticesIndices(ParsedGLTF* gltf);
 bool IsABMLastVersion(const char* path);
 
 // From Texture.cpp
-void SaveSceneImages(Scene* scene, char* path);
+void SaveSceneImages(SubScene* scene, char* path);
 
 void LoadSceneImages(char* path, Texture*& textures, int numImages);

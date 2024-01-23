@@ -26,7 +26,7 @@ vec3 PhongLighting(vec3 N, vec3 pos)
     float ndl     = max(dot(N, L), 0.0);
     // specular
     vec3  V     = normalize(viewPos - pos);
-    float dotRV = pow(max(dot(reflect(L, N), -V), 0.0), 14.0);
+    float dotRV = pow(clamp(dot(reflect(L, N), -V), 0.0, 1.0), 16.0);
     return vec3(ndl, dotRV, 0.0);
 }
 #endif

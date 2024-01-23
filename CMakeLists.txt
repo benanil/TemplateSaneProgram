@@ -16,6 +16,7 @@ set(SOURCES
     
     External/ufbx.c
     External/zstd.c # compress files. by facebook (meta)
+    External/bitset.c
     
     External/ProcessDxtc.cpp # compress dxt textures
     
@@ -24,7 +25,7 @@ set(SOURCES
     src/Renderer.cpp
     src/PlatformWindows.cpp
     src/Scene.cpp
-	src/Texture.cpp
+    src/Texture.cpp
 )
 
 # Add all .cpp files from External/astc-encoder to the SOURCES list

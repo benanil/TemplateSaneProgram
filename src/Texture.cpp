@@ -130,7 +130,6 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 		for (int j = 0; j < width; j += 4)
 		{
 			int j2 = (j * 2);
-			const int rowSize = 4 * sizeof(short);
 
 			SmallMemCpy(rg +  0, src + ((i + 0) * width2) + j2, 4 * 2);
 			SmallMemCpy(rg +  8, src + ((i + 1) * width2) + j2, 4 * 2);
@@ -143,23 +142,18 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 }
 #endif // __ANDROID__
 
-static void SaveSceneImagesGeneric(Scene* scene, char* path, const bool isMobile)
+static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMobile)
 {
 #ifndef __ANDROID__
-	AFile file = AFileOpen(path, AOpenFlag_Write);
 	AImage* images = scene->data.images;
-
 	int numImages = scene->data.numImages;
 	int currentInfo = 0;
     
 	if (numImages == 0) {
-		AFileClose(file);
 		return;
 	}
 	
-	AFileWrite(&g_AXTextureVersion, sizeof(int), file);
 	ASSERT(numImages < 512);
-
 	std::bitset<512> isNormalMap{};
 	AMaterial* materials = scene->data.materials;
 	int numMaterials = scene->data.numMaterials;
@@ -323,6 +317,8 @@ static void SaveSceneImagesGeneric(Scene* scene, char* path, const bool isMobile
 		threads[i].join();
 	}
 	
+	AFile file = AFileOpen(path, AOpenFlag_Write);
+	AFileWrite(&g_AXTextureVersion, sizeof(int), file);
 	AFileWrite(imageInfos.ptr, numImages * sizeof(ImageInfo), file);
 
 	uint64_t compressedSize = uint64_t(beforeCompressedSize * 0.90);
@@ -404,13 +400,13 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 	AFileClose(file);
 }
 
-static void SaveAndroidCompressedImagesFn(Scene* scene, char* astcPath)
+static void SaveAndroidCompressedImagesFn(SubScene* scene, char* astcPath)
 {
 	SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
 	delete[] astcPath;
 }
 
-void SaveSceneImages(Scene* scene, char* path)
+void SaveSceneImages(SubScene* scene, char* path)
 {
 	// // save dxt textures for desktop
 	ChangeExtension(path, StringLength(path), "dxt");

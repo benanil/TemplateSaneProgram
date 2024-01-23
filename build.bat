@@ -19,6 +19,7 @@ REM ASTL/Additional/OBJParser.cpp ^
 REM External/ProcessDxtc.cpp ^
 REM External/zstd.c ^
 REM External/ufbx.c ^
+REM External/bitset.c ^
 REM External/astc-encoder/astcenccli_error_metrics.cpp ^
 REM External/astc-encoder/astcenccli_image.cpp ^
 REM External/astc-encoder/astcenccli_image_external.cpp ^
@@ -66,6 +67,7 @@ REM ASTL/Additional/OBJParser.cpp ^
 REM External/ProcessDxtc.cpp ^
 REM External/zstd.c ^
 REM External/ufbx.c ^
+REM External/bitset.c ^
 REM External/astc-encoder/astcenccli_error_metrics.cpp            ^
 REM External/astc-encoder/astcenccli_image.cpp                    ^
 REM External/astc-encoder/astcenccli_image_external.cpp           ^

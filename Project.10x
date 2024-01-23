@@ -8,16 +8,16 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>build.bat $(Configuration)</BuildCommand>
+		<BuildCommand>make</BuildCommand>
 		<RebuildCommand></RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand></CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand></RunCommand>
+		<RunCommand>SaneProgram.exe</RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
 		<DebugCommand>C:\Users\Administrator\Desktop\raddbg\raddbg.exe</DebugCommand>
-		<ExePathCommand></ExePathCommand>
+		<ExePathCommand>SaneProgram.exe</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
 		<Configurations>

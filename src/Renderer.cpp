@@ -537,8 +537,8 @@ static void CreateDefaultTexture()
     
     for (int i = 0; i < (32 * 32); i++)
     {
-        img[i * 2 + 0] = 45;  // metallic 
-        img[i * 2 + 1] = 110; // roughness
+        img[i * 2 + 0] = 85;  // metallic 
+        img[i * 2 + 1] = 145; // roughness
     }
     g_DefaultTexture = CreateTexture(32, 32, img, TextureType_RG8, false).handle;
 }

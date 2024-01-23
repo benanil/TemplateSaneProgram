@@ -16,20 +16,24 @@ uniform vec3 lightPos;
 uniform int hasNormalMap;
 
 const float PI = 3.1415926535;
-
-#ifdef __ANDROID__
-const float gamma = 2.0;
-#else 
 const float gamma = 2.2;
-#endif
 
-// https://www.shadertoy.com/view/lslGzl
-vec3 ReinhardToneMapping(vec3 color)
+vec4 toLinear(vec4 sRGB)
 {
-    const float exposure = 1.5;
-    color *= exposure/(1. + color / exposure);
-    color = pow(color, vec3(1. / gamma));
-    return color;
+    bvec4 cutoff = lessThan(sRGB, vec4(0.04045));
+    vec4 higher = pow((sRGB + vec4(0.055))/vec4(1.055), vec4(2.4));
+    vec4 lower = sRGB/vec4(12.92);
+    return mix(higher, lower, cutoff);
+}
+
+// combination of unreal and Reinhard
+// https://www.shadertoy.com/view/lslGzl
+// https://www.shadertoy.com/view/WdjSW3
+vec3 CustomToneMapping(vec3 color) // https://www.desmos.com/calculator/o0exqnpjzg
+{
+    color = (color / (0.35 + color));
+    return pow(color, vec3(1.0 / gamma)) * 1.11;
+    // x = x / (x + 0.0832) * 0.982; // no need gamma correction but darks are too dark
 }
 
 #ifndef __ANDROID__
@@ -42,7 +46,7 @@ float DistributionGGX(vec3 N, vec3 H, float roughness)
     float a2 = a*a;
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH*NdotH;
-
+    
     float nom   = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
     denom = PI * denom * denom;
@@ -73,14 +77,6 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 ACESFilm(vec3 x)
-{
-    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-    vec3 color = clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
-    color = pow(color, vec3(1. / gamma));
-    return color;
-}
-
 vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
 {
     vec3 V = normalize(viewPos - vFragPos);
@@ -103,31 +99,30 @@ vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
     vec3 numerator    = NDF * G * F; 
     float denominator = 4.0 * NdotV * NdotL + 0.0001; // + 0.0001 to prevent divide by zero
     vec3 specular = numerator / denominator;
-        
+    specular *= 1.60;
     // kS is equal to Fresnel
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallic;
     
     vec3 lightColor = vec3(0.98, 0.91, 0.88);
-    const float intensity = 1.0;
+    const float intensity = 2.2;
     vec3 radiance = lightColor * intensity;
     
     vec3 lighting = (kD * color / PI + specular) * radiance * NdotL; 
     vec3 ambient = 0.02 * color * (1.0 - NdotL);
     
     lighting += ambient;
-    lighting = ReinhardToneMapping(lighting);
+    lighting = CustomToneMapping(lighting);
     return lighting;
 }
 
 #endif // __ANDROID__ // android don't have brdf
 
-
 void main()
 {
     // get diffuse color
-    vec4 color = texture(albedo, vTexCoords);
+    vec4 color = toLinear(texture(albedo, vTexCoords));
 #if ALPHA_CUTOFF
     if (color.a < 0.001)
         discard;
@@ -144,10 +139,9 @@ void main()
         c.y = 1.0 * c.y;
         const float bumpiness = 1.2f;
         normal  = normalize(vec3(c * bumpiness, z));
-        
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
-
+        
         vec2 metalRoughness = texture(metallicRoughnessMap, vTexCoords).rg;
         float metallic  = metalRoughness.r;
         float roughness = metalRoughness.g;
@@ -159,10 +153,10 @@ void main()
         float ndl = vTBN[0].x;
         vec3 sunColor = vec3(0.98, 0.92, 0.89);
         vec3 diffuse  = color.rgb * ndl * sunColor;
-        vec3 specular = vec3(vTBN[0].y * 0.25);
+        vec3 specular = vec3(vTBN[0].y * 0.12);
         vec3 ambient = color.rgb * (1.0 - ndl) * 0.05;
         lighting = diffuse + specular + ambient;
-        lighting = ReinhardToneMapping(lighting);
+        lighting = CustomToneMapping(lighting);
     }
 #endif
 

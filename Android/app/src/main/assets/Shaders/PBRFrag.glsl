@@ -16,7 +16,7 @@ uniform vec3 lightPos;
 uniform int hasNormalMap;
 
 const float PI = 3.1415926535;
-const float gamma = 2.0;
+const float gamma = 2.2;
 
 #ifndef __ANDROID__
 // pbr code directly copied from here
@@ -123,11 +123,24 @@ vec3 ReinhardToneMapping(vec3 color)
     color = pow(color, vec3(1. / gamma));
     return color;
 }
-
+vec4 toLinear(vec4 sRGB)
+{
+    bvec4 cutoff = lessThan(sRGB, vec4(0.04045));
+    vec4 higher = pow((sRGB + vec4(0.055))/vec4(1.055), vec4(2.4));
+    vec4 lower = sRGB/vec4(12.92);
+    return mix(higher, lower, cutoff);
+}
+// https://www.shadertoy.com/view/WdjSW3
+vec3 Tonemap_Unreal(vec3 x)
+{
+    x = (x / (0.38 + x));
+    return pow(x, vec3(1. / gamma)) * 1.11;
+    return x / (x + 0.0832);
+}
 void main()
 {
     // get diffuse color
-    vec4 color = texture(albedo, vTexCoords);
+    vec4 color = toLinear(texture(albedo, vTexCoords));
 #ifndef __ANDROID__
     if (color.a < 0.001)
         discard;
@@ -157,10 +170,10 @@ void main()
         float ndl = vTBN[0].x;
         vec3 sunColor = vec3(0.98, 0.92, 0.89);
         vec3 diffuse  = color.rgb * ndl * sunColor;
-        vec3 specular = vec3(vTBN[0].y * 0.25);
+        vec3 specular = vec3(vTBN[0].y * 0.12);
         vec3 ambient = color.rgb * (1.0 - ndl) * 0.05;
         lighting = diffuse + specular + ambient;
-        lighting = ReinhardToneMapping(lighting);
+        lighting = Tonemap_Unreal(lighting);
     }
 #endif
 

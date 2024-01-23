@@ -5,26 +5,197 @@
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/Containers.hpp"
 #include "../ASTL/IO.hpp"
+#include "../ASTL/HashSet.hpp"
+#include "../ASTL/Random.hpp"
 
 #include "AssetManager.hpp"
-#include "Camera.hpp"
 #include "Platform.hpp"
 
-namespace
-{
-    Camera camera;
-}
+// from Renderer.cpp
+extern unsigned int g_DefaultTexture;
+
+Scene g_CurrentScene{};
+const int SceneVersion = 0;
 
 static void WindowResizeCallback(int width, int height)
 {
-    camera.RecalculateProjection(width, height);
+    g_CurrentScene.m_Camera.RecalculateProjection(width, height);
 }
 
-int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
+Scene::Scene()
 {
-    int parsed = 1;
-    char path[256]{};
+    Vector2i windowStartSize;
+    GetMonitorSize(&windowStartSize.x, &windowStartSize.y);
 
+    m_Camera.Init(windowStartSize);
+    SetWindowResizeCallback(WindowResizeCallback);
+
+    m_MatrixNeedsUpdate = bitset_create();
+}
+
+Scene::~Scene()
+{
+    for (int i = 0; i < m_LoadedSubScenes.Size(); i++)
+    {
+        SubScene* scene = &m_LoadedSubScenes[i];
+        ParsedGLTF& data = scene->data;
+
+        DeleteMesh(scene->bigMesh);
+    
+        if (scene->textures) {
+            for (int i = 0; i < data.numTextures; i++) {
+                DeleteTexture(scene->textures[i]);
+            }
+        }
+
+        delete[] scene->textures;
+
+        FreeParsedGLTF(&scene->data);
+    }
+    m_LoadedSubScenes.Clear();
+    bitset_free(m_MatrixNeedsUpdate);
+}
+
+void Scene::Save(const char* path)
+{
+    AFile file = AFileOpen(path, AOpenFlag_Write);
+    AFileWrite(&SceneVersion, sizeof(int), file);
+    
+    int numPrefabs = m_LoadedSubScenes.m_count;
+    AFileWrite(&numPrefabs, sizeof(int), file);
+    
+    for (int i = 0; i < numPrefabs; i++)
+    {
+        AFileWrite(m_LoadedSubScenes[i].path, 256, file);
+    }
+    
+    // note: if size of scene file is too big we can only use matrices to save transforms
+    int numMeshes = m_MeshInstances.m_count;
+    int numLights = m_LightInstances.m_count;
+    
+    AFileWrite(&numMeshes, sizeof(int), file);
+    AFileWrite(&numLights, sizeof(int), file);
+
+    AFileWrite(m_MeshInstances.Data(), sizeof(MeshInstance) * numMeshes, file);
+    AFileWrite(m_Matrices.Data(), sizeof(Matrix4) * numMeshes, file);
+    AFileWrite(m_Bitmasks.Data(), sizeof(uint8_t) * numMeshes, file);
+    
+    AFileWrite(m_LightInstances.Data(), sizeof(LightInstance) * numLights, file);
+    AFileWrite(&m_SunLight, sizeof(DirectionalLight), file);
+
+    AFileClose(file);
+}
+
+void Scene::Load(const char* path)
+{
+    // Todo:
+    AFile file = AFileOpen(path, AOpenFlag_Write);
+    int sceneVersion;
+    AFileRead(&sceneVersion, sizeof(int), file);
+    ASSERT(sceneVersion == SceneVersion);
+
+    int numPrefabs;
+    AFileRead(&numPrefabs, sizeof(int), file);
+    m_LoadedSubScenes.Resize(numPrefabs);
+
+    for (int i = 0; i < numPrefabs; i++)
+    {
+        AFileRead(m_LoadedSubScenes[i].path, 256, file);
+    }
+    
+    int numMeshInstances = 0;
+    int numLightInstances = 0;
+    
+    AFileRead(&numMeshInstances, sizeof(int), file);
+    AFileRead(&numLightInstances, sizeof(int), file);
+
+    m_MeshInstances.Resize(numMeshInstances);
+    m_Matrices.Resize(numMeshInstances);
+    m_Bitmasks.Resize(numMeshInstances);
+    m_LightInstances.Resize(numLightInstances);
+    
+    AFileRead(m_MeshInstances.Data(), sizeof(MeshInstance) * numMeshInstances, file);
+    AFileRead(m_Matrices.Data(), sizeof(Matrix4) * numMeshInstances, file);
+    AFileRead(m_Bitmasks.Data(), sizeof(uint8_t) * numMeshInstances, file);
+    
+    AFileRead(m_LightInstances.Data(), sizeof(LightInstance) * numLightInstances, file);
+    AFileRead(&m_SunLight, sizeof(DirectionalLight), file);
+    AFileClose(file);
+
+    m_ScaleRotations.Resize(numMeshInstances);
+    // note: maybe multithread this
+    for (int i = 0; i < numMeshInstances; i++)
+    {
+        m_ScaleRotations[i].scale = Matrix4::ExtractScale(m_Matrices[i]);
+        m_ScaleRotations[i].rotation = Matrix4::ExtractRotation(m_Matrices[i]);
+    }
+}
+
+Vector3f Scene::GetMeshPosition(MeshId id)
+{
+    return m_Matrices[id].GetPosition();
+}
+
+void Scene::SetMeshPosition(MeshId id,  Vector3f position)
+{
+    return m_Matrices[id].SetPosition(position);
+}
+
+MeshId Scene::AddMesh(SubSceneID extScene, ushort sceneExtID, ushort meshIndex,
+               char bitmask, const Matrix4& transformation)
+{
+    MeshInstance instance = { sceneExtID, meshIndex };
+    m_MeshInstances.Add(instance);
+    m_Matrices.Add(transformation);
+    m_Bitmasks.Add(bitmask);
+    m_ScaleRotations.Add({ Matrix4::ExtractScale(transformation), Matrix4::ExtractRotation(transformation) });
+    return m_MeshInstances.Size()-1;
+}
+
+void Scene::RemoveMesh(MeshId id)
+{
+    m_MeshInstances.RemoveUnordered(id);
+    m_Matrices.RemoveUnordered(id);
+    m_Bitmasks.RemoveUnordered(id);
+    m_ScaleRotations.RemoveUnordered(id);
+}
+
+LightId Scene::AddSpotLight(Vector3f position, Vector3f direction, int color, float intensity, float innerCutoff, float outerCutoff)
+{
+    m_LightInstances.AddUninitialized(1);
+    LightInstance& instance = m_LightInstances.Back();
+    
+    instance.position  = position;
+    instance.direction = direction;
+    UnpackColorRGBf(color, &instance.color.x);
+    instance.intensity   = intensity;
+    instance.innerCutoff = innerCutoff;
+    instance.outerCutoff = outerCutoff;
+    return m_LightInstances.Size() -1;
+}
+
+LightId Scene::AddPointLight(Vector3f position, Vector3f direction, int color, float intensity)
+{
+    return AddSpotLight(position, direction, color, intensity, 0.0, 0.0);
+}
+
+void Scene::RemoveLight(MeshId id)
+{
+    m_LightInstances.RemoveUnordered(id);
+}
+
+int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
+{
+    // there will be many mesh instances they are going to use ushort
+    ASSERT(m_LoadedSubScenes.Size() < UINT16_MAX); 
+    *sceneID = m_LoadedSubScenes.Size();
+    m_LoadedSubScenes.AddUninitialized(1);
+
+    SubScene* scene = &m_LoadedSubScenes[*sceneID];
+
+    int parsed = 1;
+    char* path = scene->path;
+    MemsetZero(path, sizeof(SubScene::path));
     int pathLen = StringLength(inPath);
     SmallMemCpy(path, inPath, pathLen);
 
@@ -48,88 +219,46 @@ int ImportScene(Scene* scene, const char* inPath, float scale, bool LoadToGPU)
     if (!parsed)
         return 0;
 
-    if (LoadToGPU)
-    {
-        LoadSceneImages(path, scene->textures, scene->data.numImages);
-
-        // load scene meshes
-        ParsedGLTF& data = scene->data;
-
-        APrimitive primitive = data.meshes[0].primitives[0];
-        primitive.indices  = data.allIndices;
-        primitive.vertices = data.allVertices;
-        primitive.numIndices  = data.totalIndices;
-        primitive.numVertices = data.totalVertices;
-        primitive.indexType   = GraphicType_UnsignedInt;
-        CreateMeshFromPrimitive(&primitive, &scene->bigMesh);
-    }
-
-    // init scene function ?
-    Vector2i windowStartSize;
-    GetMonitorSize(&windowStartSize.x, &windowStartSize.y);
-
-    camera.Init(windowStartSize);
-    SetWindowResizeCallback(WindowResizeCallback);
+    // load to GPU
+    LoadSceneImages(path, scene->textures, scene->data.numImages);
+    
+    // load scene meshes
+    ParsedGLTF& data = scene->data;
+    
+    APrimitive primitive = data.meshes[0].primitives[0];
+    primitive.indices  = data.allIndices;
+    primitive.vertices = data.allVertices;
+    primitive.numIndices  = data.totalIndices;
+    primitive.numVertices = data.totalVertices;
+    primitive.indexType   = GraphicType_UnsignedInt;
+    CreateMeshFromPrimitive(&primitive, &scene->bigMesh);
 
     return parsed;
 }
 
-void RenderOneMesh(GPUMesh mesh, Texture albedo, Texture normal, Texture metallic, Texture roughness)
-{ 
-    Shader currentShader = GetCurrentShader();
-    
-    unsigned int viewPosLoc      = GetUniformLocation(currentShader, "viewPos");
-    unsigned int lightPosLoc     = GetUniformLocation(currentShader, "lightPos");
-    unsigned int hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
-    
-    // textures
-    unsigned int albedoLoc        = GetUniformLocation(currentShader, "albedo");
-    unsigned int normalMapLoc     = GetUniformLocation(currentShader, "normalMap");
-    unsigned int metallicMapLoc   = GetUniformLocation(currentShader, "metallicMap");
-    unsigned int roughnessMapLoc  = GetUniformLocation(currentShader, "roughnessMap");
-
-    static float time = 5.2f;
-    // time += GetDeltaTime() * 0.2f;
-    Vector3f lightPos = MakeVec3(0.0f, Abs(Cos(time)), Sin(time)) * 100.0f;
-
-    SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
-    SetShaderValue(&lightPos.x, lightPosLoc, GraphicType_Vector3f);
-    SetShaderValue(true, hasNormalMapLoc);
-    
-    Matrix4 model = Matrix4::Identity();
-    Matrix4 mvp   = model * camera.view * camera.projection;
-
-    SetModelViewProjection(mvp.GetPtr());
-    SetModelMatrix(model.GetPtr());
-        
-    SetTexture(albedo   , 0, albedoLoc);
-    SetTexture(normal   , 1, normalMapLoc);
-    SetTexture(metallic , 2, metallicMapLoc);
-    SetTexture(roughness, 3, roughnessMapLoc);
-
-    RenderMesh(mesh);
-}
-
-// from Renderer.cpp
-extern unsigned int g_DefaultTexture;
-
-void RenderScene(Scene* scene)
+void Scene::RenderSubScene(SubSceneID sceneID)
 {
+    SubScene* scene = &m_LoadedSubScenes[sceneID];
     ParsedGLTF& data = scene->data;
+
     Shader currentShader = GetCurrentShader();
     
-    unsigned int viewPosLoc      = GetUniformLocation(currentShader, "viewPos");
-    unsigned int lightPosLoc     = GetUniformLocation(currentShader, "lightPos");
-    unsigned int albedoLoc       = GetUniformLocation(currentShader, "albedo");
-    unsigned int normalMapLoc    = GetUniformLocation(currentShader, "normalMap");
-    unsigned int hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
-    unsigned int metallicMapLoc  = GetUniformLocation(currentShader, "metallicRoughnessMap");
+    static unsigned int viewPosLoc, lightPosLoc, albedoLoc=~0u, normalMapLoc, hasNormalMapLoc, metallicMapLoc;
+    if (albedoLoc == ~0u)
+    {
+        viewPosLoc      = GetUniformLocation(currentShader, "viewPos");
+        lightPosLoc     = GetUniformLocation(currentShader, "lightPos");
+        albedoLoc       = GetUniformLocation(currentShader, "albedo");
+        normalMapLoc    = GetUniformLocation(currentShader, "normalMap");
+        hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
+        metallicMapLoc  = GetUniformLocation(currentShader, "metallicRoughnessMap");
+    }
 
-    static float time = 2.2f;
-    // time += (float)GetDeltaTime() * 0.2f;
-    Vector3f lightPos = MakeVec3(0.0f, Abs(cosf(time)) + 0.1f, sinf(time)) * 100.0f;
+    static float time = 1.8f;
+    time += (float)GetDeltaTime() * 0.2f;
+    Vector3f lightPos = MakeVec3(-0.05f, Abs(cosf(time)) + 0.1f, sinf(time)) * 100.0f;
     
-    SetShaderValue(&camera.position.x, viewPosLoc, GraphicType_Vector3f);
+    SetShaderValue(&m_Camera.position.x, viewPosLoc, GraphicType_Vector3f);
     SetShaderValue(&lightPos.x, lightPosLoc, GraphicType_Vector3f);
 
     int numNodes  = data.numNodes;
@@ -141,7 +270,7 @@ void RenderScene(Scene* scene)
         numNodes = defaultScene.numNodes;
     }
     Matrix4 model = Matrix4::CreateScale(0.02f,0.02f,0.02f);
-    Matrix4 mvp = model * camera.view * camera.projection;
+    Matrix4 mvp = model * m_Camera.view * m_Camera.projection;
 
     SetModelViewProjection(mvp.GetPtr());
     SetModelMatrix(model.GetPtr());
@@ -156,7 +285,7 @@ void RenderScene(Scene* scene)
             continue;
 
         Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        Matrix4 mvp = model * camera.view * camera.projection;
+        Matrix4 mvp = model * m_Camera.view * m_Camera.projection;
 
         SetModelViewProjection(mvp.GetPtr());
         SetModelMatrix(model.GetPtr());
@@ -201,25 +330,14 @@ void RenderScene(Scene* scene)
     }
 }
 
-void UpdateScene(Scene* scene)
+void Scene::UpdateSubScene(SubSceneID scene)
 {
+    // Scene* scene = &loadedScenes[sceneID];
     // note: maybe load, textures one by one each frame like we do before.
-    camera.Update();
+    m_Camera.Update();
 }
 
-void DestroyScene(Scene* scene)
+SubScene* Scene::GetSubScene(SubSceneID scene)
 {
-    ParsedGLTF& data = scene->data;
-
-    DeleteMesh(scene->bigMesh);
-    
-    if (scene->textures) {
-        for (int i = 0; i < data.numTextures; i++) {
-            DeleteTexture(scene->textures[i]);
-        }
-    }
-
-    delete[] scene->textures;
-
-    FreeParsedGLTF(&scene->data);
+    return &m_LoadedSubScenes[scene];
 }

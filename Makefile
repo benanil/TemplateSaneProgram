@@ -14,7 +14,9 @@ SOURCES = $(SRC_DIR)/SaneProgram.cpp \
           $(SRC_DIR)/PlatformWindows.cpp \
           $(SRC_DIR)/Renderer.cpp \
           $(SRC_DIR)/AssetManager.cpp \
-          $(SRC_DIR)/Scene.cpp 
+          $(SRC_DIR)/Scene.cpp \
+          $(SRC_DIR)/Texture.cpp \
+          $(EXT_DIR)/bitset.c
 
 ASTC_SOURCES = $(EXT_DIR)/astc-encoder/astcenccli_error_metrics.cpp     \
 $(EXT_DIR)/astc-encoder/astcenccli_image.cpp                    \
