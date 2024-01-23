@@ -41,7 +41,7 @@ struct PlatformContextAndroid
 
     bool VSyncActive = true;
 
-    Touch Fingers[NumTouch  ]{};
+    Touch Fingers[NumTouch]{};
     
     // bitmasks for finger states(touch)
     int FingerDown = 0;

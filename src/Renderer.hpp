@@ -13,9 +13,11 @@
                                       "#define __ANDROID__ 1\n"        \
                                       "#define ALPHA_CUTOFF 0\n"
 #else
-#define AX_SHADER_VERSION_PRECISION() "#version 330 \n"          \
+#define AX_SHADER_VERSION_PRECISION() "#version 420 \n"          \
                                       "#define ALPHA_CUTOFF 0\n"
 #endif
+
+typedef int TextureType;
 
 struct Shader { unsigned int handle; };
 
@@ -24,6 +26,7 @@ struct Texture
     int width, height;
     unsigned int handle;
     unsigned char* buffer;
+    TextureType type;
 };
 
 enum GraphicType_
@@ -84,7 +87,6 @@ struct InputLayoutDesc
     int stride;
 };
 
-typedef int TextureType;
 
 // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
 struct AVertex
@@ -95,30 +97,24 @@ struct AVertex
     Vector2f texCoord;
 };
 
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Mesh                                     */
+/*//////////////////////////////////////////////////////////////////////////*/
+
 // only uint32 indices accepted
 GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
+void DeleteMesh(GPUMesh mesh);
+
 void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh);
 
-// type is either 0 or 1 if compressed. 1 means has alpha
-Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
+void BindMesh(GPUMesh mesh);
 
-void ResizeTextureLoadBufferIfNecessarry(unsigned long long size);
+void RenderMesh(GPUMesh mesh);
 
-// Imports texture from disk and loads to GPU
-Texture LoadTexture(const char* path, bool mipmap);
-
-Shader LoadShader(const char* vertexSource, const char* fragmentSource);
-
-Shader CreateFullScreenShader(const char* fragmentSource);
-
-Shader ImportShader(const char* vertexSource, const char* fragmentSource);
-
-void DeleteTexture(Texture texture);
-
-void DeleteShader(Shader shader);
-
-void DeleteMesh(GPUMesh mesh);
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Renderer                                 */
+/*//////////////////////////////////////////////////////////////////////////*/
 
 // renders an texture to screen with given shader
 void RenderFullScreen(Shader fullScreenShader, unsigned int texture);
@@ -126,17 +122,11 @@ void RenderFullScreen(Shader fullScreenShader, unsigned int texture);
 // renders an texture to screen
 void RenderFullScreen(unsigned int texture);
 
-void BindShader(Shader shader);
-
-void SetTexture(Texture texture, int index, unsigned int loc);
-
 void SetModelViewProjection(float* mvp);
 
 void SetModelMatrix(float* model);
 
-void BindMesh(GPUMesh mesh);
-
-void RenderMesh(GPUMesh mesh);
+void SetViewportSize(int width, int height);
 
 void RenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
 
@@ -147,6 +137,67 @@ void DestroyRenderer();
 void SetDepthTest(bool val);
 
 void SetDepthWrite(bool val);
+
+void ClearColor(float r, float g, float b, float a);
+
+void ClearDepth();
+
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Texture                                  */
+/*//////////////////////////////////////////////////////////////////////////*/
+
+// type is either 0 or 1 if compressed. 1 means has alpha
+Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
+Texture CreateShadowTexture(int shadowmapSize);
+
+void ResizeTextureLoadBufferIfNecessarry(unsigned long long size);
+
+// Imports texture from disk and loads to GPU
+Texture LoadTexture(const char* path, bool mipmap);
+
+void DeleteTexture(Texture texture);
+
+void SetTexture(Texture texture, int index, unsigned int loc);
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Frame Buffer                             */
+/*//////////////////////////////////////////////////////////////////////////*/
+
+struct FrameBuffer
+{
+    unsigned int handle;
+};
+
+FrameBuffer CreateFrameBuffer();
+
+void DeleteFrameBuffer(FrameBuffer frameBuffer);
+
+bool CheckFrameBuffer(FrameBuffer framebuffer);
+
+Texture CreateRenderTexture(int width, int height, TextureType type);
+
+void BindFrameBuffer(FrameBuffer frameBuffer);
+
+void UnbindFrameBuffer();
+
+void FrameBufferAttachDepth(Texture texture);
+
+void FrameBufferAttachColor(Texture texture, int index);
+
+/*//////////////////////////////////////////////////////////////////////////*/
+/*                                 Shader                                   */
+/*//////////////////////////////////////////////////////////////////////////*/
+
+Shader CreateShader(const char* vertexSource, const char* fragmentSource);
+
+Shader CreateFullScreenShader(const char* fragmentSource);
+
+Shader ImportShader(const char* vertexSource, const char* fragmentSource);
+
+void DeleteShader(Shader shader);
+
+void BindShader(Shader shader);
 
 // Todo(Anil): lookup uniforms
 unsigned int GetUniformLocation(Shader shader, const char* name);
@@ -209,7 +260,10 @@ enum TextureType_
     TextureType_CompressedR    = 35,
     TextureType_CompressedRG   = 36,
 	TextureType_CompressedRGB  = 37,
-	TextureType_CompressedRGBA = 38
+	TextureType_CompressedRGBA = 38,
+
+    TextureType_DepthStencil24 = 39,
+    TextureType_DepthStencil32 = 40
 };
 
 #endif //AX_RENDERER_H

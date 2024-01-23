@@ -34,7 +34,7 @@ int AXStart()
     
     skyTexture = LoadTexture("Textures/orange-top-gradient-background.jpg", false);
     shader     = ImportShader("Shaders/3DVert.glsl", "Shaders/PBRFrag.glsl");
-    
+    g_CurrentScene.Init();
     return 1;
 }
 

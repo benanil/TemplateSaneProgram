@@ -132,9 +132,10 @@ void FatalError(const char* format, ...)
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
+    printf(buffer);
+    OutputDebugString(buffer);
     // Display the message box
     MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
-    OutputDebugString(buffer);
 }
 
 static void InitOpenGLExtensions(void)
@@ -220,7 +221,7 @@ static HGLRC InitOpenGL(HDC real_dc)
     
     // Specify that we want to create an OpenGL 3.2 core profile context
     int gl32_attribs[] = {
-                         0x2091, 3, // WGL_CONTEXT_MAJOR_VERSION_ARB
+                         0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
                          0x2092, 2, // WGL_CONTEXT_MINOR_VERSION_ARB
                          0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
                          0,

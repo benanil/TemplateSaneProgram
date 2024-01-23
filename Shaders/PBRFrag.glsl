@@ -3,15 +3,17 @@ out vec4 FragColor;
 
 in highp   vec3 vFragPos;
 in highp   vec2 vTexCoords;
+in highp   vec4 vLightSpaceFrag;
 in mediump mat3 vTBN;
 
 uniform sampler2D albedo;
 uniform sampler2D normalMap;
 
 uniform sampler2D metallicRoughnessMap;
+uniform sampler2D shadowMap;
 
 uniform vec3 viewPos;
-uniform vec3 lightPos;
+uniform vec3 sunDir;
 
 uniform int hasNormalMap;
 
@@ -80,7 +82,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
 {
     vec3 V = normalize(viewPos - vFragPos);
-    vec3 L = normalize(lightPos - vFragPos);
+    vec3 L = -sunDir;
 
     // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
     // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
@@ -118,6 +120,48 @@ vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
 }
 
 #endif // __ANDROID__ // android don't have brdf
+
+float ShadowCalculation()
+{
+    const float bias = 0.00177;
+    // perform perspective divide
+    vec3 projCoords = vLightSpaceFrag.xyz / vLightSpaceFrag.w;
+    // transform to [0,1] range
+    projCoords = projCoords * 0.5 + 0.5;
+    float currentDepth = projCoords.z;
+    
+    vec2 texelSize = vec2(1.0) / vec2(textureSize(shadowMap, 0));
+    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+    float closestDepth = texture(shadowMap, projCoords.xy).r; 
+    float shadow = 0.0;
+    // get depth of current fragment from light's perspective
+    shadow += currentDepth - bias > closestDepth  ? .44: 1.0;
+    closestDepth = texture(shadowMap, projCoords.xy + texelSize).r;
+    shadow += currentDepth - bias > closestDepth  ? .44: 1.0;
+    closestDepth = texture(shadowMap, projCoords.xy - texelSize).r;
+    shadow += currentDepth - bias > closestDepth  ? .44: 1.0;
+    
+    projCoords.x += texelSize.x;
+    closestDepth = texture(shadowMap, projCoords.xy).r;
+    shadow += currentDepth - bias > closestDepth  ? .44: 1.0;
+
+    projCoords.x = texelSize.x * 2.0;
+    closestDepth = texture(shadowMap, projCoords.xy - texelSize).r;
+    shadow += currentDepth - bias > closestDepth  ? .44: 1.0;
+    // float realBias = bias; // max((bias * 10) * (1.0 - dot(vTBN[2], sunDir)), bias); // vTBN[2] = normal
+    // 
+    // for(int x = -1; x <= 1; ++x)
+    // {
+    //     for(int y = -1; y <= 1; ++y)
+    //     {
+    //         float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r; 
+    //         shadow += currentDepth - realBias > pcfDepth ? .44 : 1;        
+    //     }    
+    // }
+    shadow /= 5.0;
+
+    return shadow;
+}
 
 void main()
 {
@@ -159,6 +203,6 @@ void main()
         lighting = CustomToneMapping(lighting);
     }
 #endif
-
+    lighting *= ShadowCalculation();
     FragColor = vec4(lighting, 1.0);
 }

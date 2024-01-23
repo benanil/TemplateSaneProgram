@@ -299,7 +299,6 @@ static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMob
 	for (int i = 0; i <= numTask - taskPerThread; i += taskPerThread)
 	{
 		int start = i;
-		int end = taskPerThread;
 		new (threads + numThreads)std::thread(execFn, taskPerThread, currentCompressions[start], start);
 		numThreads++;
 	}

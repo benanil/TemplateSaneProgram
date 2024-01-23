@@ -41,9 +41,9 @@ struct LightInstance
 
 struct DirectionalLight
 {
-    Vector3f lightDir;
-    Vector3f lightColor;
-    float    lightIntensity;
+    Vector3f dir;
+    Vector3f color;
+    float    intensity;
 };
 
 typedef int MeshId;
@@ -75,11 +75,15 @@ public:
 
     Camera m_Camera;
 
+    Texture m_ShadowTexture;
+    Matrix4 m_LightMatrix;
 public:
 
     Scene();
     
     ~Scene();
+    
+    void Init();
 
     void Save(const char* path);
 
@@ -116,6 +120,8 @@ public:
 
     // import GLTF, FBX, or OBJ file into scene
     int ImportSubScene(SubSceneID* subsceneID, const char* inPath, float scale);
+
+    void RenderShadows(SubSceneID sceneID);
 
     void RenderSubScene(SubSceneID sceneID);
 

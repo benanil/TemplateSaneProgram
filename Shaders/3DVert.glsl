@@ -4,15 +4,17 @@ layout(location = 1) in mediump vec3 aNormal;
 layout(location = 2) in mediump vec4 aTangent;
 layout(location = 3) in highp vec2 aTexCoords;
 
-out vec3 vFragPos;
-out vec2 vTexCoords;
+out highp   vec3 vFragPos;
+out highp   vec2 vTexCoords;
+out highp   vec4 vLightSpaceFrag;
 out mediump mat3 vTBN;
 
 uniform mat4 mvp;
 uniform mat4 model;
+uniform mat4 lightMatrix;
 
 uniform mediump vec3 viewPos;
-uniform mediump vec3 lightPos;
+uniform mediump vec3 sunDir;
 
 uniform int hasNormalMap;
 
@@ -22,11 +24,10 @@ vec3 PhongLighting(vec3 N, vec3 pos)
 {
     // diffuse
     N = normalize(N); // this is using xyz10w1 format normalizing makes it better
-    vec3  L       = normalize(lightPos - pos);
-    float ndl     = max(dot(N, L), 0.0);
+    float ndl     = max(dot(N, sunDir), 0.0);
     // specular
     vec3  V     = normalize(viewPos - pos);
-    float dotRV = pow(clamp(dot(reflect(L, N), -V), 0.0, 1.0), 16.0);
+    float dotRV = pow(clamp(dot(reflect(sunDir, N), -V), 0.0, 1.0), 16.0);
     return vec3(ndl, dotRV, 0.0);
 }
 #endif
@@ -51,5 +52,6 @@ void main()
 #else
     vTBN[0] = PhongLighting(aNormal, vFragPos);
 #endif
+    vLightSpaceFrag = model * lightMatrix * vec4(aPos, 1.0);
     gl_Position = mvp * vec4(aPos, 1.0);
 }
