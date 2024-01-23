@@ -1,4 +1,3 @@
-#include <android/log.h>
 
 #include <math.h> // sinf cosf
 #include "Scene.hpp"
@@ -375,13 +374,7 @@ void Scene::RenderSubScene(SubSceneID sceneID)
         defaultScene = data.scenes[data.defaultSceneIndex];
         numNodes = defaultScene.numNodes;
     }
-    double dt = GetDeltaTime();
 
-    if (fmod(TimeSinceStartup(), 2.0) > 1.98)
-    {
-        double fps = 1.0 / dt;
-        __android_log_print(ANDROID_LOG_WARN, "AX-GL_WARN", "fps: %lf ", fps);
-    }
     BindMesh(scene->bigMesh);
 
     Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
