@@ -10,7 +10,10 @@
 #include "AssetManager.hpp"
 #include "Platform.hpp"
 
-#include "../External/ufbx.h"
+#if !AX_GAME_BUILD
+	#include "../External/ufbx.h"
+#endif
+
 #include "../ASTL/Array.hpp"
 #include "../ASTL/String.hpp"
 #include "../ASTL/Math/Matrix.hpp"
@@ -22,6 +25,8 @@
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                              FBX LOAD                                    */
 /*//////////////////////////////////////////////////////////////////////////*/
+
+#if !AX_GAME_BUILD
 
 struct FBXVertex { float pos[3]; float texCoord[2]; float normal[3]; };
 
@@ -59,10 +64,11 @@ static char* GetNameFromFBX(ufbx_string ustr, FixedSizeGrowableAllocator<char>& 
 	name[ustr.length] = 0;
 	return name;
 }
+#endif
 
 int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 {
-#ifndef __ANDROID__
+#if !AX_GAME_BUILD
 	ufbx_load_opts opts = { 0 };
 	opts.evaluate_skinning = false;
 	opts.evaluate_caches = false;
@@ -323,8 +329,8 @@ int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 	fbxScene->stringAllocator = stringAllocator.TakeOwnership();
 	fbxScene->intAllocator    = intAllocator.TakeOwnership();
 	ufbx_free_scene(uscene);
-	return 1;
 #endif // android
+	return 1;
 }
 
 
@@ -417,7 +423,7 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 15;
+const int ABMMeshVersion = 19;
 
 bool IsABMLastVersion(const char* path)
 {
@@ -451,9 +457,7 @@ static void WriteGLTFString(const char* str, AFile file)
 
 int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 {
-	if (zstdCompressorCTX == nullptr)
-		; // zstdCompressorCTX = ZSTD_createCCtx();
-
+#if !AX_GAME_BUILD
 	AFile file = AFileOpen(path, AOpenFlag_Write);
 
 	int version = ABMMeshVersion;
@@ -461,7 +465,9 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
     
 	uint64_t reserved[4] = { 0xABFABF };
 	AFileWrite(&reserved, sizeof(uint64_t) * 4, file);
+	AFileWrite(&reserved, sizeof(uint64_t) * 4, file);
    
+	AFileWrite(&gltf->scale, sizeof(float), file);
 	AFileWrite(&gltf->numMeshes, sizeof(short), file);
 	AFileWrite(&gltf->numNodes, sizeof(short), file);
 	AFileWrite(&gltf->numMaterials,  sizeof(short), file);
@@ -595,7 +601,7 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 	}
 
 	AFileClose(file);
-
+#endif
 	return 1;
 }
 
@@ -628,9 +634,6 @@ void ReadGLTFString(char*& str, AFile file, FixedSizeGrowableAllocator<char>& st
 
 int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 {
-	if (zstdCompressorCTX == nullptr)
-		zstdCompressorCTX = ZSTD_createCCtx();
-
 	AFile file = AFileOpen(path, AOpenFlag_Read);
 	if (!AFileExist(file))
 	{
@@ -648,6 +651,7 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	uint64_t reserved[4];
 	AFileRead(&reserved, sizeof(uint64_t) * 4, file);
 
+	AFileRead(&gltf->scale, sizeof(float), file);
 	AFileRead(&gltf->numMeshes, sizeof(short), file);
 	AFileRead(&gltf->numNodes, sizeof(short), file);
 	AFileRead(&gltf->numMaterials, sizeof(short), file);
@@ -824,5 +828,5 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 
 void DestroyAssetManager()
 {
-	if (zstdCompressorCTX) ZSTD_freeCCtx(zstdCompressorCTX);
+
 }

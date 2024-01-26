@@ -30,11 +30,11 @@
 #include "../ASTL/IO.hpp"
 
 #include "../External/stb_image.h"
-#include "../External/ProcessDxtc.hpp"
 #include "../External/zstd.h"
 
-#ifndef __ANDROID__
+#if !AX_GAME_BUILD
 #define STB_DXT_IMPLEMENTATION
+#include "../External/ProcessDxtc.hpp"
 #include "../External/stb_dxt.h"
 #include "../External/astc-encoder/astcenccli_internal.h"
 #endif
@@ -53,6 +53,21 @@ namespace {
 }
 
 const int g_AXTextureVersion = 1234;
+
+// note: maybe we will need to check for data changed or not.
+bool IsTextureLastVersion(const char* path)
+{
+	AFile file = AFileOpen(path, AOpenFlag_Read);
+	if (!AFileExist(file) || AFileSize(file) < 32) 
+		return false;
+	int version = 0;
+	AFileRead(&version, sizeof(int), file);
+	AFileClose(file);
+	return version == g_AXTextureVersion;
+}
+
+#if !AX_GAME_BUILD
+
 static std::thread CompressASTCImagesThread;
 
 extern uint64_t astcenc_main(const char* input_filename, unsigned char* currentCompression);
@@ -101,7 +116,6 @@ static void ConvertRGBToRGBA(const unsigned char* RESTRICT rgb, unsigned char* r
 	}
 }
 
-#ifndef __ANDROID__
 static void CompressBC4(const unsigned char* RESTRICT src, unsigned char* bc4, int width, int height)
 {
 	unsigned char r[4 * 4];
@@ -144,7 +158,10 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 
 static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMobile)
 {
-#ifndef __ANDROID__
+#if !AX_GAME_BUILD
+	if (IsTextureLastVersion(path)) {
+		return;
+	}
 	AImage* images = scene->data.images;
 	int numImages = scene->data.numImages;
 	int currentInfo = 0;
@@ -243,7 +260,7 @@ static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMob
 			
 			// note: that stb image using new and delete instead of malloc free (I overloaded)
 			ScopedPtr<unsigned char> stbImage = stbi_load(imagePath, &info.width, &info.height, &info.numComp, 0);
-			assert(stbImage.ptr != nullptr);
+			ASSERT(stbImage.ptr != nullptr);
 
 			int imageSize = info.width * info.height;
 			textureLoadBuffer.Reserve(imageSize * 4);
@@ -407,9 +424,10 @@ static void SaveAndroidCompressedImagesFn(SubScene* scene, char* astcPath)
 
 void SaveSceneImages(SubScene* scene, char* path)
 {
+#if !AX_GAME_BUILD
 	// // save dxt textures for desktop
 	ChangeExtension(path, StringLength(path), "dxt");
-	SaveSceneImagesGeneric(scene, path, false); // is mobile false
+    SaveSceneImagesGeneric(scene, path, false); // is mobile false
 	
 	// save astc textures for android
 	int len = StringLength(path);
@@ -419,6 +437,7 @@ void SaveSceneImages(SubScene* scene, char* path)
 
 	// save textures in other thread because we don't want to wait android textures while on windows platform
 	new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, scene, astcPath);
+#endif
 }
 
 void LoadSceneImages(char* path, Texture*& textures, int numImages)

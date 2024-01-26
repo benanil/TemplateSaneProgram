@@ -10,6 +10,7 @@
 
 #include "AssetManager.hpp"
 #include "Platform.hpp"
+#include "../External/glad.hpp"
 
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
@@ -19,10 +20,10 @@ const int SceneVersion = 0;
 
 namespace ShadowSettings
 {
-    const int ShadowMapSize = 1 << 11; // mobile 2k, pc 4k
+    const int ShadowMapSize = 1 << (11 + !IsAndroid()); // mobile 2k, pc 4k
     const float OrthoSize = 35.0f;
-    const float NearPlane = 0.1f;
-    const float FarPlane = 150.0f;
+    const float NearPlane = 1.0f;
+    const float FarPlane = 128.0f;
     
     const float Bias = 0.001f;
     const Vector3f OrthoOffset{};
@@ -38,9 +39,6 @@ static void WindowResizeCallback(int width, int height)
     g_CurrentScene.m_Camera.RecalculateProjection(width, height);
 }
 
-Scene::Scene()
-{ }
-
 void Scene::Init()
 {
     Vector2i windowStartSize;
@@ -50,11 +48,33 @@ void Scene::Init()
     SetWindowResizeCallback(WindowResizeCallback);
 
     //m_MatrixNeedsUpdate = bitset_create();
-    static float time = 2.8f;
-    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.05f, Abs(Cos(time)) + 0.1f, Sin(time)));
+    // setup shadow rendering
+
+    const char* vertexShaderSource =
+    AX_SHADER_VERSION_PRECISION()
+    R"(
+        layout(location = 0) in vec3 aPosition;
+        uniform mat4 model;
+        uniform mat4 lightMatrix;
+        
+        void main() {
+            gl_Position =  model * lightMatrix * vec4(aPosition, 1.0);
+        }
+    )";
+
+    const char* fragmentShaderSource = AX_SHADER_VERSION_PRECISION() "void main() { }";
+
+    m_ShadowShader      = CreateShader(vertexShaderSource, fragmentShaderSource);
+    m_ShadowFrameBuffer = CreateFrameBuffer();
+    m_ShadowTexture     = CreateShadowTexture(ShadowSettings::ShadowMapSize);
+    
+    BindFrameBuffer(m_ShadowFrameBuffer);
+    FrameBufferAttachDepth(m_ShadowTexture);
+    CheckFrameBuffer(m_ShadowFrameBuffer);
+    UnbindFrameBuffer();
 }
 
-Scene::~Scene()
+void Scene::Destroy()
 {
     for (int i = 0; i < m_LoadedSubScenes.Size(); i++)
     {
@@ -74,6 +94,9 @@ Scene::~Scene()
         FreeParsedGLTF(&scene->data);
     }
     m_LoadedSubScenes.Clear();
+    DeleteTexture(m_ShadowTexture);
+    DeleteShader(m_ShadowShader);
+    DeleteFrameBuffer(m_ShadowFrameBuffer);
     // bitset_free(m_MatrixNeedsUpdate);
 }
 
@@ -260,81 +283,32 @@ int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
 
 void Scene::RenderShadows(SubSceneID sceneID)
 {
-    const char* vertexShaderSource =
-    AX_SHADER_VERSION_PRECISION()
-    R"(
-        layout(location = 0) in vec3 aPosition;
-        uniform mat4 model;
-        uniform mat4 lightMatrix;
-    
-        void main() {
-            gl_Position =  model * lightMatrix * vec4(aPosition, 1.0);
-        }
-    )";
-
-    const char* fragmentShaderSource = AX_SHADER_VERSION_PRECISION() "void main() { }";
-
-    Shader shader = CreateShader(vertexShaderSource, fragmentShaderSource);
-    BindShader(shader);
-
     SubScene* scene = &m_LoadedSubScenes[sceneID];
-    ParsedGLTF& data = scene->data;
     
-    FrameBuffer frameBuffer = CreateFrameBuffer();
-    BindFrameBuffer(frameBuffer);
-    m_ShadowTexture = CreateShadowTexture(ShadowSettings::ShadowMapSize);
-    FrameBufferAttachDepth(m_ShadowTexture);
-    CheckFrameBuffer(frameBuffer);
+    BindShader(m_ShadowShader);
+    BindFrameBuffer(m_ShadowFrameBuffer);
+    
+    BeginShadow();
     ClearDepth();
 
     SetViewportSize(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize);
     
-    int numNodes  = data.numNodes;
-    bool hasScene = data.numScenes > 0 && data.scenes[data.defaultSceneIndex].numNodes > 1;
-    AScene defaultScene;
-    if (hasScene)
-    {
-        defaultScene = data.scenes[data.defaultSceneIndex];
-        numNodes = defaultScene.numNodes;
-    }
-
     Matrix4 view  = Matrix4::LookAtRH(m_SunLight.dir * 150.0f, -m_SunLight.dir, Vector3f::Up());    
     Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
     m_LightMatrix = view * ortho;
-    SetShaderValue(m_LightMatrix.GetPtr(), GetUniformLocation(shader, "lightMatrix"), GraphicType_Matrix4);
+    SetShaderValue(m_LightMatrix.GetPtr(), GetUniformLocation("lightMatrix"), GraphicType_Matrix4);
     
-    BindMesh(scene->bigMesh);
+    const Matrix4 model = Matrix4::CreateScale(scene->data.scale);
+    SetShaderValue(model.GetPtr(), GetUniformLocation("model"), GraphicType_Matrix4);
 
-    for (int i = 0; i < numNodes; i++)
-    {
-        ANode node = hasScene ? data.nodes[defaultScene.nodes[i]] : data.nodes[i];
-        // if node is not mesh skip (camera)
-        if (node.type != 0 || node.index == -1) 
-            continue;
+    RenderMesh(scene->bigMesh); // render all scene with one draw call
 
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        SetModelMatrix(model.GetPtr());
-
-        AMesh mesh = data.meshes[node.index];
-
-        for (int j = 0; j < mesh.numPrimitives; ++j)
-        {
-            APrimitive& primitive = mesh.primitives[j];
-            
-            if (primitive.numIndices == 0)
-                continue;
-
-            int offset = primitive.indexOffset;
-            RenderMeshIndexOffset(scene->bigMesh, primitive.numIndices, offset);
-        }
-    }
-
+    EndShadow();
     UnbindFrameBuffer();
 
     Vector2i windowSize;
     GetWindowSize(&windowSize.x, &windowSize.y);
     SetViewportSize(windowSize.x, windowSize.y);
-    DeleteShader(shader);
 }
 
 void Scene::RenderSubScene(SubSceneID sceneID)
@@ -344,12 +318,16 @@ void Scene::RenderSubScene(SubSceneID sceneID)
 
     Shader currentShader = GetCurrentShader();
     
-    static unsigned int viewPosLoc, sunDirLoc, albedoLoc=~0u, normalMapLoc, hasNormalMapLoc, metallicMapLoc, shadowMapLoc, lightMatrixLoc;
+    static unsigned int viewPosLoc, sunDirLoc, albedoLoc = ~0u, normalMapLoc, hasNormalMapLoc, metallicMapLoc,
+                        shadowMapLoc, lightMatrixLoc, modelLoc, mvpLoc;
+
     if (albedoLoc == ~0u)
     {
+        float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
+        m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
         RenderShadows(sceneID);
-        BindShader(currentShader);
 
+        BindShader(currentShader);
         viewPosLoc      = GetUniformLocation(currentShader, "viewPos");
         sunDirLoc       = GetUniformLocation(currentShader, "sunDir");
         albedoLoc       = GetUniformLocation(currentShader, "albedo");
@@ -358,10 +336,12 @@ void Scene::RenderSubScene(SubSceneID sceneID)
         metallicMapLoc  = GetUniformLocation(currentShader, "metallicRoughnessMap");
         shadowMapLoc    = GetUniformLocation(currentShader, "shadowMap");
         lightMatrixLoc  = GetUniformLocation(currentShader, "lightMatrix");
+        modelLoc        = GetUniformLocation(currentShader, "model");
+        mvpLoc          = GetUniformLocation(currentShader, "mvp");
     }
-    
-    SetShaderValue(&m_Camera.position.x, viewPosLoc, GraphicType_Vector3f);
-    SetShaderValue(&m_SunLight.dir.x, sunDirLoc, GraphicType_Vector3f);
+
+    SetShaderValue(&m_Camera.position.x  , viewPosLoc    , GraphicType_Vector3f);
+    SetShaderValue(&m_SunLight.dir.x     , sunDirLoc     , GraphicType_Vector3f);
     SetShaderValue(m_LightMatrix.GetPtr(), lightMatrixLoc, GraphicType_Matrix4);
     
     SetTexture(m_ShadowTexture, 3, shadowMapLoc);
@@ -374,7 +354,7 @@ void Scene::RenderSubScene(SubSceneID sceneID)
         defaultScene = data.scenes[data.defaultSceneIndex];
         numNodes = defaultScene.numNodes;
     }
-
+   
     BindMesh(scene->bigMesh);
 
     Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
@@ -387,10 +367,10 @@ void Scene::RenderSubScene(SubSceneID sceneID)
             continue;
 
         Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        Matrix4 mvp = model *  m_Camera.view * m_Camera.projection;
+        Matrix4 mvp = model * viewProjection;
 
-        SetModelViewProjection(mvp.GetPtr());
-        SetModelMatrix(model.GetPtr());
+        SetShaderValue(mvp.GetPtr(), mvpLoc, GraphicType_Matrix4);
+        SetShaderValue(model.GetPtr(), modelLoc, GraphicType_Matrix4);
 
         AMesh mesh = data.meshes[node.index];
 
@@ -408,18 +388,19 @@ void Scene::RenderSubScene(SubSceneID sceneID)
             if (scene->textures && baseColorIndex != -1)
                 SetTexture(scene->textures[baseColorIndex], 0, albedoLoc);
             
-            int normalIndex = material.GetNormalTexture().index;
-            int hasNormalMap = !!(primitive.attributes & AAttribType_TANGENT) && normalIndex != -1;
+            int normalIndex  = material.GetNormalTexture().index;
+            int hasNormalMap = EnumHasBit(primitive.attributes, AAttribType_TANGENT) && normalIndex != -1;
 
             if (scene->textures && hasNormalMap)
                 SetTexture(scene->textures[normalIndex], 1, normalMapLoc);
             
             SetShaderValue(hasNormalMap, hasNormalMapLoc);
 
-            // int metalicRoughnessIndex = material.metallicRoughnessTexture.index;
+            int metalicRoughnessIndex = material.metallicRoughnessTexture.index;
             // if (scene->textures && metalicRoughnessIndex != -1 && scene->textures[metalicRoughnessIndex].width != 0)
             //     SetTexture(scene->textures[metalicRoughnessIndex], 2, metallicMapLoc);
             // else
+            if (!IsAndroid())
             {
                 Texture texture;
                 texture.handle = g_DefaultTexture;

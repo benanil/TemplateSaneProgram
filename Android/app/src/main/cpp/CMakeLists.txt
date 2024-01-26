@@ -19,7 +19,7 @@ add_library(game SHARED
         ../../../../../src/Texture.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp
         ../../../../../ASTL/Additional/GLTFParser.cpp
-        ../../../../../External/zstd.c
+        ../../../../../External/zstddeclib.c # facebook zstd decompressor
         ../../../../../External/bitset.c)
 
 include_directories(${../../../../../})

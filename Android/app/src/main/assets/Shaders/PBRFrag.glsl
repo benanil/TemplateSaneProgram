@@ -1,3 +1,11 @@
+#ifdef __ANDROID__
+    #define MEDIUMP_FLT_MAX    65504.0
+    #define saturateMediump(x) min(x, MEDIUMP_FLT_MAX)
+#else
+    #define saturateMediump(x) x
+#endif
+
+precision mediump sampler2DShadow;
 
 out vec4 FragColor;
 
@@ -10,10 +18,10 @@ uniform sampler2D albedo;
 uniform sampler2D normalMap;
 
 uniform sampler2D metallicRoughnessMap;
-uniform sampler2D shadowMap;
+uniform sampler2DShadow shadowMap;
 
-uniform vec3 viewPos;
-uniform vec3 sunDir;
+uniform highp   vec3 viewPos;
+uniform half3 sunDir;
 
 uniform int hasNormalMap;
 
@@ -28,180 +36,146 @@ vec4 toLinear(vec4 sRGB)
     return mix(higher, lower, cutoff);
 }
 
+vec3 GammaCorrect(vec3 x)
+{
+    return pow(x, vec3(1.0 / gamma));
+}
+
 // combination of unreal and Reinhard
-// https://www.shadertoy.com/view/lslGzl
-// https://www.shadertoy.com/view/WdjSW3
-vec3 CustomToneMapping(vec3 color) // https://www.desmos.com/calculator/o0exqnpjzg
+// https://www.shadertoy.com/view/lslGzl & https://www.shadertoy.com/view/WdjSW3
+vec3 CustomToneMapping(vec3 x)
 {
-    color = (color / (0.35 + color));
-    return pow(color, vec3(1.0 / gamma)) * 1.11;
-    // x = x / (x + 0.0832) * 0.982; // no need gamma correction but darks are too dark
+#ifdef __ANDROID__
+    return x / (x + 0.155) * 1.019; // < android
+#else
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return GammaCorrect((x * (a * x + b)) / (x * (c * x + d) + e));
+#endif
 }
 
-#ifndef __ANDROID__
-// pbr code directly copied from here
-// https://github.com/JoeyDeVries/LearnOpenGL/blob/master/src/6.pbr/1.2.lighting_textured/1.2.pbr.fs
-// ----------------------------------------------------------------------------
-float DistributionGGX(vec3 N, vec3 H, float roughness)
+// https://google.github.io/filament/Filament.html
+float16 D_GGX(float16 roughness, float16 NoH, const half3 n, const half3 h)
 {
-    float a = roughness*roughness;
-    float a2 = a*a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH*NdotH;
-
-    float nom   = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-
-    return nom / denom;
-}
-// ----------------------------------------------------------------------------
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
-    float r = (roughness + 1.0);
-    float k = (r*r) / 8.0;
-
-    float nom   = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-
-    return nom / denom;
-}
-// ----------------------------------------------------------------------------
-float GeometrySmith(float NdotV, float NdotL, float roughness)
-{
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-    return ggx1 * ggx2;
-}
-// ----------------------------------------------------------------------------
-vec3 fresnelSchlick(float cosTheta, vec3 F0)
-{
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+#ifdef __ANDROID__
+    half3 NxH = cross(n, h);
+    float16 oneMinusNoHSquared = dot(NxH, NxH);
+#else
+    float16 oneMinusNoHSquared = 1.0 - NoH * NoH;
+#endif
+    float16 a = NoH * roughness;
+    float16 k = roughness / (oneMinusNoHSquared + a * a);
+    float16 d = k * k * (1.0 / 3.1415926535);
+    return saturateMediump(d);
 }
 
-vec3 BRDF(vec3 N, vec3 color, float metallic, float roughness)
-{
-    vec3 V = normalize(viewPos - vFragPos);
-    vec3 L = sunDir;
-
-    // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
-    // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)
-    vec3 F0 = vec3(0.04);
-    F0 = mix(F0, color, metallic);
-    vec3 H = normalize(V + L);
-
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-
-    // Cook-Torrance BRDF
-    float NDF = DistributionGGX(N, H, roughness);
-    float G   = GeometrySmith(NdotV, NdotL, roughness);
-    vec3  F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-    vec3 numerator    = NDF * G * F;
-    float denominator = 4.0 * NdotV * NdotL + 0.0001; // + 0.0001 to prevent divide by zero
-    vec3 specular = numerator / denominator;
-    specular *= 1.60;
-    // kS is equal to Fresnel
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;
-
-    vec3 lightColor = vec3(0.98, 0.91, 0.88);
-    const float intensity = 2.2;
-    vec3 radiance = lightColor * intensity;
-
-    vec3 lighting = (kD * color / PI + specular) * radiance * NdotL;
-    vec3 ambient = 0.02 * color * (1.0 - NdotL);
-
-    lighting += ambient;
-    lighting = CustomToneMapping(lighting);
-    return lighting;
+    // visibility
+float16 V_SmithGGXCorrelatedFast(float16 NoV, float16 NoL, float16 roughness) {
+    return 0.5 / mix(2.0 * NoL * NoV, NoL + NoV, roughness);
 }
 
-#endif // __ANDROID__ // android don't have brdf
+half3 F_Schlick(float16 u, half3 f0) {
+    float16 x = 1.0 - u;
+    float16 f = x * x * x * x;
+    return f + f0 * (1.0 - f);
+}
 
+half3 StandardBRDF(half3 color, half3 n, float16 roughness, float16 metallic, float16 shadow)
+{
+    half3 l = sunDir;
+    half3 v = normalize(viewPos - vFragPos);
+    half3 h = normalize(v + l);
+
+    float16 NoV = abs(dot(n, v)) + 1e-5;
+    float16 NoL = clamp(dot(n, l), 0.0, 1.0);
+    float16 NoH = clamp(dot(n, h), 0.0, 1.0);
+    float16 LoH = clamp(dot(l, h), 0.0, 1.0);
+    float16 D = D_GGX(roughness, NoH, n, h);
+
+    half3 f0 = mix(vec3(0.001), vec3(0.8), metallic * 0.4);
+
+    half3   F = F_Schlick(LoH, f0);
+    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness) * 1.15 * shadow;
+    // // specular BRDF
+    half3 Fr = (D * V) * F;
+    // diffuse BRDF
+    half3 Fd = color / 3.1415926535;
+    return CustomToneMapping(Fd + Fr);
+}
+
+float ShadowLookup(vec4 loc, vec2 offset)
+{
+    const vec2 texmapscale = vec2(0.0008, 0.0008);
+    return textureProj(shadowMap, vec4(loc.xy + offset * texmapscale * loc.w, loc.z, loc.w));
+}
+
+// https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const float bias = 0.00177;
-    // perform perspective divide
-    vec3 projCoords = vLightSpaceFrag.xyz / vLightSpaceFrag.w;
-    // transform to [0,1] range
-    projCoords = projCoords * 0.5 + 0.5;
-    float currentDepth = projCoords.z;
+    #ifdef __ANDROID__
+    vec2 offset = vec2(float(fract(vFragPos.xy * 0.5).x > 0.25));
+    offset.y += offset.x;  // y ^= x in floating point
 
-    vec2 texelSize = vec2(1.0) / vec2(textureSize(shadowMap, 0));
-    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
-    float shadow = 0.0;
-    // get depth of current fragment from light's perspective
-    shadow += currentDepth - bias > closestDepth  ? .40: 1.0;
-    closestDepth = texture(shadowMap, projCoords.xy + texelSize).r;
-    shadow += currentDepth - bias > closestDepth  ? .40: 1.0;
-    closestDepth = texture(shadowMap, projCoords.xy - texelSize).r;
-    shadow += currentDepth - bias > closestDepth  ? .40: 1.0;
+    if (offset.y > 1.1)
+        offset.y = 0.0;
 
-    projCoords.x += texelSize.x;
-    closestDepth = texture(shadowMap, projCoords.xy).r;
-    shadow += currentDepth - bias > closestDepth  ? .40: 1.0;
+    vec4 shadow = vec4(ShadowLookup(vLightSpaceFrag, offset + vec2(-1.25,  0.25)),
+    ShadowLookup(vLightSpaceFrag, offset + vec2( 0.25,  0.25)),
+    ShadowLookup(vLightSpaceFrag, offset + vec2(-1.25, -1.25)),
+    ShadowLookup(vLightSpaceFrag, offset + vec2( 0.25, -1.25)));
 
-    projCoords.x = texelSize.x * 2.0;
-    closestDepth = texture(shadowMap, projCoords.xy - texelSize).r;
-    shadow += currentDepth - bias > closestDepth  ? .40: 1.0;
-    // float realBias = bias; // max((bias * 10) * (1.0 - dot(vTBN[2], sunDir)), bias); // vTBN[2] = normal
-    //
-    // for(int x = -1; x <= 1; ++x)
-    // {
-    //     for(int y = -1; y <= 1; ++y)
-    //     {
-    //         float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
-    //         shadow += currentDepth - realBias > pcfDepth ? .44 : 1;
-    //     }
-    // }
-    shadow /= 5.0;
-    return shadow;
+    return dot(max(shadow, vec4(0.35)), vec4(1.0)) * (0.25);  // max is used with 4 elements maybe it helps to make this simd
+    #else
+    vec4 result = vec4(0.0); // store 4x4 shadow results to avoid dependency chains
+    float y = -1.5;
+    for (int i = 0; i < 4; i++, y += 1.0)
+    {
+        vec4 shadow = vec4(ShadowLookup(vLightSpaceFrag, vec2(-1.5, y)),
+        ShadowLookup(vLightSpaceFrag, vec2(-0.5, y)),
+        ShadowLookup(vLightSpaceFrag, vec2(+0.5, y)),
+        ShadowLookup(vLightSpaceFrag, vec2(+1.5, y)));
+        ShadowLookup(shadow, result.xy);
+        // horizontal sum. max is used with 4 elements maybe it helps to make this simd
+        result[i] = dot(max(shadow, vec4(0.35)), vec4(1.0));
+    }
+    return dot(result, vec4(1.0)) / 16.0;
+    #endif
 }
 
 void main()
 {
     // get diffuse color
-    vec4 color = toLinear(texture(albedo, vTexCoords));
+    mediump vec4 color = toLinear(texture(albedo, vTexCoords));
     #if ALPHA_CUTOFF
     if (color.a < 0.001)
-    discard;
+        discard;
     #endif
 
-    vec3 normal = vTBN[2];
-    vec3 lighting = vec3(0.0);
-    #ifndef __ANDROID__
+    half3 normal   = vTBN[2];
+    half3 lighting = vec3(0.0);
+
+    float shadow = ShadowCalculation();
+
+    float16 metallic  = 0.5;
+    float16 roughness = 0.3;
+#ifndef __ANDROID__
     if (hasNormalMap == 1)
     {
         // obtain normal from normal map in range [0,1]
-        vec2  c = texture(normalMap, vTexCoords).rg * 2.0 - 1.0;
-        float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
-        c.y = 1.0 * c.y;
-        const float bumpiness = 1.2f;
-        normal  = normalize(vec3(c * bumpiness, z));
+        half2   c = texture(normalMap, vTexCoords).rg * 2.0 - 1.0;
+        float16 z = sqrt(1.0 - c.x * c.x - c.y * c.y);
+        normal  = normalize(vec3(c, z));
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
 
-        vec2 metalRoughness = texture(metallicRoughnessMap, vTexCoords).rg;
-        float metallic  = metalRoughness.r;
-        float roughness = metalRoughness.g;
-
-        lighting = BRDF(normal, color.rgb, metallic, roughness);
+        half2 metalRoughness = texture(metallicRoughnessMap, vTexCoords).rg;
+        metallic  = metalRoughness.r;
+        roughness = metalRoughness.g;
     }
-    #else
-    {
-        float ndl = vTBN[0].x;
-        vec3 sunColor = vec3(0.98, 0.92, 0.89);
-        vec3 diffuse  = color.rgb * ndl * sunColor;
-        vec3 specular = vec3(vTBN[0].y * 0.13);
-        vec3 ambient = color.rgb * (1.0 - ndl) * 0.05;
-        lighting = diffuse + specular + ambient;
-        lighting = CustomToneMapping(lighting);
-    }
-    #endif
-    lighting *= ShadowCalculation();
-    FragColor = vec4(lighting, 1.0);
+#endif
+    lighting = StandardBRDF(color.rgb, normal, metallic, roughness, shadow);
+    FragColor = vec4(lighting * shadow, 1.0);
 }

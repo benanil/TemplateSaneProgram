@@ -10,12 +10,17 @@
 #  define WIN32_LEAN_AND_MEAN 
 #  define VC_EXTRALEAN
 #endif
+
+#define VMEM_OVERRIDE_NEW_DELETE
+#define VMEM_DEBUG_LEVEL 0 
+
 #include <Windows.h>
 
 #include "../ASTL/Common.hpp"
 #include "../ASTL/Algorithms.hpp"
 #include "Platform.hpp"
 #include "../External/glad.hpp"
+// #include "../External/VMem.h"
 
 #pragma comment (lib, "gdi32.lib")
 #pragma comment (lib, "user32.lib")
@@ -433,6 +438,7 @@ extern void InitRenderer();
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
+    // VMem::Initialise();
     AXInit();
     
     PlatformCtx.hwnd = WindowCreate(inst);
@@ -504,6 +510,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         wglDeleteContext(rc);
         DestroyWindow(PlatformCtx.hwnd);
     }
+    // VMem::Destroy();
+
     return 0;
 }
 

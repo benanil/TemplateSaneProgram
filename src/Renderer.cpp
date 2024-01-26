@@ -67,9 +67,6 @@ namespace
 {
     GLuint m_EmptyVAO;
     Shader m_DefaultFragShader;
-
-    Matrix4 m_ModelViewProjection;
-    Matrix4 m_ModelMatrix;
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -148,11 +145,14 @@ Texture CreateShadowTexture(int shadowmapSize)
     CHECK_GL_ERROR();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+
+    const float borderColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
     texture.width  = shadowmapSize;
     texture.height = shadowmapSize;
@@ -337,16 +337,17 @@ void BindFrameBuffer(FrameBuffer frameBuffer)
 void UnbindFrameBuffer()
 {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
 void FrameBufferAttachDepth(Texture texture)
 {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture.handle, 0);
-    // Specify that we don't need color information
-    // glDrawBuffer(GL_NONE);
-    // glReadBuffer(GL_NONE);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    CHECK_GL_ERROR();
+}
+
+void FrameBufferAttachDepthStencil(Texture texture)
+{
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texture.handle, 0);
     CHECK_GL_ERROR();
 }
 
@@ -494,6 +495,11 @@ static unsigned int currentShader = 0;
 Shader GetCurrentShader()
 {
     return {currentShader};
+}
+
+unsigned int GetUniformLocation(const char* name)
+{
+    return glGetUniformLocation(currentShader, name);
 }
 
 unsigned int GetUniformLocation(Shader shader, const char* name)
@@ -648,7 +654,7 @@ static void CreateDefaultTexture()
     for (int i = 0; i < (32 * 32); i++)
     {
         img[i * 2 + 0] = 85;  // metallic 
-        img[i * 2 + 1] = 145; // roughness
+        img[i * 2 + 1] = 125; // roughness
     }
     g_DefaultTexture = CreateTexture(32, 32, img, TextureType_RG8, false).handle;
 }
@@ -704,6 +710,22 @@ void SetDepthWrite(bool val)
 void ClearDepth()
 {
     glClear(GL_DEPTH_BUFFER_BIT); //| GL_STENCIL_BUFFER_BIT
+    CHECK_GL_ERROR();
+}
+
+void BeginShadow()
+{
+    glReadBuffer(GL_NONE);
+    glCullFace(GL_FRONT);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    CHECK_GL_ERROR();
+}
+
+void EndShadow()
+{
+    glCullFace(GL_BACK);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    CHECK_GL_ERROR();
 }
 
 void ClearColor(float r, float g, float b, float a)
@@ -739,21 +761,6 @@ void SetTexture(Texture texture, int index, unsigned int location)
     glActiveTexture(GL_TEXTURE0 + index);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glUniform1i(location, index);
-}
-
-void SetModelViewProjection(float* mvp) 
-{
-    SmallMemCpy(&m_ModelViewProjection.m[0][0], mvp, 16 * sizeof(float)); 
-    GLint mvpLoc   = glGetUniformLocation(currentShader, "mvp");
-    glUniformMatrix4fv(mvpLoc  , 1, false, &m_ModelViewProjection.m[0][0]);
-}   
-
-void SetModelMatrix(float* model)
-{
-    // Todo fix this, don't use uniform location like this
-    SmallMemCpy(&m_ModelMatrix.m[0][0], model, 16 * sizeof(float)); 
-    GLint modelLoc = glGetUniformLocation(currentShader, "model");
-    glUniformMatrix4fv(modelLoc, 1, false, &m_ModelMatrix.m[0][0]);
 }
 
 void SetViewportSize(int width, int height)

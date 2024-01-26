@@ -9,16 +9,15 @@ set(CMAKE_WIN32_EXECUTABLE ON)
 # Specify the custom build directory
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build)
 
+# if true, reduces exe size and you will have faster compile times.
+# it doesn't build astc encoder and ufbx. also it uses zstddeclib instead of entire zstd. (only decompression in game builds)
+# look at Scene.cpp first lines, you can change it over there.
+set(AX_GAME_BUILD FALSE)
+
 # Add your source files here
 set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     ASTL/Additional/OBJParser.cpp
-    
-    External/ufbx.c
-    External/zstd.c # compress files. by facebook (meta)
-    External/bitset.c
-    
-    External/ProcessDxtc.cpp # compress dxt textures
     
     src/AssetManager.cpp
     src/SaneProgram.cpp
@@ -28,11 +27,24 @@ set(SOURCES
     src/Texture.cpp
 )
 
-# Add all .cpp files from External/astc-encoder to the SOURCES list
-file(GLOB ASTC_ENCODER_SOURCES External/astc-encoder/*.cpp)
+if(AX_GAME_BUILD)
+	list(APPEND SOURCES External/zstddeclib.c) # decompress files. by facebook (meta)
+endif()
 
-# Append the ASTC_ENCODER_SOURCES to the SOURCES list
-list(APPEND SOURCES ${ASTC_ENCODER_SOURCES})
+# add astc encoder and ufbx if we are in editor build.
+if(NOT AX_GAME_BUILD)
+  
+	list(APPEND SOURCES 
+       External/ufbx.c
+       External/zstd.c # game build include all zstd library. (compressor and decompressor)
+       External/ProcessDxtc.cpp) # compress dxt and bcn textures
+
+  # Add all .cpp files from External/astc-encoder to the SOURCES list
+  file(GLOB ASTC_ENCODER_SOURCES External/astc-encoder/*.cpp)
+  
+  # Append the ASTC_ENCODER_SOURCES to the SOURCES list
+  list(APPEND SOURCES ${ASTC_ENCODER_SOURCES})
+endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 

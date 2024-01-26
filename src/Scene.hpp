@@ -1,5 +1,14 @@
-
 #pragma once
+
+// game build doesn't have astc encoder, ufbx, dxt encoder. 
+// because we are only decoding when we release the game
+// if true, reduces exe size and you will have faster compile times.
+// also it uses zstddeclib instead of entire zstd. (only decompression in game builds) go to CMakeLists.txt for more details
+#if defined(__ANDROID__)
+    #define AX_GAME_BUILD 1
+#else
+    #define AX_GAME_BUILD 0
+#endif
 
 #include "Renderer.hpp"
 #include "Camera.hpp"
@@ -15,7 +24,7 @@ struct SubScene
     ParsedGLTF data;
     Texture* textures;
     GPUMesh bigMesh; // contains all of the vertices and indices of an SubScene
-    char path[256];
+    char path[128]; // relative path
 };
 
 typedef ushort SubSceneID;
@@ -77,13 +86,13 @@ public:
 
     Texture m_ShadowTexture;
     Matrix4 m_LightMatrix;
+    Shader m_ShadowShader;
+    FrameBuffer m_ShadowFrameBuffer;
 public:
-
-    Scene();
-    
-    ~Scene();
     
     void Init();
+
+    void Destroy();
 
     void Save(const char* path);
 

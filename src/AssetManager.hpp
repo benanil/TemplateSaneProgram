@@ -13,6 +13,8 @@ void CreateVerticesIndices(ParsedGLTF* gltf);
 // ABM = AX binary mesh
 bool IsABMLastVersion(const char* path);
 
+bool IsTextureLastVersion(const char* path);
+
 // From Texture.cpp
 void SaveSceneImages(SubScene* scene, char* path);
 

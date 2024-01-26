@@ -1,6 +1,5 @@
 @echo off
 
-
 if "%1"=="Debug" (
     echo Debug build is running
     devenv build/SaneProgram.vcxproj /Build "Debug|x64"
@@ -10,14 +9,22 @@ if "%1"=="Debug" (
     start "" "build/Release/SaneProgram.exe"
 )
 
-REM REM Compile the C++ code using clang++
+REM Compile the C++ code using clang++
 REM clang++ -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mwindows -luser32 ^
 REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS  ^
 REM src/SaneProgram.cpp ^
 REM ASTL/Additional/GLTFParser.cpp ^
 REM ASTL/Additional/OBJParser.cpp ^
+REM External/zstddeclib.c ^
+REM src/PlatformWindows.cpp ^
+REM src/AssetManager.cpp ^
+REM src/Renderer.cpp ^
+REM src/Scene.cpp ^
+REM src/Texture.cpp ^
+REM -o SaneProgram.exe ^
+REM -lopengl32 -lgdi32  SaneProgram.res
+
 REM External/ProcessDxtc.cpp ^
-REM External/zstd.c ^
 REM External/ufbx.c ^
 REM External/bitset.c ^
 REM External/astc-encoder/astcenccli_error_metrics.cpp ^
@@ -50,13 +57,7 @@ REM External/astc-encoder/astcenc_symbolic_physical.cpp           ^
 REM External/astc-encoder/astcenc_weight_align.cpp                ^
 REM External/astc-encoder/astcenc_weight_quant_xfer_tables.cpp    ^
 REM External/astc-encoder/wuffs-v0.3.cpp                          ^
-REM src/PlatformWindows.cpp ^
-REM src/AssetManager.cpp ^
-REM src/Renderer.cpp ^
-REM src/Scene.cpp ^
-REM src/Texture.cpp ^
-REM -o SaneProgram ^
-REM -lopengl32 -lgdi32  SaneProgram.res
+
 
 REM REM Compile the C++ code using g++
 REM g++ -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mwindows -luser32 ^

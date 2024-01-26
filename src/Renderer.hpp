@@ -7,14 +7,16 @@
 
 #ifdef __ANDROID__  
 #define AX_SHADER_VERSION_PRECISION() "#version 300 es\n"              \
-                                      "precision highp   float;\n"     \
+                                      "precision highp float;\n"     \
                                       "precision mediump sampler2D;\n" \
-                                      "precision highp   int;\n"       \
+                                      "precision mediump int;\n"       \
                                       "#define __ANDROID__ 1\n"        \
-                                      "#define ALPHA_CUTOFF 0\n"
+                                      "#define ALPHA_CUTOFF 0\n"       \
+                                      "bool IsAndroid() { return true; }\n"
 #else
 #define AX_SHADER_VERSION_PRECISION() "#version 420 \n"          \
-                                      "#define ALPHA_CUTOFF 0\n"
+                                      "#define ALPHA_CUTOFF 0\n" \
+                                      "bool IsAndroid() { return false; }\n"
 #endif
 
 typedef int TextureType;
@@ -122,10 +124,6 @@ void RenderFullScreen(Shader fullScreenShader, unsigned int texture);
 // renders an texture to screen
 void RenderFullScreen(unsigned int texture);
 
-void SetModelViewProjection(float* mvp);
-
-void SetModelMatrix(float* model);
-
 void SetViewportSize(int width, int height);
 
 void RenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
@@ -185,6 +183,11 @@ void FrameBufferAttachDepth(Texture texture);
 
 void FrameBufferAttachColor(Texture texture, int index);
 
+void BeginShadow();
+
+void EndShadow();
+
+
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Shader                                   */
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -200,6 +203,8 @@ void DeleteShader(Shader shader);
 void BindShader(Shader shader);
 
 // Todo(Anil): lookup uniforms
+unsigned int GetUniformLocation(const char* name);
+
 unsigned int GetUniformLocation(Shader shader, const char* name);
 
 Shader GetCurrentShader();

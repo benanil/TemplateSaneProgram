@@ -9,28 +9,14 @@ out highp   vec2 vTexCoords;
 out highp   vec4 vLightSpaceFrag;
 out mediump mat3 vTBN;
 
-uniform mat4 mvp;
-uniform mat4 model;
-uniform mat4 lightMatrix;
+uniform highp mat4 mvp;
+uniform highp mat4 model;
+uniform highp mat4 lightMatrix;
 
 uniform mediump vec3 viewPos;
 uniform mediump vec3 sunDir;
 
 uniform int hasNormalMap;
-
-// use gouard shading on android, calculate lighting in vertex shader
-#ifdef __ANDROID__
-vec3 PhongLighting(vec3 N, vec3 pos)
-{
-    // diffuse
-    N = normalize(N); // this is using xyz10w1 format normalizing makes it better
-    float ndl     = max(dot(N, sunDir), 0.0);
-    // specular
-    vec3  V     = normalize(viewPos - pos);
-    float dotRV = pow(clamp(dot(reflect(sunDir, N), -V), 0.0, 1.0), 16.0);
-    return vec3(ndl, dotRV, 0.0);
-}
-#endif
 
 // https://developer.android.com/games/optimize/vertex-data-management
 void main()
@@ -38,20 +24,30 @@ void main()
     vFragPos   = vec3(model * vec4(aPos, 1.0));   
     vTexCoords = aTexCoords; 
     
-    vTBN[2] = aNormal; // if has no tangents use vertex normal
+    vTBN[2] = normalize(aNormal); // if has no tangents use vertex normal
 #ifndef __ANDROID__
     if (hasNormalMap == 1)
     {
         vec3 T = normalize(vec3(model * vec4(aTangent.xyz, 0.0)));
-        vec3 N = normalize(vec3(model * vec4(aNormal  , 0.0)));
+        vec3 N = normalize(vec3(model * vec4(vTBN[2]  , 0.0)));
         T = normalize(T - dot(T, N) * N);
         vec3 B = cross(N, T) * aTangent.w;
 
         vTBN = mat3(T, B, N);
     }
-#else
-    vTBN[0] = PhongLighting(aNormal, vFragPos);
 #endif
-    vLightSpaceFrag = model * lightMatrix * vec4(aPos, 1.0);
+    
+    // for shadow, this matrix converts [-1, 1] space to [0, 1]
+    const mat4 biasMatrix = mat4( 
+        0.5, 0.0, 0.0, 0.0,
+        0.0, 0.5, 0.0, 0.0,
+        0.0, 0.0, 0.5, 0.0,
+        0.5, 0.5, 0.5, 1.0
+    );
+
+    vec3 normal = vTBN[2];
+    float biasPosOffset = 0.5 + (1.0 - dot(normal, sunDir)); // clamp(tan(acos(ndl))*0.8, 0.0, 3.0)
+
+    vLightSpaceFrag = biasMatrix * model * lightMatrix * vec4(aPos + (normal * biasPosOffset), 1.0);
     gl_Position = mvp * vec4(aPos, 1.0);
 }

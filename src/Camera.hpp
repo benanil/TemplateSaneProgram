@@ -1,4 +1,6 @@
 #pragma once
+
+#include <math.h>
 #include "../ASTL/Math/Transform.hpp"
 #include "Platform.hpp"
 
@@ -10,7 +12,7 @@ struct Camera
 	// Matrix4 inverseProjection;
 	// Matrix4 inverseView;
 
-	float verticalFOV = 65.0f;
+	float verticalFOV = 60.0f;
 	float nearClip = 0.1f;
 	float farClip = 1000.0f;
 
@@ -21,16 +23,16 @@ struct Camera
 
 	Vector3f Front, Right, Up;
 
-	float pitch = 0.0f, yaw = -90.0f , senstivity = 20.0f;
+	float pitch = 0.0f, yaw = -90.0f , senstivity = 10.0f;
 
 	bool wasPressing = false;
 
 	void Init(Vector2i xviewPortSize)
 	{
-		verticalFOV = 55.0f;
+		verticalFOV = 60.0f;
 		nearClip = 0.1f;
 		farClip = 500.0f;
-		pitch = 0.0f, yaw = -45.0f , senstivity = 20.0f;
+		pitch = 0.0f, yaw = -45.0f , senstivity = 10.0f;
 
 		viewportSize = xviewPortSize;
 		position = MakeVec3(0.0f, 3.0f, 0.0f);
@@ -39,6 +41,7 @@ struct Camera
 		GetMonitorSize(&monitorSize.x, &monitorSize.y);
 
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
+		Update(true);
 		RecalculateView();
 	}
 
@@ -74,13 +77,13 @@ struct Camera
 #endif
 	}
 
-	void Update()
+	void Update(bool pass=false)
 	{
 		bool pressing = GetMouseDown(MouseButton_Right);
-		if (!pressing) { wasPressing = false; return; }
+		if (!pressing && !pass) { wasPressing = false; return; }
 
-		float dt = (float)GetDeltaTime() * 2.0f;
-		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 2.0f;
+		float dt = pass ? 0.05 : (float)GetDeltaTime() * 2.0f;
+		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 1.2f;
 
 		Vector2f mousePos;
 		GetMousePos(&mousePos.x, &mousePos.y);
@@ -99,14 +102,14 @@ struct Camera
 				pitch = Clamp(pitch, -89.0f, 89.0f);
 			}
 
-			Front.x = Cos(yaw * DegToRad) * Cos(pitch * DegToRad);
-			Front.y = Sin(pitch * DegToRad);
-			Front.z = Sin(yaw * DegToRad) * Cos(pitch * DegToRad);
+			Front.x = cosf(yaw * DegToRad) * cosf(pitch * DegToRad);
+			Front.y = sinf(pitch * DegToRad);
+			Front.z = sinf(yaw * DegToRad) * cosf(pitch * DegToRad);
 			Front.NormalizeSelf();
 			// also re-calculate the Right and Up vector
 			// normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
-			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));  
-			Up = Vector3f::NormalizeEst(Vector3f::Cross(Right, Front));
+			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));
+			Up = Vector3f::Normalize(Vector3f::Cross(Right, Front));
 		}
 #ifdef __ANDROID__
 		else if (wasPressing && diff.x + diff.y < 130.0f)
