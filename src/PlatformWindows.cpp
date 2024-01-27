@@ -18,8 +18,8 @@
 
 #include "../ASTL/Common.hpp"
 #include "../ASTL/Algorithms.hpp"
-#include "Platform.hpp"
 #include "../External/glad.hpp"
+#include "Platform.hpp"
 // #include "../External/VMem.h"
 
 #pragma comment (lib, "gdi32.lib")
@@ -63,31 +63,31 @@ struct PlatformContextWin
 static char WindowName[64]{ 'A', 'S', 'T', 'L' };
 
 
-void SetFocusChangedCallback(void(*callback)(bool))         { PlatformCtx.FocusChangedCallback = callback; }
+void wSetFocusChangedCallback(void(*callback)(bool))         { PlatformCtx.FocusChangedCallback = callback; }
 void SetKeyPressCallback    (void(*callback)(wchar_t))      { PlatformCtx.KeyPressCallback     = callback; }
 void SetMouseMoveCallback   (void(*callback)(float, float)) { PlatformCtx.MouseMoveCallback    = callback; }
-void SetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback; }
-void SetWindowMoveCallback  (void(*callback)(int, int))     { PlatformCtx.WindowMoveCallback   = callback; }
+void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback; }
+void wSetWindowMoveCallback  (void(*callback)(int, int))     { PlatformCtx.WindowMoveCallback   = callback; }
 
 
-void GetWindowSize(int* x, int* y) { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
-void GetWindowPos (int* x, int* y) { *x = PlatformCtx.WindowPosX;   *y = PlatformCtx.WindowPosY;   }
+void wGetWindowSize(int* x, int* y) { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
+void wGetWindowPos (int* x, int* y) { *x = PlatformCtx.WindowPosX;   *y = PlatformCtx.WindowPosY;   }
 
-void SetWindowSize(int width, int height)
+void wSetWindowSize(int width, int height)
 {
     PlatformCtx.WindowWidth = width; PlatformCtx.WindowHeight = height;
     if (!PlatformCtx.hwnd) return;
     SetWindowPos(PlatformCtx.hwnd, nullptr, PlatformCtx.WindowPosX, PlatformCtx.WindowPosY, width, height, 0);
 }
 
-void SetWindowPosition(int x, int y)
+void wSetWindowPosition(int x, int y)
 {
     PlatformCtx.WindowPosX = x; PlatformCtx.WindowPosY = y;
     if (!PlatformCtx.hwnd) return;
     SetWindowPos(PlatformCtx.hwnd, nullptr, x, y, PlatformCtx.WindowWidth, PlatformCtx.WindowHeight, 0);
 }
 
-void SetWindowName(const char* name)
+void wSetWindowName(const char* name)
 {
     SmallMemSet(WindowName, 0, sizeof(WindowName));
     
@@ -101,13 +101,13 @@ void SetWindowName(const char* name)
     }
 }
 
-void GetMonitorSize(int* width, int* height)
+void wGetMonitorSize(int* width, int* height)
 {
     *width  = GetSystemMetrics(SM_CXSCREEN);
     *height = GetSystemMetrics(SM_CYSCREEN);
 }
 
-void SetVSync(bool active)
+void wSetVSync(bool active)
 {
     PlatformCtx.VSyncActive = active; 
 }
@@ -433,8 +433,8 @@ extern int  AXStart();
 extern void AXLoop();
 extern void AXExit();
 // forom Renderer.cpp
-extern void DestroyRenderer();
-extern void InitRenderer();
+extern void rDestroyRenderer();
+extern void rInitRenderer();
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
@@ -452,11 +452,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     // first thing that we will see is going to be black color instead of white
     // if we clear before starting the engine
     SwapBuffers(dc);
-    InitRenderer();
+    rInitRenderer();
 
-    if (AXStart() == 0)
-        return 1; // user defined startup failed
-
+    // init time
     LARGE_INTEGER frequency, prevTime, currentTime;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&prevTime);
@@ -464,6 +462,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     currentTime = prevTime;
     PlatformCtx.StartupTime = currentTime.QuadPart;
     PlatformCtx.Frequency   = frequency.QuadPart;
+
+    if (AXStart() == 0)
+        return 1; // user defined startup failed
 
     while (true)
     {   
@@ -486,9 +487,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check
             goto end_infinite_loop;
 
-        char fps[9]{};
-        IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
-        SetWindowName(fps);
+        // char fps[9]{};
+        // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
+        // SetWindowName(fps);
 
         // Do OpenGL rendering here
         AXLoop();
@@ -504,7 +505,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     end_infinite_loop:
     {
         AXExit();
-        DestroyRenderer();
+        rDestroyRenderer();
         wglMakeCurrent(dc, 0);
         ReleaseDC(PlatformCtx.hwnd, dc);
         wglDeleteContext(rc);
@@ -516,7 +517,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 }
 
 // https://stackoverflow.com/questions/2382464/win32-full-screen-and-hiding-taskbar
-bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight) 
+bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight) 
 {
     DEVMODE fullscreenSettings;
     EnumDisplaySettings(NULL, 0, &fullscreenSettings);
@@ -536,7 +537,7 @@ bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight)
     return success;
 }
 
-bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) 
+bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) 
 {
     SetWindowLongPtr(PlatformCtx.hwnd, GWL_EXSTYLE, WS_EX_LEFT);
     SetWindowLongPtr(PlatformCtx.hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);

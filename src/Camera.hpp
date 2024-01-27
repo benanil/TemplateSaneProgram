@@ -12,7 +12,7 @@ struct Camera
 	// Matrix4 inverseProjection;
 	// Matrix4 inverseView;
 
-	float verticalFOV = 60.0f;
+	float verticalFOV = 65.0f;
 	float nearClip = 0.1f;
 	float farClip = 1000.0f;
 
@@ -29,7 +29,7 @@ struct Camera
 
 	void Init(Vector2i xviewPortSize)
 	{
-		verticalFOV = 60.0f;
+		verticalFOV = 65.0f;
 		nearClip = 0.1f;
 		farClip = 500.0f;
 		pitch = 0.0f, yaw = -45.0f , senstivity = 10.0f;
@@ -38,7 +38,7 @@ struct Camera
 		position = MakeVec3(0.0f, 3.0f, 0.0f);
 		Front = MakeVec3(0.5f, 0.0f, -0.5f);
 
-		GetMonitorSize(&monitorSize.x, &monitorSize.y);
+		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
 		Update(true);
@@ -54,7 +54,7 @@ struct Camera
 
 	void RecalculateView()
 	{
-		view = Matrix4::LookAtRH(position, Front, Vector3f::Up());
+		view = Matrix4::LookAtRH(position, Front, Up);
 		// inverseView = Matrix4::Inverse(view);
 	}
 
@@ -109,7 +109,7 @@ struct Camera
 			// also re-calculate the Right and Up vector
 			// normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
 			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));
-			Up = Vector3f::Normalize(Vector3f::Cross(Right, Front));
+			Up = Vector3f::Cross(Right, Front);
 		}
 #ifdef __ANDROID__
 		else if (wasPressing && diff.x + diff.y < 130.0f)

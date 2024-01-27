@@ -1,3 +1,4 @@
+
 #ifdef __ANDROID__
     #define MEDIUMP_FLT_MAX    65504.0
     #define saturateMediump(x) min(x, MEDIUMP_FLT_MAX)
@@ -5,9 +6,17 @@
     #define saturateMediump(x) x
 #endif
 
-#define float16 mediump float
-#define half2 mediump vec2
-#define half3 mediump vec3
+#ifdef __ANDROID__
+    #define float16 mediump float
+    #define half2   mediump vec2
+    #define half3   mediump vec3
+#else
+    #define float16 float
+    #define half2   vec2
+    #define half3   vec3
+#endif
+
+#define MakeVec3(x) vec3(x)
 
 precision mediump sampler2DShadow;
 
@@ -25,7 +34,7 @@ uniform sampler2D metallicRoughnessMap;
 uniform sampler2DShadow shadowMap;
 
 uniform highp   vec3 viewPos;
-uniform half3 sunDir;
+uniform mediump vec3 sunDir;
 
 uniform int hasNormalMap;
 
@@ -40,6 +49,10 @@ vec4 toLinear(vec4 sRGB)
     return mix(higher, lower, cutoff);
 }
 
+float sq(float x) {
+    return x * x;
+}
+
 vec3 GammaCorrect(vec3 x)
 {
     return pow(x, vec3(1.0 / gamma));
@@ -49,8 +62,10 @@ vec3 GammaCorrect(vec3 x)
 vec3 CustomToneMapping(vec3 x)
 {
 #ifdef __ANDROID__
-    return x / (x + 0.155) * 1.019; // < android
+    return GammaCorrect(x / (1.0 + x)); // reinhard
+    return x / (x + 0.155) * 1.019; // < doesn't require gamma correction
 #else
+    //return GammaCorrect(x / (1.0 + x)); // reinhard
     const float a = 2.51;
     const float b = 0.03;
     const float c = 2.43;
@@ -94,39 +109,45 @@ half3 StandardBRDF(half3 color, half3 n, float16 roughness, float16 metallic, fl
     float16 LoH = clamp(dot(l, h), 0.0, 1.0);
     float16 D = D_GGX(roughness, NoH, n, h);
 
-    half3 f0 = mix(vec3(0.001), vec3(0.8), metallic * 0.4);
+    half3 f0 = mix(vec3(0.001), vec3(color), metallic * 0.4);
 
     half3   F = F_Schlick(LoH, f0);
-    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness) * 1.15 * shadow;
+    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);
+    float16 lightIntensity = 1.2;
     // // specular BRDF
-    half3 Fr = (D * V) * F;
+    shadow = shadow * shadow;
+    half3 Fr = (D * V) * F * (shadow * shadow); // step because we don't want to have 0.4 shadow.
     // diffuse BRDF
-    half3 Fd = color / 3.1415926535;
-    return CustomToneMapping(Fd + Fr);
+    color *= lightIntensity;
+    float16 darkness = NoL * shadow;
+    half3 ambient = color * (1.0-darkness) * 0.10;
+    half3 Fd = (color / 3.1415926535) * darkness;
+
+    return CustomToneMapping((Fd + Fr) + ambient);
 }
 
 float ShadowLookup(vec4 loc, vec2 offset)
 {
-    const vec2 texmapscale = vec2(0.0008, 0.0008);
+    const vec2 texmapscale = vec2(0.0007, 0.0007);
     return textureProj(shadowMap, vec4(loc.xy + offset * texmapscale * loc.w, loc.z, loc.w));
 }
 
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
+    const vec4 minShadow = vec4(0.40);
 #ifdef __ANDROID__
-    vec2 offset = vec2(float(fract(vFragPos.xy * 0.5).x > 0.25));
-    offset.y += offset.x;  // y ^= x in floating point
+    vec2 offset;
+    const vec3 mixer = vec3(1.0, 1.1, 1.2);
+    offset.x = fract(dot(vFragPos.xyz * 0.33, mixer)) * 0.5;
+    offset.y = fract(dot(vFragPos.yzx * 0.33, mixer)) * 0.5;
 
-    if (offset.y > 1.1)
-    offset.y = 0.0;
-
-    vec4 shadow = vec4(ShadowLookup(vLightSpaceFrag, offset + vec2(-1.25,  0.25)),
+    vec4 shadow = vec4(ShadowLookup(vLightSpaceFrag, offset + vec2(-0.50,  0.25)),
                        ShadowLookup(vLightSpaceFrag, offset + vec2( 0.25,  0.25)),
-                       ShadowLookup(vLightSpaceFrag, offset + vec2(-1.25, -1.25)),
-                       ShadowLookup(vLightSpaceFrag, offset + vec2( 0.25, -1.25)));
+                       ShadowLookup(vLightSpaceFrag, offset + vec2(-0.50, -0.50)),
+                       ShadowLookup(vLightSpaceFrag, offset + vec2( 0.25, -0.50)));
 
-    return dot(max(shadow, vec4(0.35)), vec4(1.0)) * (0.25);  // max is used with 4 elements maybe it helps to make this simd
+    return dot(max(shadow, minShadow), vec4(1.0)) * (0.25);  // max is used with 4 elements maybe it helps to make this simd
 #else
     vec4 result = vec4(0.0); // store 4x4 shadow results to avoid dependency chains
     float y = -1.5;
@@ -136,9 +157,9 @@ float ShadowCalculation()
                            ShadowLookup(vLightSpaceFrag, vec2(-0.5, y)),
                            ShadowLookup(vLightSpaceFrag, vec2(+0.5, y)),
                            ShadowLookup(vLightSpaceFrag, vec2(+1.5, y)));
-        ShadowLookup(shadow, result.xy);
+
         // horizontal sum. max is used with 4 elements maybe it helps to make this simd
-        result[i] = dot(max(shadow, vec4(0.35)), vec4(1.0));
+        result[i] = dot(max(shadow, minShadow), vec4(1.0));
     }
     return dot(result, vec4(1.0)) / 16.0;
 #endif

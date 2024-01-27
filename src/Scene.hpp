@@ -7,15 +7,13 @@
 #if defined(__ANDROID__)
     #define AX_GAME_BUILD 1
 #else
-    #define AX_GAME_BUILD 0
+    #define AX_GAME_BUILD 1 /* make zero for editor build */
 #endif
-
-#include "Renderer.hpp"
-#include "Camera.hpp"
 
 #include "../ASTL/Array.hpp"
 #include "../ASTL/Math/Matrix.hpp"
 #include "../External/bitset.h"
+#include "Renderer.hpp"
 
 //------------------------------------------------------------------------
 // subscene is GLTF, FBX or OBJ
@@ -82,12 +80,6 @@ public:
 
     Array<SubScene> m_LoadedSubScenes;
 
-    Camera m_Camera;
-
-    Texture m_ShadowTexture;
-    Matrix4 m_LightMatrix;
-    Shader m_ShadowShader;
-    FrameBuffer m_ShadowFrameBuffer;
 public:
     
     void Init();
@@ -129,10 +121,6 @@ public:
 
     // import GLTF, FBX, or OBJ file into scene
     int ImportSubScene(SubSceneID* subsceneID, const char* inPath, float scale);
-
-    void RenderShadows(SubSceneID sceneID);
-
-    void RenderSubScene(SubSceneID sceneID);
 
     void UpdateSubScene(SubSceneID scene);
     

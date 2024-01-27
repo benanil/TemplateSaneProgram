@@ -24,6 +24,7 @@ set(SOURCES
     src/Renderer.cpp
     src/PlatformWindows.cpp
     src/Scene.cpp
+    src/SceneRenderer.cpp
     src/Texture.cpp
 )
 

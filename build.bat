@@ -20,6 +20,7 @@ REM src/PlatformWindows.cpp ^
 REM src/AssetManager.cpp ^
 REM src/Renderer.cpp ^
 REM src/Scene.cpp ^
+REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
 REM -o SaneProgram.exe ^
 REM -lopengl32 -lgdi32  SaneProgram.res
@@ -103,6 +104,7 @@ REM src/PlatformWindows.cpp ^
 REM src/AssetManager.cpp ^
 REM src/Renderer.cpp ^
 REM src/Scene.cpp ^
+REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
 REM -o SaneProgram ^
 REM -lopengl32 -lgdi32 -mno-needed SaneProgram.res

@@ -1,5 +1,12 @@
-#ifndef AX_RENDERER_H
-#define AX_RENDERER_H
+
+/************************************************************************** 
+*    Purpose: Render interface that works with OpenGL 4.2 and OpenGL ES2  *
+*             Notice that each function has R prefix to indicate Renderer *
+*             I saw it in Doom source code I think makes sense.           *
+*    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com              *
+**************************************************************************/
+
+#pragma once
 
 #include "../ASTL/Additional/GLTFParser.hpp"
 #include "../ASTL/Math/Vector.hpp"
@@ -104,41 +111,44 @@ struct AVertex
 /*//////////////////////////////////////////////////////////////////////////*/
 
 // only uint32 indices accepted
-GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
+GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
-void DeleteMesh(GPUMesh mesh);
+void rDeleteMesh(GPUMesh mesh);
 
-void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh);
+void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh);
 
-void BindMesh(GPUMesh mesh);
+void rBindMesh(GPUMesh mesh);
 
-void RenderMesh(GPUMesh mesh);
+void rRenderMesh(GPUMesh mesh);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Renderer                                 */
 /*//////////////////////////////////////////////////////////////////////////*/
 
 // renders an texture to screen with given shader
-void RenderFullScreen(Shader fullScreenShader, unsigned int texture);
+void rRenderFullScreen(Shader fullScreenShader, unsigned int texture);
 
 // renders an texture to screen
-void RenderFullScreen(unsigned int texture);
+void rRenderFullScreen(unsigned int texture);
 
-void SetViewportSize(int width, int height);
+void rSetViewportSize(int width, int height);
 
-void RenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
+void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
 
-void InitRenderer();
+void rInitRenderer();
 
-void DestroyRenderer();
+void rDestroyRenderer();
 
-void SetDepthTest(bool val);
+void rSetDepthTest(bool val);
 
-void SetDepthWrite(bool val);
+void rSetDepthWrite(bool val);
 
-void ClearColor(float r, float g, float b, float a);
+void rClearColor(float r, float g, float b, float a);
 
-void ClearDepth();
+void rClearDepth();
+
+void rBeginShadow();
+void rEndShadow();
 
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -146,17 +156,17 @@ void ClearDepth();
 /*//////////////////////////////////////////////////////////////////////////*/
 
 // type is either 0 or 1 if compressed. 1 means has alpha
-Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
-Texture CreateShadowTexture(int shadowmapSize);
+Texture rCreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
+Texture rCreateShadowTexture(int shadowmapSize);
 
-void ResizeTextureLoadBufferIfNecessarry(unsigned long long size);
+void rResizeTextureLoadBufferIfNecessarry(unsigned long long size);
 
 // Imports texture from disk and loads to GPU
-Texture LoadTexture(const char* path, bool mipmap);
+Texture rLoadTexture(const char* path, bool mipmap);
 
-void DeleteTexture(Texture texture);
+void rDeleteTexture(Texture texture);
 
-void SetTexture(Texture texture, int index, unsigned int loc);
+void rSetTexture(Texture texture, int index, unsigned int loc);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Frame Buffer                             */
@@ -167,58 +177,54 @@ struct FrameBuffer
     unsigned int handle;
 };
 
-FrameBuffer CreateFrameBuffer();
+FrameBuffer rCreateFrameBuffer();
 
-void DeleteFrameBuffer(FrameBuffer frameBuffer);
-
-bool CheckFrameBuffer(FrameBuffer framebuffer);
-
-Texture CreateRenderTexture(int width, int height, TextureType type);
-
-void BindFrameBuffer(FrameBuffer frameBuffer);
-
-void UnbindFrameBuffer();
-
-void FrameBufferAttachDepth(Texture texture);
-
-void FrameBufferAttachColor(Texture texture, int index);
-
-void BeginShadow();
-
-void EndShadow();
+void        rDeleteFrameBuffer(FrameBuffer frameBuffer);
+            
+bool        rCheckFrameBuffer(FrameBuffer framebuffer);
+            
+Texture     rCreateRenderTexture(int width, int height, TextureType type);
+            
+void        rBindFrameBuffer(FrameBuffer frameBuffer);
+            
+void        rUnbindFrameBuffer();
+            
+void        rFrameBufferAttachDepth(Texture texture);
+            
+void        rFrameBufferAttachColor(Texture texture, int index);
 
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Shader                                   */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-Shader CreateShader(const char* vertexSource, const char* fragmentSource);
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource);
 
-Shader CreateFullScreenShader(const char* fragmentSource);
+Shader rCreateFullScreenShader(const char* fragmentSource);
 
-Shader ImportShader(const char* vertexSource, const char* fragmentSource);
+Shader rImportShader(const char* vertexSource, const char* fragmentSource);
 
-void DeleteShader(Shader shader);
+void   rDeleteShader(Shader shader);
 
-void BindShader(Shader shader);
+void   rBindShader(Shader shader);
 
 // Todo(Anil): lookup uniforms
-unsigned int GetUniformLocation(const char* name);
+unsigned int rGetUniformLocation(const char* name);
 
-unsigned int GetUniformLocation(Shader shader, const char* name);
+unsigned int rGetUniformLocation(Shader shader, const char* name);
 
-Shader GetCurrentShader();
+Shader rGetCurrentShader();
 
-void SetMaterial(AMaterial* material);
-
-// sets uniform to binded shader
-void SetShaderValue(const void* value, unsigned int location, GraphicType type);
+void rSetMaterial(AMaterial* material);
 
 // sets uniform to binded shader
-void SetShaderValue(int value, unsigned int location);
+void rSetShaderValue(const void* value, unsigned int location, GraphicType type);
 
 // sets uniform to binded shader
-void SetShaderValue(float value, unsigned int location);
+void rSetShaderValue(int value, unsigned int location);
+
+// sets uniform to binded shader
+void rSetShaderValue(float value, unsigned int location);
 
 
 // Warning! Order is important
@@ -270,5 +276,3 @@ enum TextureType_
     TextureType_DepthStencil24 = 39,
     TextureType_DepthStencil32 = 40
 };
-
-#endif //AX_RENDERER_H

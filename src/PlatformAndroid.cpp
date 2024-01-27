@@ -50,13 +50,13 @@ struct PlatformContextAndroid
 
 } PlatformCtx{};
 
-void SetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
-void SetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback;}
+void wSetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
+void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback;}
 void SetKeyPressCallback(void(*callback)(wchar_t))          { PlatformCtx.KeyPressCallback     = callback; }
 void SetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseMoveCallback    = callback;}
 
-void GetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowWidth; }
-void GetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowHeight; *height = PlatformCtx.WindowHeight; }
+void wGetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowWidth; }
+void wGetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowHeight; *height = PlatformCtx.WindowHeight; }
 
 void UpdateRenderArea()
 {
@@ -199,7 +199,7 @@ void HandleCMD(android_app *pApp, int32_t cmd)
             g_android_app = pApp;
             AXInit();
             InitWindow();
-            InitRenderer();
+            rInitRenderer();
 
             if (AXStart() == 0) return; // user defined startup failed
         break;
@@ -207,7 +207,7 @@ void HandleCMD(android_app *pApp, int32_t cmd)
             UpdateRenderArea();
             break;
         case APP_CMD_TERM_WINDOW:
-            DestroyRenderer();
+            rDestroyRenderer();
             pApp->userData = 0;
             g_android_app  = nullptr;
         break;

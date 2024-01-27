@@ -46,27 +46,27 @@ inline constexpr const char* GetFileName(const char* path)
 ////////                Window               ////////
 
 #ifndef __ANDROID__
-void SetWindowSize(int width, int height);
-void SetWindowPosition(int x, int y);
-void SetWindowMoveCallback(void(*callback)(int, int));
-void SetWindowName(const char* name);
-void GetWindowPos(int* x, int* y);
+void wSetWindowSize(int width, int height);
+void wSetWindowPosition(int x, int y);
+void wSetWindowMoveCallback(void(*callback)(int, int));
+void wSetWindowName(const char* name);
+void wGetWindowPos(int* x, int* y);
 
 // Sets Window as Full Screen, with given resolution, this might improve performance but pixel density drops down
 // You can set the resolution using GetMonitorSize or following resolutions: 
 // 2560x1440, 1920x1080, 1280×720 etc.
-bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight);
+bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight);
 
 // Go back to full screen Mode
-bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight);
+bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight);
 
-void SetVSync(bool active);
+void wSetVSync(bool active);
 #endif
 
-void SetFocusChangedCallback(void(*callback)(bool focused));
-void SetWindowResizeCallback(void(*callback)(int, int));
-void GetWindowSize(int* x, int* y);
-void GetMonitorSize(int* width, int* height);
+void wSetFocusChangedCallback(void(*callback)(bool focused));
+void wSetWindowResizeCallback(void(*callback)(int, int));
+void wGetWindowSize(int* x, int* y);
+void wGetMonitorSize(int* width, int* height);
 
 ////////                Keyboard             ////////
 
@@ -204,17 +204,17 @@ typedef int KeyboardKey;
 // this way compiler will not use this functions
 #ifdef __ANDROID__
 
-inline void SetWindowSize(int width, int height) {}
-inline void SetWindowPosition(int x, int y) {}
-inline void SetWindowMoveCallback(void(*callback)(int, int)) {}
-inline void SetWindowName(const char* name) {}
-inline void GetWindowPos(int* x, int* y) { *x=0; *y=0;}
+inline void wSetWindowSize(int width, int height) {}
+inline void wSetWindowPosition(int x, int y) {}
+inline void wSetWindowMoveCallback(void(*callback)(int, int)) {}
+inline void wSetWindowName(const char* name) {}
+inline void wGetWindowPos(int* x, int* y) { *x=0; *y=0;}
 
-inline bool EnterFullscreen(int fullscreenWidth, int fullscreenHeight) { return false; }
+inline bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight) { return false; }
 
-inline bool ExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) { return false; }
+inline bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) { return false; }
 
-inline void SetVSync(bool active) {}
+inline void wSetVSync(bool active) {}
 
 inline void SetMousePos(float x, float y) {}
 

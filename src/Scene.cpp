@@ -1,5 +1,6 @@
 
 #include <math.h> // sinf cosf
+
 #include "Scene.hpp"
 
 #include "../ASTL/Math/Matrix.hpp"
@@ -10,68 +11,15 @@
 
 #include "AssetManager.hpp"
 #include "Platform.hpp"
-#include "../External/glad.hpp"
-
-// from Renderer.cpp
-extern unsigned int g_DefaultTexture;
 
 Scene g_CurrentScene{};
 const int SceneVersion = 0;
 
-namespace ShadowSettings
-{
-    const int ShadowMapSize = 1 << (11 + !IsAndroid()); // mobile 2k, pc 4k
-    const float OrthoSize = 35.0f;
-    const float NearPlane = 1.0f;
-    const float FarPlane = 128.0f;
-    
-    const float Bias = 0.001f;
-    const Vector3f OrthoOffset{};
-
-    inline Matrix4 GetOrthoMatrix()
-    {
-        return Matrix4::OrthoRH(-OrthoSize, OrthoSize, -OrthoSize, OrthoSize, NearPlane, FarPlane);
-    }
-}
-
-static void WindowResizeCallback(int width, int height)
-{
-    g_CurrentScene.m_Camera.RecalculateProjection(width, height);
-}
-
 void Scene::Init()
 {
-    Vector2i windowStartSize;
-    GetMonitorSize(&windowStartSize.x, &windowStartSize.y);
-
-    m_Camera.Init(windowStartSize);
-    SetWindowResizeCallback(WindowResizeCallback);
-
+    float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
+    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
     //m_MatrixNeedsUpdate = bitset_create();
-    // setup shadow rendering
-
-    const char* vertexShaderSource =
-    AX_SHADER_VERSION_PRECISION()
-    R"(
-        layout(location = 0) in vec3 aPosition;
-        uniform mat4 model;
-        uniform mat4 lightMatrix;
-        
-        void main() {
-            gl_Position =  model * lightMatrix * vec4(aPosition, 1.0);
-        }
-    )";
-
-    const char* fragmentShaderSource = AX_SHADER_VERSION_PRECISION() "void main() { }";
-
-    m_ShadowShader      = CreateShader(vertexShaderSource, fragmentShaderSource);
-    m_ShadowFrameBuffer = CreateFrameBuffer();
-    m_ShadowTexture     = CreateShadowTexture(ShadowSettings::ShadowMapSize);
-    
-    BindFrameBuffer(m_ShadowFrameBuffer);
-    FrameBufferAttachDepth(m_ShadowTexture);
-    CheckFrameBuffer(m_ShadowFrameBuffer);
-    UnbindFrameBuffer();
 }
 
 void Scene::Destroy()
@@ -81,11 +29,11 @@ void Scene::Destroy()
         SubScene* scene = &m_LoadedSubScenes[i];
         ParsedGLTF& data = scene->data;
 
-        DeleteMesh(scene->bigMesh);
+        rDeleteMesh(scene->bigMesh);
     
         if (scene->textures) {
             for (int i = 0; i < data.numTextures; i++) {
-                DeleteTexture(scene->textures[i]);
+                rDeleteTexture(scene->textures[i]);
             }
         }
 
@@ -94,9 +42,6 @@ void Scene::Destroy()
         FreeParsedGLTF(&scene->data);
     }
     m_LoadedSubScenes.Clear();
-    DeleteTexture(m_ShadowTexture);
-    DeleteShader(m_ShadowShader);
-    DeleteFrameBuffer(m_ShadowFrameBuffer);
     // bitset_free(m_MatrixNeedsUpdate);
 }
 
@@ -247,6 +192,7 @@ int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
     bool firstLoad = !FileExist(path) || !IsABMLastVersion(path);
     if (firstLoad)
     {
+        ASSERT(!IsAndroid());
         ChangeExtension(path, StringLength(path), "gltf");
         parsed &= ParseGLTF(path, &scene->data, scale); ASSERT(parsed);
         CreateVerticesIndices(&scene->data);
@@ -266,157 +212,23 @@ int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
     // load to GPU
     LoadSceneImages(path, scene->textures, scene->data.numImages);
     
-    // load scene meshes
     ParsedGLTF& data = scene->data;
     
+    // create big mesh that contains all of the vertices and indices of an scene
     APrimitive primitive = data.meshes[0].primitives[0];
-    primitive.indices  = data.allIndices;
-    primitive.vertices = data.allVertices;
+    primitive.indices     = data.allIndices;
+    primitive.vertices    = data.allVertices;
     primitive.numIndices  = data.totalIndices;
     primitive.numVertices = data.totalVertices;
     primitive.indexType   = GraphicType_UnsignedInt;
-    CreateMeshFromPrimitive(&primitive, &scene->bigMesh);
+    rCreateMeshFromPrimitive(&primitive, &scene->bigMesh);
 
     return parsed;
-}
-
-
-void Scene::RenderShadows(SubSceneID sceneID)
-{
-    SubScene* scene = &m_LoadedSubScenes[sceneID];
-    
-    BindShader(m_ShadowShader);
-    BindFrameBuffer(m_ShadowFrameBuffer);
-    
-    BeginShadow();
-    ClearDepth();
-
-    SetViewportSize(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize);
-    
-    Matrix4 view  = Matrix4::LookAtRH(m_SunLight.dir * 150.0f, -m_SunLight.dir, Vector3f::Up());    
-    Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
-    m_LightMatrix = view * ortho;
-    SetShaderValue(m_LightMatrix.GetPtr(), GetUniformLocation("lightMatrix"), GraphicType_Matrix4);
-    
-    const Matrix4 model = Matrix4::CreateScale(scene->data.scale);
-    SetShaderValue(model.GetPtr(), GetUniformLocation("model"), GraphicType_Matrix4);
-
-    RenderMesh(scene->bigMesh); // render all scene with one draw call
-
-    EndShadow();
-    UnbindFrameBuffer();
-
-    Vector2i windowSize;
-    GetWindowSize(&windowSize.x, &windowSize.y);
-    SetViewportSize(windowSize.x, windowSize.y);
-}
-
-void Scene::RenderSubScene(SubSceneID sceneID)
-{
-    SubScene* scene = &m_LoadedSubScenes[sceneID];
-    ParsedGLTF& data = scene->data;
-
-    Shader currentShader = GetCurrentShader();
-    
-    static unsigned int viewPosLoc, sunDirLoc, albedoLoc = ~0u, normalMapLoc, hasNormalMapLoc, metallicMapLoc,
-                        shadowMapLoc, lightMatrixLoc, modelLoc, mvpLoc;
-
-    if (albedoLoc == ~0u)
-    {
-        float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
-        m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
-        RenderShadows(sceneID);
-
-        BindShader(currentShader);
-        viewPosLoc      = GetUniformLocation(currentShader, "viewPos");
-        sunDirLoc       = GetUniformLocation(currentShader, "sunDir");
-        albedoLoc       = GetUniformLocation(currentShader, "albedo");
-        normalMapLoc    = GetUniformLocation(currentShader, "normalMap");
-        hasNormalMapLoc = GetUniformLocation(currentShader, "hasNormalMap");
-        metallicMapLoc  = GetUniformLocation(currentShader, "metallicRoughnessMap");
-        shadowMapLoc    = GetUniformLocation(currentShader, "shadowMap");
-        lightMatrixLoc  = GetUniformLocation(currentShader, "lightMatrix");
-        modelLoc        = GetUniformLocation(currentShader, "model");
-        mvpLoc          = GetUniformLocation(currentShader, "mvp");
-    }
-
-    SetShaderValue(&m_Camera.position.x  , viewPosLoc    , GraphicType_Vector3f);
-    SetShaderValue(&m_SunLight.dir.x     , sunDirLoc     , GraphicType_Vector3f);
-    SetShaderValue(m_LightMatrix.GetPtr(), lightMatrixLoc, GraphicType_Matrix4);
-    
-    SetTexture(m_ShadowTexture, 3, shadowMapLoc);
-
-    int numNodes  = data.numNodes;
-    bool hasScene = data.numScenes > 0 && data.scenes[data.defaultSceneIndex].numNodes > 1;
-    AScene defaultScene;
-    if (hasScene)
-    {
-        defaultScene = data.scenes[data.defaultSceneIndex];
-        numNodes = defaultScene.numNodes;
-    }
-   
-    BindMesh(scene->bigMesh);
-
-    Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
-
-    for (int i = 0; i < numNodes; i++)
-    {
-        ANode node = hasScene ? data.nodes[defaultScene.nodes[i]] : data.nodes[i];
-        // if node is not mesh skip (camera)
-        if (node.type != 0 || node.index == -1) 
-            continue;
-
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        Matrix4 mvp = model * viewProjection;
-
-        SetShaderValue(mvp.GetPtr(), mvpLoc, GraphicType_Matrix4);
-        SetShaderValue(model.GetPtr(), modelLoc, GraphicType_Matrix4);
-
-        AMesh mesh = data.meshes[node.index];
-
-        for (int j = 0; j < mesh.numPrimitives; ++j)
-        {
-            APrimitive& primitive = mesh.primitives[j];
-            
-            if (primitive.numIndices == 0)
-                continue;
-
-            AMaterial material = data.materials[primitive.material];
-            // SetMaterial(&material);
-
-            int baseColorIndex = material.baseColorTexture.index;
-            if (scene->textures && baseColorIndex != -1)
-                SetTexture(scene->textures[baseColorIndex], 0, albedoLoc);
-            
-            int normalIndex  = material.GetNormalTexture().index;
-            int hasNormalMap = EnumHasBit(primitive.attributes, AAttribType_TANGENT) && normalIndex != -1;
-
-            if (scene->textures && hasNormalMap)
-                SetTexture(scene->textures[normalIndex], 1, normalMapLoc);
-            
-            SetShaderValue(hasNormalMap, hasNormalMapLoc);
-
-            int metalicRoughnessIndex = material.metallicRoughnessTexture.index;
-            // if (scene->textures && metalicRoughnessIndex != -1 && scene->textures[metalicRoughnessIndex].width != 0)
-            //     SetTexture(scene->textures[metalicRoughnessIndex], 2, metallicMapLoc);
-            // else
-            if (!IsAndroid())
-            {
-                Texture texture;
-                texture.handle = g_DefaultTexture;
-                SetTexture(texture, 2, metallicMapLoc);
-            }
-            int offset = primitive.indexOffset;
-            RenderMeshIndexOffset(scene->bigMesh, primitive.numIndices, offset);
-        }
-    }
 }
 
 void Scene::UpdateSubScene(SubSceneID scene)
 {
     // Scene* scene = &loadedScenes[sceneID];
-    // note: maybe load, textures one by one each frame like we do before.
-    m_Camera.Update();
 }
 
 SubScene* Scene::GetSubScene(SubSceneID scene)

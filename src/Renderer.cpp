@@ -136,7 +136,7 @@ const char* GetGLErrorString(GLenum error)
     return "UNKNOWN_GL_ERROR";
 }
 
-Texture CreateShadowTexture(int shadowmapSize)
+Texture rCreateShadowTexture(int shadowmapSize)
 {
     Texture texture;
     glGenTextures(1, &texture.handle);
@@ -164,7 +164,7 @@ Texture CreateShadowTexture(int shadowmapSize)
 }
 
 // type is either 0 or 1 if compressed. 1 means has alpha
-Texture CreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed)
+Texture rCreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed)
 {
     Texture texture;
     glGenTextures(1, &texture.handle);
@@ -235,7 +235,7 @@ static bool IsCompressed(const char* path, int pathLen)
 #endif
 }
 
-void ResizeTextureLoadBufferIfNecessarry(unsigned long long size)
+void rResizeTextureLoadBufferIfNecessarry(unsigned long long size)
 {
     if (g_TextureLoadBufferSize < size)
     {
@@ -245,7 +245,7 @@ void ResizeTextureLoadBufferIfNecessarry(unsigned long long size)
     }
 }
 
-Texture LoadTexture(const char* path, bool mipmap)
+Texture rLoadTexture(const char* path, bool mipmap)
 {
     int width, height, channels;
     unsigned char* image = nullptr;
@@ -263,7 +263,7 @@ Texture LoadTexture(const char* path, bool mipmap)
     AFile asset = AFileOpen(path, AOpenFlag_Read);
     uint64_t size = AFileSize(asset);
 
-    ResizeTextureLoadBufferIfNecessarry(size);
+    rResizeTextureLoadBufferIfNecessarry(size);
     
     bool compressed = IsCompressed(path, StringLength(path));
     if (!compressed)
@@ -284,7 +284,7 @@ Texture LoadTexture(const char* path, bool mipmap)
         return defTexture;
     }
     const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
-    Texture texture = CreateTexture(width, height, image, numCompToFormat[channels], mipmap, compressed);
+    Texture texture = rCreateTexture(width, height, image, numCompToFormat[channels], mipmap, compressed);
     if (!compressed)
     {
         stbi_image_free(image);
@@ -292,7 +292,7 @@ Texture LoadTexture(const char* path, bool mipmap)
     return texture;
 }
 
-void DeleteTexture(Texture texture) 
+void rDeleteTexture(Texture texture) 
 { 
     glDeleteTextures(1, &texture.handle); 
 }
@@ -301,19 +301,19 @@ void DeleteTexture(Texture texture)
 /*                                 Frame Buffer                             */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-FrameBuffer CreateFrameBuffer()
+FrameBuffer rCreateFrameBuffer()
 {
     FrameBuffer frameBuffer;
     glGenFramebuffers(1, &frameBuffer.handle);
     return frameBuffer;
 }
 
-void DeleteFrameBuffer(FrameBuffer frameBuffer)
+void rDeleteFrameBuffer(FrameBuffer frameBuffer)
 {
     glDeleteFramebuffers(1, &frameBuffer.handle);
 }
 
-bool CheckFrameBuffer(FrameBuffer framebuffer)
+bool rCheckFrameBuffer(FrameBuffer framebuffer)
 {
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
@@ -324,22 +324,22 @@ bool CheckFrameBuffer(FrameBuffer framebuffer)
     return true;
 }
 
-Texture CreateRenderTexture(int width, int height, TextureType type)
+Texture rCreateRenderTexture(int width, int height, TextureType type)
 {
-    return CreateTexture(width, height, nullptr, type, false, false);
+    return rCreateTexture(width, height, nullptr, type, false, false);
 }
 
-void BindFrameBuffer(FrameBuffer frameBuffer)
+void rBindFrameBuffer(FrameBuffer frameBuffer)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer.handle);
 }
 
-void UnbindFrameBuffer()
+void rUnbindFrameBuffer()
 {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void FrameBufferAttachDepth(Texture texture)
+void rFrameBufferAttachDepth(Texture texture)
 {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture.handle, 0);
     CHECK_GL_ERROR();
@@ -351,7 +351,7 @@ void FrameBufferAttachDepthStencil(Texture texture)
     CHECK_GL_ERROR();
 }
 
-void FrameBufferAttachColor(Texture texture, int index)
+void rFrameBufferAttachColor(Texture texture, int index)
 {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + index,
                            GL_TEXTURE_2D, texture.handle, 0);
@@ -389,7 +389,7 @@ inline unsigned int GLTFWrapToOGLWrap(int wrap) {
     return values[wrap];
 }
 
-GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
+GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
 {
     GPUMesh mesh;
     glGenBuffers(1, &mesh.vertexHandle);
@@ -439,7 +439,7 @@ GPUMesh CreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int num
     return mesh;
 }
 
-void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
+void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
 {
     InputLayoutDesc desc;
     const int NumLayout = 4;
@@ -456,30 +456,30 @@ void CreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
     desc.stride = sizeof(AVertex); 
     desc.numLayout = ArraySize(inputLayout);
 
-    *mesh = CreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
+    *mesh = rCreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 
-void BindMesh(GPUMesh mesh)
+void rBindMesh(GPUMesh mesh)
 {
     glBindVertexArray(mesh.vertexLayoutHandle);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
     CHECK_GL_ERROR();
 }
 
-void RenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset)
+void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset)
 {
     glDrawElements(GL_TRIANGLES, numIndex, mesh.indexType, (void*)((size_t)offset * sizeof(uint32)));
     CHECK_GL_ERROR();
 }
 
-void RenderMesh(GPUMesh mesh)
+void rRenderMesh(GPUMesh mesh)
 {
-    BindMesh(mesh);
+    rBindMesh(mesh);
     glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
     CHECK_GL_ERROR();
 }
 
-void DeleteMesh(GPUMesh mesh)
+void rDeleteMesh(GPUMesh mesh)
 {
     glDeleteVertexArrays(1, &mesh.vertexLayoutHandle);
     glDeleteBuffers(1, &mesh.vertexHandle);
@@ -492,32 +492,32 @@ void DeleteMesh(GPUMesh mesh)
 
 static unsigned int currentShader = 0;
 
-Shader GetCurrentShader()
+Shader rGetCurrentShader()
 {
     return {currentShader};
 }
 
-unsigned int GetUniformLocation(const char* name)
+unsigned int rGetUniformLocation(const char* name)
 {
     return glGetUniformLocation(currentShader, name);
 }
 
-unsigned int GetUniformLocation(Shader shader, const char* name)
+unsigned int rGetUniformLocation(Shader shader, const char* name)
 {
     return glGetUniformLocation(shader.handle, name);
 }
 
-void SetShaderValue(int   value, unsigned int location)
+void rSetShaderValue(int   value, unsigned int location)
 { 
     glUniform1i(location, value);
 }
 
-void SetShaderValue(float value, unsigned int location)
+void rSetShaderValue(float value, unsigned int location)
 { 
     glUniform1f(location, value);
 }
 
-void SetShaderValue(const void* value, unsigned int location, GraphicType type)
+void rSetShaderValue(const void* value, unsigned int location, GraphicType type)
 {
     switch (type)
     {
@@ -538,7 +538,7 @@ void SetShaderValue(const void* value, unsigned int location, GraphicType type)
     }
 }
 
-void SetMaterial(AMaterial* material)
+void rSetMaterial(AMaterial* material)
 {
     // TODO: set material
 }
@@ -554,7 +554,7 @@ static void CheckShaderError(uint shader)
         glGetShaderInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);
-        DestroyRenderer();
+        rDestroyRenderer();
     }
 }
 
@@ -569,11 +569,11 @@ static void CheckLinkerError(uint shader)
         glGetProgramInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);
-        DestroyRenderer();
+        rDestroyRenderer();
     }
 }
 
-Shader CreateShader(const char* vertexSource, const char* fragmentSource)
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource)
 {
     // Vertex shader
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -605,7 +605,7 @@ Shader CreateShader(const char* vertexSource, const char* fragmentSource)
     return {shaderProgram};
 }
 
-Shader CreateFullScreenShader(const char* fragmentSource)
+Shader rCreateFullScreenShader(const char* fragmentSource)
 {
     const GLchar* vertexShaderSource =
     AX_SHADER_VERSION_PRECISION()
@@ -618,21 +618,21 @@ Shader CreateFullScreenShader(const char* fragmentSource)
     	texCoord.y = 1.0 - texCoord.y;\n\
         gl_Position = vec4(x, y, 0, 1);\n\
     }";
-    return CreateShader(vertexShaderSource, fragmentSource);
+    return rCreateShader(vertexShaderSource, fragmentSource);
 }
 
-Shader ImportShader(const char* vertexPath, const char* fragmentPath)
+Shader rImportShader(const char* vertexPath, const char* fragmentPath)
 {
     char* vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     char* fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     
-    Shader shader = CreateShader(vertexText, fragmentText);
+    Shader shader = rCreateShader(vertexText, fragmentText);
     FreeAllText(vertexText);
     FreeAllText(fragmentText);
     return shader;
 }
 
-void DeleteShader(Shader shader)    
+void rDeleteShader(Shader shader)    
 {
     glDeleteProgram(shader.handle);       
 }
@@ -656,7 +656,7 @@ static void CreateDefaultTexture()
         img[i * 2 + 0] = 85;  // metallic 
         img[i * 2 + 1] = 125; // roughness
     }
-    g_DefaultTexture = CreateTexture(32, 32, img, TextureType_RG8, false).handle;
+    g_DefaultTexture = rCreateTexture(32, 32, img, TextureType_RG8, false).handle;
 }
 
 static void CreateDefaultScreenShader()
@@ -671,10 +671,10 @@ static void CreateDefaultScreenShader()
             color = texture(tex, texCoord);
         }
     )";
-    m_DefaultFragShader = CreateFullScreenShader(fragmentShaderSource);
+    m_DefaultFragShader = rCreateFullScreenShader(fragmentShaderSource);
 }
 
-void InitRenderer()
+void rInitRenderer()
 {
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CCW);
@@ -696,24 +696,24 @@ void InitRenderer()
     g_TextureLoadBuffer = new unsigned char[g_TextureLoadBufferSize];
 }
 
-void SetDepthTest(bool val)
+void rSetDepthTest(bool val)
 {
     void(*EnableDisable[2])(unsigned int) = { glDisable, glEnable};
     EnableDisable[val](GL_DEPTH_TEST);
 }
 
-void SetDepthWrite(bool val) 
+void rSetDepthWrite(bool val) 
 {
     glDepthMask(val); 
 }
 
-void ClearDepth()
+void rClearDepth()
 {
     glClear(GL_DEPTH_BUFFER_BIT); //| GL_STENCIL_BUFFER_BIT
     CHECK_GL_ERROR();
 }
 
-void BeginShadow()
+void rBeginShadow()
 {
     glReadBuffer(GL_NONE);
     glCullFace(GL_FRONT);
@@ -721,19 +721,19 @@ void BeginShadow()
     CHECK_GL_ERROR();
 }
 
-void EndShadow()
+void rEndShadow()
 {
     glCullFace(GL_BACK);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     CHECK_GL_ERROR();
 }
 
-void ClearColor(float r, float g, float b, float a)
+void rClearColor(float r, float g, float b, float a)
 {
     glClearColor(r, g, b, a);
 }
 
-void RenderFullScreen(Shader fullScreenShader, unsigned int texture)
+void rRenderFullScreen(Shader fullScreenShader, unsigned int texture)
 {
     glUseProgram(fullScreenShader.handle);
     glBindVertexArray(m_EmptyVAO);
@@ -744,34 +744,34 @@ void RenderFullScreen(Shader fullScreenShader, unsigned int texture)
     CHECK_GL_ERROR();
 }
 
-void RenderFullScreen(unsigned int texture)
+void rRenderFullScreen(unsigned int texture)
 {
-    RenderFullScreen(m_DefaultFragShader, texture);
+    rRenderFullScreen(m_DefaultFragShader, texture);
 }
 
-void BindShader(Shader shader)
+void rBindShader(Shader shader)
 {
     glUseProgram(shader.handle);
     currentShader = shader.handle;
     CHECK_GL_ERROR();
 }
 
-void SetTexture(Texture texture, int index, unsigned int location)
+void rSetTexture(Texture texture, int index, unsigned int location)
 {
     glActiveTexture(GL_TEXTURE0 + index);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glUniform1i(location, index);
 }
 
-void SetViewportSize(int width, int height)
+void rSetViewportSize(int width, int height)
 {
     glViewport(0, 0, width, height);
 }
 
-void DestroyRenderer()
+void rDestroyRenderer()
 {
     glDeleteTextures(1, &g_DefaultTexture);
-    DeleteShader(m_DefaultFragShader);
+    rDeleteShader(m_DefaultFragShader);
 
     delete[] g_TextureLoadBuffer;
     g_TextureLoadBuffer = nullptr;

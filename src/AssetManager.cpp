@@ -9,6 +9,7 @@
 
 #include "AssetManager.hpp"
 #include "Platform.hpp"
+#include "Renderer.hpp"
 
 #if !AX_GAME_BUILD
 	#include "../External/ufbx.h"
@@ -465,7 +466,6 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
     
 	uint64_t reserved[4] = { 0xABFABF };
 	AFileWrite(&reserved, sizeof(uint64_t) * 4, file);
-	AFileWrite(&reserved, sizeof(uint64_t) * 4, file);
    
 	AFileWrite(&gltf->scale, sizeof(float), file);
 	AFileWrite(&gltf->numMeshes, sizeof(short), file);
@@ -826,7 +826,3 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 	return 1;
 }
 
-void DestroyAssetManager()
-{
-
-}

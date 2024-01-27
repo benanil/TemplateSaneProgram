@@ -398,7 +398,7 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 
 		const bool hasMipMap = true;
 		const bool isCompresed = true;
-		textures[i] = CreateTexture(info.width, info.height, currentImage, textureType, hasMipMap, isCompresed);
+		textures[i] = rCreateTexture(info.width, info.height, currentImage, textureType, hasMipMap, isCompresed);
 		currentImage += imageSize;
 
 		if_constexpr (IsAndroid())
