@@ -108,3 +108,5 @@ REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
 REM -o SaneProgram ^
 REM -lopengl32 -lgdi32 -mno-needed SaneProgram.res
+
+REM g++ -std=c++14 -O3 -mavx2 -march=native -msse4.2 -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc RandomSSAOKernelGen.cpp -o RandomSSAOKernelGen.exe

@@ -20,6 +20,12 @@ windres SaneProgram.rc -O coff -o SaneProgram.res
 ```
 To change icon and information of the .exe: <br>
 Visual Studio go to SolutionExplorer-> right click SaneProgram->AddExisting->SaneProgram.res
+
+# Good to Know
+'r' prefix used for renderer functions
+'w' prefix used for windowing functions
+this is doom like thing
+
 # Contributing
 
 feel free to contribute

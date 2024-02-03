@@ -80,46 +80,52 @@ struct TextureFormat
     GLenum type;
 };
 
+#ifndef GL_RG16_SNORM
+    #define GL_RG16_SNORM 0x8F99
+    #define GL_R16_SNORM 0x8F98
+#endif
 // https://www.khronos.org/opengles/sdk/docs/man31/html/glTexImage2D.xhtml
 static const TextureFormat TextureFormatTable[] =
 {
-    {   GL_R8             , GL_RED,             GL_UNSIGNED_BYTE                 }, // TextureType_R8           = 0,
-    {   GL_R8_SNORM       , GL_RED,             GL_BYTE                          }, // TextureType_R8_SNORM     = 1,
-    {   GL_R16F           , GL_RED,             GL_HALF_FLOAT                    }, // TextureType_R16F         = 2,
-    {   GL_R32F           , GL_RED,             GL_FLOAT                         }, // TextureType_R32F         = 3,
-    {   GL_R8UI           , GL_RED_INTEGER ,    GL_UNSIGNED_BYTE                 }, // TextureType_R8UI         = 4,
-    {   GL_R16UI          , GL_RED_INTEGER ,    GL_UNSIGNED_SHORT                }, // TextureType_R16UI        = 5,
-    {   GL_R32UI          , GL_RED_INTEGER ,    GL_UNSIGNED_INT                  }, // TextureType_R32UI        = 6,
-    {   GL_RG8            , GL_RG,              GL_UNSIGNED_BYTE                 }, // TextureType_RG8	         = 7,
-    {   GL_RG8_SNORM      , GL_RG,              GL_BYTE                          }, // TextureType_RG8_SNORM    = 8,
-    {   GL_RG16F          , GL_RG,              GL_HALF_FLOAT                    }, // TextureType_RG16F        = 9,
-    {   GL_RG32F          , GL_RG,              GL_FLOAT                         }, // TextureType_RG32F        = 10,
-    {   GL_RG16UI         , GL_RG_INTEGER,      GL_UNSIGNED_SHORT                }, // TextureType_RG16UI       = 11,
-    {   GL_RG32UI         , GL_RG_INTEGER,      GL_UNSIGNED_INT                  }, // TextureType_RG32UI       = 12,
-    {   GL_RGB8           , GL_RGB,             GL_UNSIGNED_BYTE                 }, // TextureType_RGB8         = 13,
-    {   GL_SRGB8          , GL_RGB,             GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8        = 14,
-    {   GL_RGB8_SNORM     , GL_RGB,             GL_BYTE                          }, // TextureType_RGB8_SNORM   = 15,
-    {   GL_R11F_G11F_B10F , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_R11F_G11F_B1 = 16,
-    {   GL_RGB9_E5        , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB9_E5      = 17,
-    {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB16F       = 18,
-    {   GL_RGB32F         , GL_RGB,             GL_FLOAT                         }, // TextureType_RGB32F       = 19,
-    {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, // TextureType_RGB8UI       = 20,
-    {   GL_RGB16UI        , GL_RGB_INTEGER,     GL_UNSIGNED_SHORT                }, // TextureType_RGB16UI      = 21,
-    {   GL_RGB32UI        , GL_RGB_INTEGER,     GL_UNSIGNED_INT                  }, // TextureType_RGB32UI      = 22,
-    {   GL_RGBA8          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8        = 23,
-    {   GL_SRGB8_ALPHA8   , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8_ALPHA8 = 24,
-    {   GL_RGBA8_SNORM    , GL_RGBA,            GL_BYTE                          }, // TextureType_RGBA8_SNORM  = 25,
-    {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGB5_A1      = 26,
-    {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA4        = 27,
-    {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, // TextureType_RGB10_A2     = 28,
-    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, // TextureType_RGBA16F      = 29,
-    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, // TextureType_RGBA32F      = 30,
-    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI      = 31,
-    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI     = 33,
-    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI     = 34,
-    {}, {}, {}, {},                                                                 // Compressed Formats
-    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8             }, // TextureType_DepthStencil24
-    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8             }, // TextureType_DepthStencil32
+    {   GL_R8             , GL_RED,             GL_UNSIGNED_BYTE                 }, // TextureType_R8            = 0,
+    {   GL_R8_SNORM       , GL_RED,             GL_BYTE                          }, // TextureType_R8_SNORM      = 1,
+    {   GL_R16F           , GL_RED,             GL_HALF_FLOAT                    }, // TextureType_R16F          = 2,
+    {   GL_R16_SNORM      , GL_RED,             GL_SHORT                         }, // TextureType_R16_SNORM     = 3         
+    {   GL_R32F           , GL_RED,             GL_FLOAT                         }, // TextureType_R32F          = 4,
+    {   GL_R8UI           , GL_RED_INTEGER ,    GL_UNSIGNED_BYTE                 }, // TextureType_R8UI          = 5,
+    {   GL_R16UI          , GL_RED_INTEGER ,    GL_UNSIGNED_SHORT                }, // TextureType_R16UI         = 6,
+    {   GL_R32UI          , GL_RED_INTEGER ,    GL_UNSIGNED_INT                  }, // TextureType_R32UI         = 7,
+    {   GL_RG8            , GL_RG,              GL_UNSIGNED_BYTE                 }, // TextureType_RG8	         = 8,
+    {   GL_RG8_SNORM      , GL_RG,              GL_BYTE                          }, // TextureType_RG8_SNORM     = 9,
+    {   GL_RG16F          , GL_RG,              GL_HALF_FLOAT                    }, // TextureType_RG16F         = 10,
+    {   GL_RG32F          , GL_RG,              GL_FLOAT                         }, // TextureType_RG32F         = 11,
+    {   GL_RG16UI         , GL_RG_INTEGER,      GL_UNSIGNED_SHORT                }, // TextureType_RG16UI        = 12,
+    {   GL_RG16_SNORM     , GL_RG_INTEGER,      GL_SHORT                         }, // TextureType_RG16_SNORM    = 13,
+    {   GL_RG32UI         , GL_RG_INTEGER,      GL_UNSIGNED_INT                  }, // TextureType_RG32UI        = 14,
+    {   GL_RGB8           , GL_RGB,             GL_UNSIGNED_BYTE                 }, // TextureType_RGB8          = 15,
+    {   GL_SRGB8          , GL_RGB,             GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8         = 16,
+    {   GL_RGB8_SNORM     , GL_RGB,             GL_BYTE                          }, // TextureType_RGB8_SNORM    = 17,
+    {   GL_R11F_G11F_B10F , GL_RGB,             GL_FLOAT                         }, // TextureType_R11F_G11F_B10 = 18,
+    {   GL_RGB9_E5        , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB9_E5       = 19,
+    {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB16F        = 20,
+    {   GL_RGB32F         , GL_RGB,             GL_FLOAT                         }, // TextureType_RGB32F        = 21,
+    {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, // TextureType_RGB8UI        = 22,
+    {   GL_RGB16UI        , GL_RGB_INTEGER,     GL_UNSIGNED_SHORT                }, // TextureType_RGB16UI       = 23,
+    {   GL_RGB32UI        , GL_RGB_INTEGER,     GL_UNSIGNED_INT                  }, // TextureType_RGB32UI       = 24,
+    {   GL_RGBA8          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8         = 25,
+    {   GL_SRGB8_ALPHA8   , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8_ALPHA8  = 26,
+    {   GL_RGBA8_SNORM    , GL_RGBA,            GL_BYTE                          }, // TextureType_RGBA8_SNORM   = 27,
+    {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGB5_A1       = 28,
+    {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA4         = 29,
+    {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, // TextureType_RGB10_A2      = 30,
+    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, // TextureType_RGBA16F       = 31,
+    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, // TextureType_RGBA32F       = 33,
+    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 34,
+    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 35,
+    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 36,
+    {}, {}, {}, {},{},                                                              // Compressed Formats
+    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24
+    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32
 };
 
 const char* GetGLErrorString(GLenum error) 
@@ -136,43 +142,53 @@ const char* GetGLErrorString(GLenum error)
     return "UNKNOWN_GL_ERROR";
 }
 
-Texture rCreateShadowTexture(int shadowmapSize)
+void rCopyTexture(Texture a, Texture b)
+{
+    // note: todo??
+    CHECK_GL_ERROR();
+}
+
+Texture rCreateDepthTexture(int width, int height, DepthType depthType)
 {
     Texture texture;
+    texture.width  = width;
+    texture.height = height;
+    texture.buffer = nullptr;
+    texture.type   = TextureType_DepthStencil24; // < ??
     glGenTextures(1, &texture.handle);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, shadowmapSize, shadowmapSize);
-    CHECK_GL_ERROR();
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16 + depthType, width, height);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-
     const float borderColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-
-    texture.width  = shadowmapSize;
-    texture.height = shadowmapSize;
-    texture.buffer = nullptr;
-    texture.type   = TextureType_DepthStencil24;
-
     CHECK_GL_ERROR();
     return texture;
 }
 
 // type is either 0 or 1 if compressed. 1 means has alpha
-Texture rCreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed)
+Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags)
 {
     Texture texture;
     glGenTextures(1, &texture.handle);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, IsAndroid() ? GL_NEAREST : GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmap ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR);
+    int wrapMode = (flags & TexFlags_ClampToEdge) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+    bool mipmap     = !!(flags & TexFlags_MipMap);
+    bool nearest    = !!(flags & TexFlags_Nearest);
+    bool compressed = !!(flags & TexFlags_Compressed);
+
+    __const int defaultMagFilter = IsAndroid() ? GL_NEAREST : GL_LINEAR;
+    __const int mipmapFilter = IsAndroid() ? GL_NEAREST_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_NEAREST;
+    int minFilter = nearest ? GL_NEAREST : GL_LINEAR;
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : defaultMagFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmap ? mipmapFilter : minFilter);
 
     texture.width  = width;
     texture.height = height;
@@ -185,10 +201,10 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, bool
         glTexImage2D(GL_TEXTURE_2D, 0, format.internalFormat, width, height, 0, format.format, format.type, data);
     }
     else
-#ifndef __ANDROID__ 
+    #ifndef __ANDROID__ 
     {
         int blockSize = width * height;
-        blockSize >>= type == TextureType_CompressedR; // bc4 is 0.5 byte per pixel
+        blockSize >>= int(type == TextureType_CompressedR); // bc4 is 0.5 byte per pixel
 
         const int compressedMap[] =
         {
@@ -200,7 +216,7 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, bool
         int arrIndex = type-TextureType_CompressedR;
         glCompressedTexImage2D(GL_TEXTURE_2D, 0, compressedMap[arrIndex], width, height, 0, blockSize, data);
     }
-#else
+    #else
     {
         int numMips = MAX((int)Log2((unsigned)width) >> 1, 1) - 1;
 
@@ -216,7 +232,7 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, bool
             mip++;
         } while(numMips-- > 0);
     }
-#endif
+    #endif
     
     if (!IsAndroid() && mipmap)
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -235,7 +251,7 @@ static bool IsCompressed(const char* path, int pathLen)
 #endif
 }
 
-void rResizeTextureLoadBufferIfNecessarry(unsigned long long size)
+static void rResizeTextureLoadBufferIfNecessarry(unsigned long long size)
 {
     if (g_TextureLoadBufferSize < size)
     {
@@ -265,11 +281,11 @@ Texture rLoadTexture(const char* path, bool mipmap)
 
     rResizeTextureLoadBufferIfNecessarry(size);
     
-    bool compressed = IsCompressed(path, StringLength(path));
+    int compressed = IsCompressed(path, StringLength(path));
     if (!compressed)
     {
         AFileRead(g_TextureLoadBuffer, size, asset);
-        image = stbi_load_from_memory(g_TextureLoadBuffer , size, &width, &height, &channels, 0);
+        image = stbi_load_from_memory(g_TextureLoadBuffer, (int)size, &width, &height, &channels, 0);
     }
     else
     {
@@ -284,7 +300,8 @@ Texture rLoadTexture(const char* path, bool mipmap)
         return defTexture;
     }
     const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
-    Texture texture = rCreateTexture(width, height, image, numCompToFormat[channels], mipmap, compressed);
+    TexFlags flags = (int)mipmap | (compressed << 1);
+    Texture texture = rCreateTexture(width, height, image, numCompToFormat[channels], flags);
     if (!compressed)
     {
         stbi_image_free(image);
@@ -313,7 +330,7 @@ void rDeleteFrameBuffer(FrameBuffer frameBuffer)
     glDeleteFramebuffers(1, &frameBuffer.handle);
 }
 
-bool rCheckFrameBuffer(FrameBuffer framebuffer)
+bool rFrameBufferCheck()
 {
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
@@ -322,11 +339,6 @@ bool rCheckFrameBuffer(FrameBuffer framebuffer)
         return false;
     }
     return true;
-}
-
-Texture rCreateRenderTexture(int width, int height, TextureType type)
-{
-    return rCreateTexture(width, height, nullptr, type, false, false);
 }
 
 void rBindFrameBuffer(FrameBuffer frameBuffer)
@@ -341,11 +353,12 @@ void rUnbindFrameBuffer()
 
 void rFrameBufferAttachDepth(Texture texture)
 {
+    // glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, texture.handle);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture.handle, 0);
     CHECK_GL_ERROR();
 }
 
-void FrameBufferAttachDepthStencil(Texture texture)
+void rFrameBufferAttachDepthStencil(Texture texture)
 {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texture.handle, 0);
     CHECK_GL_ERROR();
@@ -353,9 +366,19 @@ void FrameBufferAttachDepthStencil(Texture texture)
 
 void rFrameBufferAttachColor(Texture texture, int index)
 {
+    glBindTexture(GL_TEXTURE_2D, texture.handle);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + index,
                            GL_TEXTURE_2D, texture.handle, 0);
     CHECK_GL_ERROR();
+}
+
+void rFrameBufferSetNumColorBuffers(int numBuffers)
+{
+    // - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
+    unsigned int attachments[8];
+    for (int i = 0; i < 8; i++) 
+        attachments[i] = GL_COLOR_ATTACHMENT0 + i;
+    glDrawBuffers(numBuffers, attachments);
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -615,7 +638,7 @@ Shader rCreateFullScreenShader(const char* fragmentSource)
     	float y = -1.0 + float((gl_VertexID & 2) << 1);\n\
     	texCoord.x = (x + 1.0) * 0.5;\n\
     	texCoord.y = (y + 1.0) * 0.5;\n\
-    	texCoord.y = 1.0 - texCoord.y;\n\
+    	//texCoord.y = 1.0 - texCoord.y;\n\
         gl_Position = vec4(x, y, 0, 1);\n\
     }";
     return rCreateShader(vertexShaderSource, fragmentSource);
@@ -656,7 +679,7 @@ static void CreateDefaultTexture()
         img[i * 2 + 0] = 85;  // metallic 
         img[i * 2 + 1] = 125; // roughness
     }
-    g_DefaultTexture = rCreateTexture(32, 32, img, TextureType_RG8, false).handle;
+    g_DefaultTexture = rCreateTexture(32, 32, img, TextureType_RG8, TexFlags_None).handle;
 }
 
 static void CreateDefaultScreenShader()
@@ -709,8 +732,12 @@ void rSetDepthWrite(bool val)
 
 void rClearDepth()
 {
-    glClear(GL_DEPTH_BUFFER_BIT); //| GL_STENCIL_BUFFER_BIT
-    CHECK_GL_ERROR();
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void rClearDepthStencil()
+{
+    glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT); 
 }
 
 void rBeginShadow()
@@ -747,6 +774,12 @@ void rRenderFullScreen(Shader fullScreenShader, unsigned int texture)
 void rRenderFullScreen(unsigned int texture)
 {
     rRenderFullScreen(m_DefaultFragShader, texture);
+}
+
+void rRenderFullScreen()
+{
+    glBindVertexArray(m_EmptyVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 void rBindShader(Shader shader)

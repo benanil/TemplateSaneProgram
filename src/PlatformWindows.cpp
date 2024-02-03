@@ -44,10 +44,10 @@ struct PlatformContextWin
     HWND hwnd       = nullptr;
 
     // Input Code, 128 bit bitmasks for key states.
-    unsigned long DownKeys[2]{};
-    unsigned long LastKeys[2]{};
-    unsigned long PressedKeys[2]{};
-    unsigned long ReleasedKeys[2]{};
+    unsigned long DownKeys[2]={};
+    unsigned long LastKeys[2]={};
+    unsigned long PressedKeys[2]={};
+    unsigned long ReleasedKeys[2]={};
     // Mouse
     int    MouseDown, MouseLast, MousePressed, MouseReleased;
     float  MousePosX, MousePosY;
@@ -60,12 +60,12 @@ struct PlatformContextWin
     bool VSyncActive;
 } PlatformCtx{}; 
 
-static char WindowName[64]{ 'A', 'S', 'T', 'L' };
+static char WindowName[64] = { 'S', 'a', 'n', 'e', 'E', 'n', 'g', 'i', 'n', 'e' };
 
 
 void wSetFocusChangedCallback(void(*callback)(bool))         { PlatformCtx.FocusChangedCallback = callback; }
-void SetKeyPressCallback    (void(*callback)(wchar_t))      { PlatformCtx.KeyPressCallback     = callback; }
-void SetMouseMoveCallback   (void(*callback)(float, float)) { PlatformCtx.MouseMoveCallback    = callback; }
+void SetKeyPressCallback     (void(*callback)(wchar_t))      { PlatformCtx.KeyPressCallback     = callback; }
+void SetMouseMoveCallback    (void(*callback)(float, float)) { PlatformCtx.MouseMoveCallback    = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback; }
 void wSetWindowMoveCallback  (void(*callback)(int, int))     { PlatformCtx.WindowMoveCallback   = callback; }
 
@@ -110,136 +110,6 @@ void wGetMonitorSize(int* width, int* height)
 void wSetVSync(bool active)
 {
     PlatformCtx.VSyncActive = active; 
-}
-
-/********************************************************************************/
-/*                       OpenGL, WGL Initialization                             */
-/********************************************************************************/
-
-// See https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_create_context.txt for all values
-// See https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_pixel_format.txt for all values
-// See https://gist.github.com/nickrolfe/1127313ed1dbf80254b614a721b3ee9c
-typedef HGLRC WINAPI wglCreateContextAttribsARB_type(HDC hdc, HGLRC hShareContext, const int* attribList);
-typedef BOOL WINAPI wglChoosePixelFormatARB_type(HDC hdc, const int* piAttribIList, const FLOAT* pfAttribFList, UINT nMaxFormats, int* piFormats, UINT* nNumFormats);
-
-wglCreateContextAttribsARB_type* wglCreateContextAttribsARB;
-wglChoosePixelFormatARB_type* wglChoosePixelFormatARB = nullptr;
-
-BOOL(WINAPI* wglSwapIntervalEXT)(int) = nullptr;
-
-#include <stdio.h>
-
-void FatalError(const char* format, ...)
-{
-    char buffer[1024]; // Adjust the size according to your needs
-    // Format the error message
-    va_list args;
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
-    printf(buffer);
-    OutputDebugString(buffer);
-    // Display the message box
-    MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
-}
-
-static void InitOpenGLExtensions(void)
-{
-    // Before we can load extensions, we need a dummy OpenGL context, created using a dummy window.
-    // We use a dummy window because you can only set the pixel format for a window once.
-    WNDCLASSA window_class{};
-    window_class.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    window_class.lpfnWndProc   = DefWindowProcA;
-    window_class.hInstance     = GetModuleHandle(0);
-    window_class.lpszClassName = "Dummy_WGL_StagingWindow";
-    
-    if (!RegisterClass(&window_class)) 
-        FatalError("Failed to register dummy OpenGL window.");
-    
-    HWND dummy_window = CreateWindowExA(0, window_class.lpszClassName, "ASTL Window",
-                                        0, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0,
-                                        0, window_class.hInstance, 0);
-    
-    if (!dummy_window) FatalError("Failed to create dummy OpenGL window.");
-    
-    HDC dummy_dc = GetDC(dummy_window);
-    PIXELFORMATDESCRIPTOR pfd{};
-    pfd.nSize        = sizeof(pfd);
-    pfd.nVersion     = 1;
-    pfd.iPixelType   = PFD_TYPE_RGBA;
-    pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.cColorBits   = 32;
-    pfd.cAlphaBits   = 8;
-    pfd.iLayerType   = PFD_MAIN_PLANE;
-    pfd.cDepthBits   = 24;
-    pfd.cStencilBits = 8;
-    
-    int pixel_format = ChoosePixelFormat(dummy_dc, &pfd);
-    if (!pixel_format) FatalError("Failed to find a suitable pixel format.");
-    
-    if (!SetPixelFormat(dummy_dc, pixel_format, &pfd)) FatalError("Failed to set the pixel format.");
-    
-    HGLRC dummy_context = wglCreateContext(dummy_dc);
-    if (!dummy_context) FatalError("Failed to create a dummy OpenGL rendering context.");
-    
-    if (!wglMakeCurrent(dummy_dc, dummy_context)) FatalError("Failed to activate dummy OpenGL rendering context.");
-    
-    wglCreateContextAttribsARB = (wglCreateContextAttribsARB_type*)wglGetProcAddress("wglCreateContextAttribsARB");
-    wglChoosePixelFormatARB    = (wglChoosePixelFormatARB_type*)wglGetProcAddress("wglChoosePixelFormatARB");
-    wglSwapIntervalEXT         = (BOOL(WINAPI*)(int)) wglGetProcAddress("wglSwapIntervalEXT");
-
-    wglMakeCurrent(dummy_dc, 0);
-    wglDeleteContext(dummy_context);
-    ReleaseDC(dummy_window, dummy_dc);
-    DestroyWindow(dummy_window);
-}
-
-static HGLRC InitOpenGL(HDC real_dc)
-{
-    InitOpenGLExtensions();
-    // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
-    int pixel_format_attribs[] = {
-                                 0x2001,          1, // WGL_DRAW_TO_WINDOW_ARB
-                                 0x2010,          1, // WGL_SUPPORT_OPENGL_ARB
-                                 0x2011,          1, // WGL_DOUBLE_BUFFER_ARB
-                                 0x2003,     0x2027, // WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB
-                                 0x2013,     0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
-                                 0x2014,         32, // WGL_COLOR_BITS_ARB
-                                 0x2022,         24, // WGL_DEPTH_BITS_ARB
-                                 0x2023,          8, // WGL_STENCIL_BITS_ARB
-                                 0x20A9,          1, // WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB <- SRGB support
-                                 0x2041,          1, // WGL_SAMPLE_BUFFERS_ARB           <- enable MSAA
-                                 0x2042,          8, // WGL_SAMPLES_ARB                  <- 4x MSAA
-                                 0
-    };
-    
-    int pixel_format;
-    UINT num_formats;
-    wglChoosePixelFormatARB(real_dc, pixel_format_attribs, 0, 1, &pixel_format, &num_formats);
-    if (!num_formats) 
-    FatalError("Failed to set the OpenGL 3.3 pixel format.");
-    
-    PIXELFORMATDESCRIPTOR pfd;
-    DescribePixelFormat(real_dc, pixel_format, sizeof(pfd), &pfd);
-    if (!SetPixelFormat(real_dc, pixel_format, &pfd)) 
-    FatalError("Failed to set the OpenGL 3.3 pixel format.");
-    
-    // Specify that we want to create an OpenGL 3.2 core profile context
-    int gl32_attribs[] = {
-                         0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
-                         0x2092, 2, // WGL_CONTEXT_MINOR_VERSION_ARB
-                         0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
-                         0,
-    };
-    
-    HGLRC gl32_context = wglCreateContextAttribsARB(real_dc, 0, gl32_attribs);
-    if (!gl32_context) 
-    FatalError("Failed to create OpenGL 3.2 context.");
-    
-    if (!wglMakeCurrent(real_dc, gl32_context)) 
-    FatalError("Failed to activate OpenGL 3.2 rendering context.");
-    
-    return gl32_context;
 }
 
 /********************************************************************************/
@@ -306,11 +176,6 @@ float GetMouseWheelDelta()
     return PlatformCtx.MouseWheelDelta; 
 }
 
-static void UpdateRenderArea()
-{
-    glViewport(0, 0, PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
-}
-
 static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     LRESULT result = 0;
@@ -338,7 +203,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_SYSKEYDOWN:
         {
             if (wparam > 127) break;
-            SetBit128(PlatformCtx.DownKeys, wparam);
+            SetBit128(PlatformCtx.DownKeys, (int)wparam);
             break;
         }
         case WM_SETFOCUS:
@@ -350,7 +215,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_SYSKEYUP:
         {
             if (wparam > 127) break;
-            ResetBit128(PlatformCtx.DownKeys, wparam);
+            ResetBit128(PlatformCtx.DownKeys, (int)wparam);
             break;
         }
         case WM_CHAR:
@@ -361,7 +226,6 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_SIZE:
             PlatformCtx.WindowWidth  = LOWORD(lparam);
             PlatformCtx.WindowHeight = HIWORD(lparam);
-            UpdateRenderArea();
             if (PlatformCtx.WindowResizeCallback)
                 PlatformCtx.WindowResizeCallback(PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
             break;
@@ -380,40 +244,199 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
     return result;
 }
 
-static HWND WindowCreate(HINSTANCE inst)
-{
-    WNDCLASSA window_class{};
-    window_class.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    window_class.lpfnWndProc   = WindowCallback;
-    window_class.hInstance     = inst;
-    window_class.hCursor       = LoadCursor(0, IDC_ARROW);
-    window_class.hbrBackground = 0;
-    window_class.lpszClassName = "ASTLWindow";
-    window_class.hIcon         = LoadIconA(inst, "icon");
-    
-    if (!RegisterClassA(&window_class))
-    FatalError("Failed to register window.");
-    
-    // Specify a desired width and height, then adjust the rect so the window's client area will be that size.
-    RECT rect{};
-    rect.right  = PlatformCtx.WindowWidth;
-    rect.bottom = PlatformCtx.WindowHeight;
-    const DWORD window_style = WS_OVERLAPPEDWINDOW;
+/********************************************************************************/
+/*                       OpenGL, WGL Initialization                             */
+/********************************************************************************/
 
-    AdjustWindowRect(&rect, window_style, false);
+// See https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_create_context.txt for all values
+// See https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_pixel_format.txt for all values
+// See https://gist.github.com/nickrolfe/1127313ed1dbf80254b614a721b3ee9c
+typedef HGLRC WINAPI wglCreateContextAttribsARB_type(HDC hdc, HGLRC hShareContext, const int* attribList);
+typedef BOOL WINAPI wglChoosePixelFormatARB_type(HDC hdc, const int* piAttribIList, const FLOAT* pfAttribFList, UINT nMaxFormats, int* piFormats, UINT* nNumFormats);
+
+wglCreateContextAttribsARB_type* wglCreateContextAttribsARB;
+wglChoosePixelFormatARB_type* wglChoosePixelFormatARB = nullptr;
+
+BOOL(WINAPI* wglSwapIntervalEXT)(int) = nullptr;
+
+#include <stdio.h>
+
+void FatalError(const char* format, ...)
+{
+    char buffer[1024]; // Adjust the size according to your needs
+    // Format the error message
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    printf(buffer);
+    OutputDebugString(buffer);
+    // Display the message box
+    MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
+}
+
+// https://gist.github.com/mmozeiko/6825cb94d393cb4032d250b8e7cc9d14
+static void GetWglFunctions(void)
+{
+    // to get WGL functions we need valid GL context, so create dummy window for dummy GL contetx
+    HWND dummy = CreateWindowExW(
+        0, L"STATIC", L"DummyWindow", WS_OVERLAPPED,
+        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+        NULL, NULL, NULL, NULL);
+    ASSERT(dummy && "Failed to create dummy window");
+
+    HDC dc = GetDC(dummy);
+    ASSERT(dc && "Failed to get device context for dummy window");
+
+    PIXELFORMATDESCRIPTOR desc = {};
+    desc.nSize = sizeof(desc);
+    desc.nVersion = 1;
+    desc.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    desc.iPixelType = PFD_TYPE_RGBA;
+    desc.cColorBits = 24;
+
+    int format = ChoosePixelFormat(dc, &desc);
+    if (!format)
+        FatalError("Cannot choose OpenGL pixel format for dummy window!");
+
+    int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
+    ASSERT(ok && "Failed to describe OpenGL pixel format");
+
+    // reason to create dummy window is that SetPixelFormat can be called only once for the window
+    if (!SetPixelFormat(dc, format, &desc))
+        FatalError("Cannot set OpenGL pixel format for dummy window!");
+
+    HGLRC rc = wglCreateContext(dc);
+    ASSERT(rc && "Failed to create OpenGL context for dummy window");
+
+    ok = wglMakeCurrent(dc, rc);
+    ASSERT(ok && "Failed to make current OpenGL context for dummy window");
+
+    wglCreateContextAttribsARB = (wglCreateContextAttribsARB_type*)wglGetProcAddress("wglCreateContextAttribsARB");
+    wglSwapIntervalEXT = (BOOL(WINAPI*)(int))wglGetProcAddress("wglSwapIntervalEXT");
+    wglChoosePixelFormatARB = (wglChoosePixelFormatARB_type*)wglGetProcAddress("wglChoosePixelFormatARB");
+
+    wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(rc);
+    ReleaseDC(dummy, dc);
+    DestroyWindow(dummy);
+}
+
+static HWND WindowCreate(HINSTANCE instance)
+{
+    GetWglFunctions();
+    // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
+    int pixel_format_attribs[] = {
+                                 0x2001,          1, // WGL_DRAW_TO_WINDOW_ARB
+                                 0x2010,          1, // WGL_SUPPORT_OPENGL_ARB
+                                 0x2011,          1, // WGL_DOUBLE_BUFFER_ARB
+                                 0x2003,     0x2027, // WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB
+                                 0x2013,     0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
+                                 0x2014,         32, // WGL_COLOR_BITS_ARB
+                                 0x2022,         24, // WGL_DEPTH_BITS_ARB
+                                 0x2023,          8, // WGL_STENCIL_BITS_ARB
+                                 0x20A9,          1, // WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB <- SRGB support
+                                 0x2041,          1, // WGL_SAMPLE_BUFFERS_ARB           <- enable MSAA
+                                 0x2042,          8, // WGL_SAMPLES_ARB                  <- 4x MSAA
+                                 0
+    };
+    // register window class to have custom WindowProc callback
+    WNDCLASSEX wc = {};
+    wc.cbSize = sizeof(wc),
+    wc.lpfnWndProc = WindowCallback,
+    wc.hInstance = instance,
+    wc.hIcon     = LoadIconA(instance, "icon"),
+    wc.hCursor   = LoadCursor(NULL, IDC_ARROW),
+    wc.lpszClassName = WindowName;
+    ATOM atom = RegisterClassEx(&wc);
+    ASSERT(atom && "Failed to register window class");
+
+    // window properties - width, height and style
+    int width = PlatformCtx.WindowWidth;
+    int height = PlatformCtx.WindowHeight;
+    DWORD exstyle = WS_EX_APPWINDOW;
+    DWORD style = WS_OVERLAPPEDWINDOW;
+
+    // VERY IMPORTANT: all windows sharing same OpenGL context must have same pixel format
+    // this is mentioned in https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_create_context.txt
+    int format = 0;
+    PIXELFORMATDESCRIPTOR desc = {};
+    desc.nSize = sizeof(desc);
+
+    // create window
+    HWND window = CreateWindowEx(
+        exstyle, wc.lpszClassName, WindowName, style,
+        CW_USEDEFAULT, CW_USEDEFAULT, width, height,
+        NULL, NULL, wc.hInstance, NULL);
+    ASSERT(window && "Failed to create window");
+
+    HDC dc = GetDC(window);
+    ASSERT(dc && "Failed to window device context");
+
+    // figure out pixel format
+    int attrib[] = {
+        0x2001, GL_TRUE, // WGL_DRAW_TO_WINDOW_ARB
+        0x2010, GL_TRUE, // WGL_SUPPORT_OPENGL_ARB
+        0x2011, GL_TRUE, // WGL_DOUBLE_BUFFER_ARB
+        0x2013, 0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
+        0x2014, 24, // WGL_COLOR_BITS_ARB
+        0x2022, 24, // WGL_DEPTH_BITS_ARB
+        0x2023,  8, // WGL_STENCIL_BITS_ARB
+        // uncomment for sRGB framebuffer, from WGL_ARB_framebuffer_sRGB extension
+        // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_framebuffer_sRGB.txt
+        //WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB, GL_TRUE,
+        // uncomment for multisampeld framebuffer, from WGL_ARB_multisample extension
+        // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_multisample.txt
+        0x2041, 1, // WGL_SAMPLE_BUFFERS_ARB
+        0x2042, 4, // 4x MSAA WGL_SAMPLES_ARB
+        0,
+    };
     
-    HWND window = CreateWindowExA(0,
-                                  window_class.lpszClassName,
-                                  WindowName, window_style,
-                                  CW_USEDEFAULT, CW_USEDEFAULT,
-                                  PlatformCtx.WindowWidth, PlatformCtx.WindowHeight,
-                                  0, 0, inst, 0);
+    UINT formats;
+    if (!wglChoosePixelFormatARB(dc, attrib, NULL, 1, &format, &formats) || formats == 0)
+        FatalError("OpenGL does not support required pixel format!");
     
-    if (!window) FatalError("Failed to create window.");
+    int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
+    ASSERT(ok && "Failed to describe OpenGL pixel format");
+
+    // always set pixel format, same for all windows
+    if (!SetPixelFormat(dc, format, &desc))
+       FatalError("Cannot set OpenGL selected pixel format!");
+
     return window;
 }
 
-/**** Time ****/
+HGLRC InitOpenGL(HDC dc)
+{
+    // now create modern OpenGL context, can do it after pixel format is set
+    int attrib[] =
+    {
+        0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
+        0x2092, 2, // WGL_CONTEXT_MINOR_VERSION_ARB
+        0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+#ifdef DEBUG
+        // ask for debug context for non "Release" builds
+        // this is so we can enable debug callback
+        0x2094, 0x00000001, // WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB
+#endif
+        0,
+    };
+
+    // we'll use only one OpenGL context for simplicity, no need to worry about resource sharing
+    HGLRC rc = wglCreateContextAttribsARB(dc, NULL, attrib);
+    if (!rc)
+    {
+        FatalError("Cannot create modern OpenGL context! OpenGL version 4.5 not supported?");
+    }
+
+    BOOL ok = wglMakeCurrent(dc, rc);
+    ASSERT(ok && "Failed to make current OpenGL context");
+    return rc;
+}
+
+/********************************************************************************/
+/*                                     TIME                                     */
+/********************************************************************************/
 
 double GetDeltaTime() 
 { 
@@ -435,6 +458,7 @@ extern void AXExit();
 // forom Renderer.cpp
 extern void rDestroyRenderer();
 extern void rInitRenderer();
+extern void rSetViewportSize(int x, int y);
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
@@ -533,7 +557,10 @@ bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight)
     ShowWindow(PlatformCtx.hwnd, SW_MAXIMIZE);
     
     if (success && PlatformCtx.WindowResizeCallback)
-        PlatformCtx.WindowResizeCallback(fullscreenWidth, fullscreenHeight), UpdateRenderArea();
+    {
+        PlatformCtx.WindowResizeCallback(fullscreenWidth, fullscreenHeight); 
+        rSetViewportSize(fullscreenWidth, fullscreenHeight);
+    }
     return success;
 }
 
@@ -548,8 +575,10 @@ bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHe
     ShowWindow(PlatformCtx.hwnd, SW_RESTORE);
 
     if (success && PlatformCtx.WindowResizeCallback)
-        PlatformCtx.WindowResizeCallback(windowedWidth, windowedHeight), UpdateRenderArea();
-    
+    {
+        PlatformCtx.WindowResizeCallback(windowedWidth, windowedHeight); 
+        rSetViewportSize(windowedWidth, windowedHeight);
+    }
     return success;
 }
 

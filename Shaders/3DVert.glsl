@@ -24,14 +24,15 @@ void main()
     vFragPos   = vec3(model * vec4(aPos, 1.0));   
     vTexCoords = aTexCoords; 
     
-    vTBN[2] = normalize(aNormal); // if has no tangents use vertex normal
+    mediump vec3 normal = normalize(vec3(model * vec4(normalize(aNormal), 0.0)));
+    vTBN[2] = aNormal; // if has no tangents use vertex normal
 #ifndef __ANDROID__
     if (hasNormalMap == 1)
     {
-        vec3 T = normalize(vec3(model * vec4(aTangent.xyz, 0.0)));
-        vec3 N = normalize(vec3(model * vec4(vTBN[2]  , 0.0)));
+        mediump vec3 T = normalize(vec3(model * vec4(aTangent.xyz, 0.0)));
+        mediump vec3 N = normal;
         T = normalize(T - dot(T, N) * N);
-        vec3 B = cross(N, T) * aTangent.w;
+        mediump vec3 B = cross(N, T) * aTangent.w;
 
         vTBN = mat3(T, B, N);
     }
@@ -45,7 +46,6 @@ void main()
         0.5, 0.5, 0.5, 1.0
     );
 
-    vec3 normal = vTBN[2];
     float biasPosOffset = 0.5 + (1.0 - dot(normal, sunDir)); // clamp(tan(acos(ndl))*0.8, 0.0, 3.0)
 
     vLightSpaceFrag = biasMatrix * model * lightMatrix * vec4(aPos + (normal * biasPosOffset), 1.0);

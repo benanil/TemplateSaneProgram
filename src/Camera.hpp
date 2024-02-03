@@ -14,7 +14,7 @@ struct Camera
 
 	float verticalFOV = 65.0f;
 	float nearClip = 0.1f;
-	float farClip = 1000.0f;
+	float farClip = 500.0f;
 
 	Vector2i viewportSize, monitorSize;
 
@@ -82,7 +82,7 @@ struct Camera
 		bool pressing = GetMouseDown(MouseButton_Right);
 		if (!pressing && !pass) { wasPressing = false; return; }
 
-		float dt = pass ? 0.05 : (float)GetDeltaTime() * 2.0f;
+		float dt = pass ? 0.05f : (float)GetDeltaTime() * 2.0f;
 		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 1.2f;
 
 		Vector2f mousePos;

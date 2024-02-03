@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 project(SaneProgram)
 
-# Set the C++ standard to C++14
-set(CMAKE_CXX_STANDARD 14)
+# Set the C++ standard to C++17
+set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_WIN32_EXECUTABLE ON)
 

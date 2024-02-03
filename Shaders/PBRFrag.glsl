@@ -20,7 +20,8 @@
 
 precision mediump sampler2DShadow;
 
-out vec4 FragColor;
+layout(location = 0) out vec3 oFragColor;
+layout(location = 1) out vec3 oNormal;
 
 in highp   vec3 vFragPos;
 in highp   vec2 vTexCoords;
@@ -39,7 +40,6 @@ uniform mediump vec3 sunDir;
 uniform int hasNormalMap;
 
 const float PI = 3.1415926535;
-const float gamma = 2.2;
 
 vec4 toLinear(vec4 sRGB)
 {
@@ -49,37 +49,15 @@ vec4 toLinear(vec4 sRGB)
     return mix(higher, lower, cutoff);
 }
 
-float sq(float x) {
-    return x * x;
-}
-
-vec3 GammaCorrect(vec3 x)
-{
-    return pow(x, vec3(1.0 / gamma));
-}
-
-// https://www.shadertoy.com/view/WdjSW3
-vec3 CustomToneMapping(vec3 x)
-{
-#ifdef __ANDROID__
-    return GammaCorrect(x / (1.0 + x)); // reinhard
-    return x / (x + 0.155) * 1.019; // < doesn't require gamma correction
-#else
-    //return GammaCorrect(x / (1.0 + x)); // reinhard
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return GammaCorrect((x * (a * x + b)) / (x * (c * x + d) + e));
-#endif
-}
-
 // https://google.github.io/filament/Filament.html
 float16 D_GGX(float16 roughness, float16 NoH, const half3 n, const half3 h) 
 {
-    half3 NxH = cross(n, h);
-    float16 oneMinusNoHSquared = dot(NxH, NxH);
+#if defined(__ANDROID__)
+    vec3 NxH = cross(n, h);
+    float oneMinusNoHSquared = dot(NxH, NxH);
+#else
+    float oneMinusNoHSquared = 1.0 - NoH * NoH;
+#endif
     float16 a = NoH * roughness;
     float16 k = roughness / (oneMinusNoHSquared + a * a);
     float16 d = k * k * (1.0 / 3.1415926535);
@@ -109,21 +87,21 @@ half3 StandardBRDF(half3 color, half3 n, float16 roughness, float16 metallic, fl
     float16 LoH = clamp(dot(l, h), 0.0, 1.0);
     float16 D = D_GGX(roughness, NoH, n, h);
 
-    half3 f0 = mix(vec3(0.001), vec3(color), metallic * 0.4);
+    const half3 W = vec3(0.3525, 0.4354, 0.2521); // luminence
+    half3 f0 = mix(vec3(0.005), vec3(dot(color, W)), metallic * 0.4);
 
     half3   F = F_Schlick(LoH, f0);
-    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);
-    float16 lightIntensity = 1.2;
+    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness) * float(shadow > 0.35);
+    float16 lightIntensity = 1.0;
     // // specular BRDF
-    shadow = shadow * shadow;
-    half3 Fr = (D * V) * F * (shadow * shadow); // step because we don't want to have 0.4 shadow.
+    half3 Fr = (D * V) * F; // step because we don't want to have 0.4 shadow.
     // diffuse BRDF
     color *= lightIntensity;
-    float16 darkness = NoL * shadow;
+    float16 darkness = max(NoL * (shadow * shadow), 0.1);
     half3 ambient = color * (1.0-darkness) * 0.10;
     half3 Fd = (color / 3.1415926535) * darkness;
 
-    return CustomToneMapping((Fd + Fr) + ambient);
+    return (Fd + Fr) + ambient;
 }
 
 float ShadowLookup(vec4 loc, vec2 offset)
@@ -135,7 +113,7 @@ float ShadowLookup(vec4 loc, vec2 offset)
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const vec4 minShadow = vec4(0.40);
+    const vec4 minShadow = vec4(0.35);
 #ifdef __ANDROID__
     vec2 offset;
     const vec3 mixer = vec3(1.0, 1.1, 1.2);
@@ -197,5 +175,8 @@ void main()
     }
 #endif
     lighting = StandardBRDF(color.rgb, normal, metallic, roughness, shadow);
-    FragColor = vec4(lighting * shadow, 1.0);
+    oFragColor = lighting * shadow;
+    oNormal    = vTBN[2] + vec3(1.0) * vec3(0.5); // convert to 0-1 range
+    //oPosition  = vFragPos;
 }
+        

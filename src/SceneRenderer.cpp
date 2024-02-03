@@ -5,6 +5,9 @@
 #include "Platform.hpp"
 #include "Camera.hpp"
 
+#include "../ASTL/IO.hpp"
+#include "../ASTL/Random.hpp"
+
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
 
@@ -17,7 +20,28 @@ namespace SceneRenderer
     FrameBuffer m_ShadowFrameBuffer;
     Shader      m_ShadowShader;
     Shader      m_PBRShader;
+    Shader      m_PostProcessingShader;
 
+    struct MainFrameBuffer
+    {
+        FrameBuffer Buffer;
+        Texture     ColorTexture;
+        Texture     DepthTexture;
+        Texture     NormalTexture;
+        int width, height;
+    };
+
+    MainFrameBuffer m_MainFrameBuffer;
+    MainFrameBuffer m_MainFrameBufferHalf;
+    Shader m_MainFrameBufferCopyShader;
+    
+    Shader      m_SSAOShader; 
+    Shader      m_RedUpsampleShader; 
+    Texture     m_SSAONoiseTexture;
+    FrameBuffer m_SSAOFrameBuffer;
+    Texture     m_SSAOHalfTexture;
+    Texture     m_SSAOTexture;
+    
     // uniform locations
     unsigned int lViewPos    , lSunDir   , lAlbedo     , lNormalMap, lHasNormalMap, 
                  lMetallicMap, lShadowMap, lLightMatrix, lModel    , lMvp;
@@ -51,9 +75,60 @@ inline Vector3f ColorMix(Vector3f col1, Vector3f col2, float p)
 
 namespace SceneRenderer {
 
+static void CreateMainFrameBuffer(MainFrameBuffer& frameBuffer, int width, int height, bool half)
+{
+    frameBuffer.Buffer = rCreateFrameBuffer();
+    frameBuffer.width  = width;
+    frameBuffer.height = height;
+    rBindFrameBuffer(frameBuffer.Buffer);
+    frameBuffer.ColorTexture  = rCreateTexture(width, height, nullptr, TextureType_RGB8, TexFlags_Nearest);
+    frameBuffer.NormalTexture = rCreateTexture(width, height, nullptr, TextureType_R11F_G11F_B10, TexFlags_Nearest);
+
+    rFrameBufferAttachColor(frameBuffer.ColorTexture , 0);
+    rFrameBufferAttachColor(frameBuffer.NormalTexture, 1);
+
+    frameBuffer.DepthTexture  = rCreateDepthTexture(width, height, DepthType_24);
+    rFrameBufferAttachDepth(frameBuffer.DepthTexture);
+    
+    rFrameBufferSetNumColorBuffers(2);
+    rFrameBufferCheck();
+}
+
+static void DeleteMainFrameBuffer(MainFrameBuffer& frameBuffer)
+{
+    rDeleteTexture(frameBuffer.ColorTexture);
+    rDeleteTexture(frameBuffer.DepthTexture);
+    rDeleteTexture(frameBuffer.NormalTexture);
+    rDeleteFrameBuffer(frameBuffer.Buffer);
+}
+
+static void DeleteSSAOFrameBuffer()
+{
+    rDeleteFrameBuffer(m_SSAOFrameBuffer);
+    rDeleteTexture(m_SSAOHalfTexture);
+    rDeleteTexture(m_SSAOTexture);
+}
+
+static void CreateSSAOFrameBuffer(int width, int height)
+{
+    m_SSAOFrameBuffer = rCreateFrameBuffer();
+    m_SSAOHalfTexture = rCreateTexture(width / 2, height / 2, nullptr, TextureType_R11F_G11F_B10, TexFlags_ClampToEdge);
+    m_SSAOTexture = rCreateTexture(width, height, nullptr, TextureType_R11F_G11F_B10, TexFlags_ClampToEdge);
+}
+
 static void WindowResizeCallback(int width, int height)
 {
+    width = MAX(width, 16);
+    height = MAX(height, 16);
+    rSetViewportSize(width, height);
     m_Camera.RecalculateProjection(width, height);
+    DeleteMainFrameBuffer(m_MainFrameBuffer);
+    DeleteMainFrameBuffer(m_MainFrameBufferHalf);
+
+    CreateMainFrameBuffer(m_MainFrameBuffer, width, height, false);
+    CreateMainFrameBuffer(m_MainFrameBufferHalf, width / 2, height / 2, true); // ishalf true
+    DeleteSSAOFrameBuffer();
+    CreateSSAOFrameBuffer(width, height);
 }
 
 static void CreateSkyTexture()
@@ -66,12 +141,22 @@ static void CreateSkyTexture()
 
     for (int i = 0; i < 64; i++)
     {
-        Vector3f target = ColorMix(startColor, endColor, (float)(i) / 64.0);
+        Vector3f target = ColorMix(startColor, endColor, (float)(i) / 64.0f);
         uint color = PackColorRGBU32(&target.x);
         MemSet32(currentPixel, color, 4);
         currentPixel += 4;
     }
-    m_SkyTexture = rCreateTexture(4, 64, pixels, TextureType_RGBA8, false, false);
+    m_SkyTexture = rCreateTexture(4, 64, pixels, TextureType_RGBA8, TexFlags_None);
+}
+
+static void GenSSAONoise()
+{
+    uint64_t noise[8];
+    uint64_t xoro[2];
+    Random::Xoroshiro128PlusInit(xoro);
+    for (int i = 0; i < 8; i++)
+        noise[i] = Random::Xoroshiro128Plus(xoro);
+    m_SSAONoiseTexture = rCreateTexture(8, 8, noise, TextureType_RG16UI, TexFlags_None);
 }
 
 static void GetUniformLocations()
@@ -116,20 +201,26 @@ void RenderShadows(SubScene* subScene, DirectionalLight& sunLight)
     rSetViewportSize(windowSize.x, windowSize.y);
 }
 
-void Init()
+inline Shader FullScreenShaderFromPath(const char* path)
+{
+    ScopedText fragSource = ReadAllText(path, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    Shader shader = rCreateFullScreenShader(fragSource);
+    return shader;
+}
+
+static void CreateShaders()
 {
     m_PBRShader = rImportShader("Shaders/3DVert.glsl", "Shaders/PBRFrag.glsl");
     GetUniformLocations();
+    
+    m_PostProcessingShader      = FullScreenShaderFromPath("Shaders/PostProcessing.glsl");
+    m_SSAOShader                = FullScreenShaderFromPath("Shaders/SSAO.glsl");
+    m_RedUpsampleShader         = FullScreenShaderFromPath("Shaders/UpscaleRed.glsl");
+    m_MainFrameBufferCopyShader = FullScreenShaderFromPath("Shaders/MainFrameBufferCopy.glsl");
+}
 
-    CreateSkyTexture();
-
-    Vector2i windowStartSize;
-    wGetMonitorSize(&windowStartSize.x, &windowStartSize.y);
-
-    m_Camera.Init(windowStartSize);
-    wSetWindowResizeCallback(WindowResizeCallback);
-
-    // setup shadow rendering
+static void SetupShadowRendering()
+{
     const char* vertexShaderSource =
     AX_SHADER_VERSION_PRECISION()
     R"(
@@ -146,33 +237,62 @@ void Init()
 
     m_ShadowShader      = rCreateShader(vertexShaderSource, fragmentShaderSource);
     m_ShadowFrameBuffer = rCreateFrameBuffer();
-    m_ShadowTexture     = rCreateShadowTexture(ShadowSettings::ShadowMapSize);
+    m_ShadowTexture     = rCreateDepthTexture(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize, DepthType_16);
     
     lShadowModel       = rGetUniformLocation(m_ShadowShader, "model");
     lShadowLightMatrix = rGetUniformLocation(m_ShadowShader, "lightMatrix");
     
     rBindFrameBuffer(m_ShadowFrameBuffer);
     rFrameBufferAttachDepth(m_ShadowTexture);
-    rCheckFrameBuffer(m_ShadowFrameBuffer);
-    rUnbindFrameBuffer();    
+    rFrameBufferCheck();
+}
+
+void Init()
+{
+    CreateSkyTexture();
+    CreateShaders();
+
+    Vector2i windowStartSize;
+    wGetMonitorSize(&windowStartSize.x, &windowStartSize.y);
+    Vector2i halfRes = windowStartSize / 2;
+    
+    // Create frame buffers
+    CreateSSAOFrameBuffer(halfRes.x, halfRes.y);
+    CreateMainFrameBuffer(m_MainFrameBuffer, windowStartSize.x, windowStartSize.y, false);
+    CreateMainFrameBuffer(m_MainFrameBufferHalf, halfRes.x, halfRes.y, true);
+
+    m_Camera.Init(windowStartSize);
+    wSetWindowResizeCallback(WindowResizeCallback);
+
+    SetupShadowRendering();
 }
 
 void RenderSubScene(Scene* scene, SubSceneID subsceneId)
 {
-    // works like a skybox
+    SubScene* subScene = scene->GetSubScene(subsceneId);
+    ParsedGLTF& data = subScene->data;
+    DirectionalLight sunLight = scene->m_SunLight;
+    
+    static int twice = 2; // render shadows only once if not dynamic
+    if (twice == 0)
+    {
+        Vector2i windowSize;
+        wGetWindowSize(&windowSize.x, &windowSize.y);
+        WindowResizeCallback(windowSize.x, windowSize.y);
+        RenderShadows(subScene, sunLight);
+    }
+    twice = MAX(twice - 1, -1);
+
+    rBindFrameBuffer(m_MainFrameBuffer.Buffer);
+    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
+    rClearDepth();
+
+    // looks like a skybox
     {
         rSetDepthTest(false);
         rRenderFullScreen(m_SkyTexture.handle);
         rSetDepthTest(true);
     }
-
-    SubScene* subScene = scene->GetSubScene(subsceneId);
-    ParsedGLTF& data = subScene->data;
-    DirectionalLight sunLight = scene->m_SunLight;
-    
-    static bool once = true; // render shadows only once if not dynamica
-    if (once) { RenderShadows(subScene, sunLight); once = false; }
-
     rBindShader(m_PBRShader);
     m_Camera.Update();
 
@@ -248,11 +368,72 @@ void RenderSubScene(Scene* scene, SubSceneID subsceneId)
     }
 }
 
+void PostProcessPass()
+{
+    // Downsample main frame buffer
+    rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
+    rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
+    {
+        rClearDepth();
+        rBindShader(m_MainFrameBufferCopyShader);
+
+        rSetTexture(m_MainFrameBuffer.ColorTexture , 0, rGetUniformLocation("ColorTex"));
+        rSetTexture(m_MainFrameBuffer.NormalTexture, 1, rGetUniformLocation("NormalTex"));
+        rSetTexture(m_MainFrameBuffer.DepthTexture , 2, rGetUniformLocation("DepthTex"));
+        rRenderFullScreen();
+    }
+
+    rSetDepthTest(false);
+    rSetDepthWrite(false);
+
+    // SSAO pass
+    rBindFrameBuffer(m_SSAOFrameBuffer);
+    rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
+    rBindShader(m_SSAOShader);
+    {
+        rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, rGetUniformLocation("depthMap")); // m_MainFrameBufferHalf.DepthTexture
+        rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, rGetUniformLocation("normalTex"));
+        rSetTexture(m_SSAONoiseTexture                 , 2, rGetUniformLocation("noiseTex"));
+    
+        rSetShaderValue(m_Camera.view.GetPtr()      , rGetUniformLocation("View"), GraphicType_Matrix4);
+        rSetShaderValue(m_Camera.projection.GetPtr(), rGetUniformLocation("Proj"), GraphicType_Matrix4);
+        
+        rRenderFullScreen();
+    }
+    // Upsample SSAO
+    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
+    rFrameBufferAttachColor(m_SSAOTexture, 0);
+    rBindShader(m_RedUpsampleShader);
+    {
+        rSetTexture(m_SSAOHalfTexture, 0, rGetUniformLocation("halfTex"));
+        // rSetTexture(m_MainFrameBufferHalf.DepthTexture, 1, rGetUniformLocation("depthMap"));
+        rRenderFullScreen();
+    }
+    rUnbindFrameBuffer(); // < draw to backbuffer after this line
+    // ToneMapping and End Post Processing
+    {
+        rBindShader(m_PostProcessingShader);
+        rSetTexture(m_MainFrameBuffer.ColorTexture, 0, rGetUniformLocation("tex"));
+        rSetTexture(m_SSAOTexture, 1, rGetUniformLocation("aoTex"));
+        rRenderFullScreen();
+    }
+
+    rSetDepthTest(true);
+    rSetDepthWrite(true);
+}
+
 void Destroy()
 {
+    DeleteSSAOFrameBuffer();
+    DeleteMainFrameBuffer(m_MainFrameBuffer);
+    DeleteMainFrameBuffer(m_MainFrameBufferHalf);
+
     rDeleteTexture(m_ShadowTexture);
     rDeleteShader(m_PBRShader);
     rDeleteShader(m_ShadowShader);
+    rDeleteShader(m_RedUpsampleShader);
+    rDeleteShader(m_SSAOShader);
+    rDeleteShader(m_MainFrameBufferCopyShader);
     rDeleteFrameBuffer(m_ShadowFrameBuffer);
 }
 

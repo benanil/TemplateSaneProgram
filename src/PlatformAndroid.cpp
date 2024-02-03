@@ -55,8 +55,8 @@ void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.Windo
 void SetKeyPressCallback(void(*callback)(wchar_t))          { PlatformCtx.KeyPressCallback     = callback; }
 void SetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseMoveCallback    = callback;}
 
-void wGetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowWidth; }
-void wGetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowHeight; *height = PlatformCtx.WindowHeight; }
+void wGetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
+void wGetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowWidth; *height = PlatformCtx.WindowHeight; }
 
 void UpdateRenderArea()
 {
@@ -65,7 +65,8 @@ void UpdateRenderArea()
     eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_HEIGHT, &height);
     PlatformCtx.WindowWidth  = width;
     PlatformCtx.WindowHeight = height;
-    glViewport(0, 0, PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
+    if (PlatformCtx.WindowResizeCallback)
+        PlatformCtx.WindowResizeCallback(width, height);
 }
 
 /****               Keyboard and Touch                ****/
@@ -200,9 +201,14 @@ void HandleCMD(android_app *pApp, int32_t cmd)
             AXInit();
             InitWindow();
             rInitRenderer();
-
-            if (AXStart() == 0) return; // user defined startup failed
-        break;
+            if (AXStart() == 0)
+                return; // user defined startup failed
+            break;
+        case APP_CMD_GAINED_FOCUS:
+        case APP_CMD_LOST_FOCUS:
+            if (PlatformCtx.FocusChangedCallback)
+                PlatformCtx.FocusChangedCallback(cmd == APP_CMD_GAINED_FOCUS);
+            break;
         case APP_CMD_WINDOW_RESIZED:
             UpdateRenderArea();
             break;

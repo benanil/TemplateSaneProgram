@@ -21,7 +21,7 @@
                                       "#define ALPHA_CUTOFF 0\n"       \
                                       "bool IsAndroid() { return true; }\n"
 #else
-#define AX_SHADER_VERSION_PRECISION() "#version 420 \n"          \
+#define AX_SHADER_VERSION_PRECISION() "#version 420 core \n"          \
                                       "#define ALPHA_CUTOFF 0\n" \
                                       "bool IsAndroid() { return false; }\n"
 #endif
@@ -131,6 +131,9 @@ void rRenderFullScreen(Shader fullScreenShader, unsigned int texture);
 // renders an texture to screen
 void rRenderFullScreen(unsigned int texture);
 
+// draws full screen quad, don't forget to set sahaders and uniforms
+void rRenderFullScreen();
+
 void rSetViewportSize(int width, int height);
 
 void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
@@ -147,7 +150,10 @@ void rClearColor(float r, float g, float b, float a);
 
 void rClearDepth();
 
+void rClearDepthStencil();
+
 void rBeginShadow();
+
 void rEndShadow();
 
 
@@ -155,11 +161,24 @@ void rEndShadow();
 /*                                 Texture                                  */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-// type is either 0 or 1 if compressed. 1 means has alpha
-Texture rCreateTexture(int width, int height, void* data, TextureType type, bool mipmap, bool compressed = false);
-Texture rCreateShadowTexture(int shadowmapSize);
+enum TexFlags_
+{
+    TexFlags_None        = 0,
+    TexFlags_MipMap      = 1,
+    TexFlags_Compressed  = 2,
+    TexFlags_ClampToEdge = 4,
+    TexFlags_Nearest     = 8
+};
 
-void rResizeTextureLoadBufferIfNecessarry(unsigned long long size);
+typedef int TexFlags;
+
+// type is either 0 or 1 if compressed. 1 means has alpha
+Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags);
+
+enum DepthType_ { DepthType_16, DepthType_24, DepthType_32 };
+typedef int DepthType;
+
+Texture rCreateDepthTexture(int width, int height, DepthType depthType);
 
 // Imports texture from disk and loads to GPU
 Texture rLoadTexture(const char* path, bool mipmap);
@@ -167,6 +186,9 @@ Texture rLoadTexture(const char* path, bool mipmap);
 void rDeleteTexture(Texture texture);
 
 void rSetTexture(Texture texture, int index, unsigned int loc);
+
+// a = b
+void rCopyTexture(Texture a, Texture b);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Frame Buffer                             */
@@ -180,19 +202,18 @@ struct FrameBuffer
 FrameBuffer rCreateFrameBuffer();
 
 void        rDeleteFrameBuffer(FrameBuffer frameBuffer);
-            
-bool        rCheckFrameBuffer(FrameBuffer framebuffer);
-            
-Texture     rCreateRenderTexture(int width, int height, TextureType type);
+
+bool        rFrameBufferCheck();
             
 void        rBindFrameBuffer(FrameBuffer frameBuffer);
             
 void        rUnbindFrameBuffer();
             
 void        rFrameBufferAttachDepth(Texture texture);
-            
+
 void        rFrameBufferAttachColor(Texture texture, int index);
 
+void        rFrameBufferSetNumColorBuffers(int numBuffers);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Shader                                   */
@@ -230,49 +251,48 @@ void rSetShaderValue(float value, unsigned int location);
 // Warning! Order is important
 enum TextureType_
 {
-    TextureType_R8           = 0,
-    TextureType_R8_SNORM     = 1,
-    TextureType_R16F         = 2,
-    TextureType_R32F         = 3,
-    TextureType_R8UI         = 4,
-    TextureType_R16UI        = 5,
-    TextureType_R32UI        = 6,
-
-    TextureType_RG8          = 7,
-    TextureType_RG8_SNORM    = 8,
-    TextureType_RG16F        = 9,
-    TextureType_RG32F        = 10,
-    TextureType_RG16UI       = 11,
-    TextureType_RG32UI       = 12,
-    
-    TextureType_RGB8         = 13,
-    TextureType_SRGB8        = 14,
-    TextureType_RGB8_SNORM	 = 15,
-    TextureType_R11F_G11F_B1 = 16,
-    TextureType_RGB9_E5      = 17,
-    TextureType_RGB16F       = 18,
-    TextureType_RGB32F       = 19,
-    TextureType_RGB8UI       = 20,
-    TextureType_RGB16UI      = 21,
-    TextureType_RGB32UI      = 22,
-    
-    TextureType_RGBA8        = 23,
-    TextureType_SRGB8_ALPHA8 = 24,
-    TextureType_RGBA8_SNORM	 = 25,
-    TextureType_RGB5_A1      = 26,
-    TextureType_RGBA4        = 27,
-    TextureType_RGB10_A2     = 28,
-    TextureType_RGBA16F	     = 29,
-    TextureType_RGBA32F	     = 30,
-    TextureType_RGBA8UI	     = 31,
-    TextureType_RGBA16UI     = 33,
-    TextureType_RGBA32UI     = 34,
-
-    TextureType_CompressedR    = 35,
-    TextureType_CompressedRG   = 36,
-	TextureType_CompressedRGB  = 37,
-	TextureType_CompressedRGBA = 38,
-
-    TextureType_DepthStencil24 = 39,
-    TextureType_DepthStencil32 = 40
+    TextureType_R8             = 0,
+    TextureType_R8_SNORM       = 1,
+    TextureType_R16F           = 2,
+    TextureType_R16_SNORM      = 3,
+    TextureType_R32F           = 4,
+    TextureType_R8UI           = 5,
+    TextureType_R16UI          = 6,
+    TextureType_R32UI          = 7,
+    TextureType_RG8            = 8,
+    TextureType_RG8_SNORM      = 9,
+    TextureType_RG16F          = 10,
+    TextureType_RG32F          = 11,
+    TextureType_RG16UI         = 12,
+    TextureType_RG16_SNORM     = 13,
+    TextureType_RG32UI         = 14,
+    TextureType_RGB8           = 15,
+    TextureType_SRGB8          = 16,
+    TextureType_RGB8_SNORM	   = 17,
+    TextureType_R11F_G11F_B10  = 18,
+    TextureType_RGB9_E5        = 19,
+    TextureType_RGB16F         = 20,
+    TextureType_RGB32F         = 21,
+    TextureType_RGB8UI         = 22,
+    TextureType_RGB16UI        = 23,
+    TextureType_RGB32UI        = 24,
+    TextureType_RGBA8          = 25,
+    TextureType_SRGB8_ALPHA8   = 26,
+    TextureType_RGBA8_SNORM	   = 27,
+    TextureType_RGB5_A1        = 28,
+    TextureType_RGBA4          = 29,
+    TextureType_RGB10_A2       = 30,
+    TextureType_RGBA16F	       = 31,
+    TextureType_RGBA32F	       = 33,
+    TextureType_RGBA8UI	       = 34,
+    TextureType_RGBA16UI       = 35,
+    TextureType_RGBA32UI       = 36,
+    // Compressed Formats
+    TextureType_CompressedR    = 37,
+    TextureType_CompressedRG   = 38,
+	TextureType_CompressedRGB  = 39,
+	TextureType_CompressedRGBA = 40,
+    // Depth Formats
+    TextureType_DepthStencil24 = 41,
+    TextureType_DepthStencil32 = 42
 };

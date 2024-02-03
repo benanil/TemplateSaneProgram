@@ -9,6 +9,8 @@ namespace SceneRenderer
     void RenderShadows(SubScene* scene, SubSceneID subsceneId);
 
     void RenderSubScene(Scene* scene, SubSceneID subsceneId);
+    
+    void PostProcessPass();
 
     void Destroy();
 }

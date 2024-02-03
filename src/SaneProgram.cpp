@@ -1,9 +1,5 @@
 
 
-#include <stdio.h>
-
-#include "../ASTL/Additional/GLTFParser.hpp"
-
 #include "Renderer.hpp"
 #include "Platform.hpp"
 
@@ -38,10 +34,9 @@ int AXStart()
 // do rendering and main loop here
 void AXLoop()
 {
-    static bool once = true;
-    if (once) { wEnterFullscreen(1920, 1080); once = false; }
     g_CurrentScene.UpdateSubScene(GLTFScene);
     SceneRenderer::RenderSubScene(&g_CurrentScene, GLTFScene);
+    SceneRenderer::PostProcessPass();
     // RenderScene(&FBXScene);
     // todo material and light system
 }
