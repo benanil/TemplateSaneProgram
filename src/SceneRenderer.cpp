@@ -120,8 +120,8 @@ static void DeleteSSAOFrameBuffer()
 static void CreateSSAOFrameBuffer(int width, int height)
 {
     m_SSAOFrameBuffer = rCreateFrameBuffer();
-    m_SSAOHalfTexture = rCreateTexture(width / 2, height / 2, nullptr, TextureType_R16F, TexFlags_ClampToEdge | TexFlags_Nearest);
-    m_SSAOTexture     = rCreateTexture(width    , height    , nullptr, TextureType_R16F, TexFlags_ClampToEdge | TexFlags_Nearest);
+    m_SSAOHalfTexture = rCreateTexture(width / 2, height / 2, nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
+    m_SSAOTexture     = rCreateTexture(width    , height    , nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
 }
 
 static void CreateFrameBuffers(int width, int height)

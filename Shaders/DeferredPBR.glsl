@@ -170,7 +170,7 @@ float Blur5(float a, float b, float c, float d, float e)
 float GetAO(float shadow)
 {
     float ao = 0.0;
-    #ifndef __ANDROID__
+    #ifdef __ANDROID__
     {
         ao = Blur5(texture(aoTex, texCoord).r,
                    textureOffset(aoTex, texCoord, ivec2(-1, 0)).r,
