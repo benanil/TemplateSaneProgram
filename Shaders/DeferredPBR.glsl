@@ -37,7 +37,7 @@ const float PI = 3.1415926535;
 
 vec4 toLinear(vec4 sRGB)
 {
-    return sRGB * sRGB;
+    return sRGB * sRGB; // < gamma 2.2
     bvec4 cutoff = lessThan(sRGB, vec4(0.04045));
     vec4 higher = pow((sRGB + vec4(0.055))/vec4(1.055), vec4(2.4));
     vec4 lower = sRGB/vec4(12.92);
@@ -124,7 +124,7 @@ vec3 WorldSpacePosFromDepthBuffer()
     vec2 uv = texCoord * 2.0 - 1.0;
     vec4 vsPos = uInvProj * vec4(uv, depth * 2.0 - 1.0, 1.0);
     vsPos /= vsPos.w;
-    // vsPos = uInvView * vsPos;
+    vsPos = uInvView * vsPos;
     return vsPos.xyz ;
 }
 
@@ -167,6 +167,37 @@ float Blur5(float a, float b, float c, float d, float e)
 }
 #endif
 
+float GetAO(float shadow)
+{
+    float ao = 0.0;
+    #ifndef __ANDROID__
+    {
+        ao = Blur5(texture(aoTex, texCoord).r,
+                   textureOffset(aoTex, texCoord, ivec2(-1, 0)).r,
+                   textureOffset(aoTex, texCoord, ivec2( 1, 0)).r,
+                   textureOffset(aoTex, texCoord, ivec2(-2, 0)).r,
+                   textureOffset(aoTex, texCoord, ivec2( 2, 0)).r);
+    }
+    #else
+    {
+        // 9x gaussian blur
+        ao += textureOffset(aoTex, texCoord, ivec2(-4.0, 0)).r * 0.05;
+        ao += textureOffset(aoTex, texCoord, ivec2(-3.0, 0)).r * 0.09;
+        ao += textureOffset(aoTex, texCoord, ivec2(-2.0, 0)).r * 0.12;
+        ao += textureOffset(aoTex, texCoord, ivec2(-1.0, 0)).r * 0.15;
+        ao += textureOffset(aoTex, texCoord, ivec2(+0.0, 0)).r * 0.16;
+        ao += textureOffset(aoTex, texCoord, ivec2(+1.0, 0)).r * 0.15;
+        ao += textureOffset(aoTex, texCoord, ivec2(+2.0, 0)).r * 0.12;
+        ao += textureOffset(aoTex, texCoord, ivec2(+3.0, 0)).r * 0.09;
+        ao += textureOffset(aoTex, texCoord, ivec2(+4.0, 0)).r * 0.05;
+    }
+    #endif
+    // we want ao only if there is shadow 
+    float invAO = 1.0 - ao;
+    invAO *= step(shadow, 0.50);
+    return 1.0 - invAO;
+}
+
 void main()
 {
     vec3  shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
@@ -181,32 +212,5 @@ void main()
     vec3 lighting = StandardBRDF(albedo, sunDir, v, normal, shadMetRough.y, shadMetRough.z, shadow);
     vec3 pbr = lighting * shadow;
  
-    float ao = 0.0;
-    #ifndef __ANDROID__
-    {
-        // 9x gaussian blur
-        ao += textureOffset(aoTex, texCoord, ivec2(-4.0, 0)).r * 0.05;
-        ao += textureOffset(aoTex, texCoord, ivec2(-3.0, 0)).r * 0.09;
-        ao += textureOffset(aoTex, texCoord, ivec2(-2.0, 0)).r * 0.12;
-        ao += textureOffset(aoTex, texCoord, ivec2(-1.0, 0)).r * 0.15;
-        ao += textureOffset(aoTex, texCoord, ivec2(+0.0, 0)).r * 0.16;
-        ao += textureOffset(aoTex, texCoord, ivec2(+1.0, 0)).r * 0.15;
-        ao += textureOffset(aoTex, texCoord, ivec2(+2.0, 0)).r * 0.12;
-        ao += textureOffset(aoTex, texCoord, ivec2(+3.0, 0)).r * 0.09;
-        ao += textureOffset(aoTex, texCoord, ivec2(+4.0, 0)).r * 0.05;
-    }
-    #else
-    {
-        ao = Blur5(texture(aoTex, texCoord).r,
-                   textureOffset(aoTex, texCoord, ivec2(-1, 0)).r,
-                   textureOffset(aoTex, texCoord, ivec2( 1, 0)).r,
-                   textureOffset(aoTex, texCoord, ivec2(-2, 0)).r,
-                   textureOffset(aoTex, texCoord, ivec2( 2, 0)).r);
-    }
-    #endif
-    // we want ao only if there is shadow 
-    float invAO = 1.0 - ao;
-    invAO *= step(shadow, 0.50);
-    ao = 1.0 - invAO;
-    oFragColor = CustomToneMapping(pbr).xyzz * ao * Vignette(texCoord);
+    oFragColor = CustomToneMapping(pbr).xyzz * GetAO(shadow) * Vignette(texCoord);
 }
