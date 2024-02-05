@@ -1,4 +1,3 @@
-
 layout(location = 0) in highp vec3 aPos;
 layout(location = 1) in mediump vec3 aNormal;
 layout(location = 2) in mediump vec4 aTangent;

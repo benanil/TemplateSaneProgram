@@ -8,6 +8,15 @@ project("game")
 #support neon
 ENABLE_LANGUAGE(ASM)
 
+# Gather all files in the Shaders folder
+file(GLOB SHADERS "${CMAKE_SOURCE_DIR}/../../../../../Shaders/*")
+
+# Copy each file to the Assets folder
+foreach(SHADER ${SHADERS})
+    get_filename_component(FILENAME ${SHADER} NAME)
+    file(COPY ${SHADER} DESTINATION "${CMAKE_SOURCE_DIR}/../Assets/Shaders")
+endforeach()
+
 # Creates your game shared library. The name must be the same as the
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.
 add_library(game SHARED

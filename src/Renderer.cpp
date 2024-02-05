@@ -84,6 +84,7 @@ struct TextureFormat
     #define GL_RG16_SNORM 0x8F99
     #define GL_R16_SNORM 0x8F98
 #endif
+
 // https://www.khronos.org/opengles/sdk/docs/man31/html/glTexImage2D.xhtml
 static const TextureFormat TextureFormatTable[] =
 {
@@ -107,25 +108,26 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RGB8_SNORM     , GL_RGB,             GL_BYTE                          }, // TextureType_RGB8_SNORM    = 17,
     {   GL_R11F_G11F_B10F , GL_RGB,             GL_FLOAT                         }, // TextureType_R11F_G11F_B10 = 18,
     {   GL_RGB9_E5        , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB9_E5       = 19,
-    {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB16F        = 20,
-    {   GL_RGB32F         , GL_RGB,             GL_FLOAT                         }, // TextureType_RGB32F        = 21,
-    {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, // TextureType_RGB8UI        = 22,
-    {   GL_RGB16UI        , GL_RGB_INTEGER,     GL_UNSIGNED_SHORT                }, // TextureType_RGB16UI       = 23,
-    {   GL_RGB32UI        , GL_RGB_INTEGER,     GL_UNSIGNED_INT                  }, // TextureType_RGB32UI       = 24,
-    {   GL_RGBA8          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8         = 25,
-    {   GL_SRGB8_ALPHA8   , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8_ALPHA8  = 26,
-    {   GL_RGBA8_SNORM    , GL_RGBA,            GL_BYTE                          }, // TextureType_RGBA8_SNORM   = 27,
-    {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGB5_A1       = 28,
-    {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA4         = 29,
-    {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, // TextureType_RGB10_A2      = 30,
-    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, // TextureType_RGBA16F       = 31,
-    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, // TextureType_RGBA32F       = 33,
-    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 34,
-    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 35,
-    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 36,
+    {   GL_RGB565         , GL_RGB,             GL_UNSIGNED_SHORT_5_6_5          }, // TextureType_RGB565        = 20,
+    {   GL_RGB16F         , GL_RGB,             GL_HALF_FLOAT                    }, // TextureType_RGB16F        = 21,
+    {   GL_RGB32F         , GL_RGB,             GL_FLOAT                         }, // TextureType_RGB32F        = 22,
+    {   GL_RGB8UI         , GL_RGB_INTEGER,     GL_UNSIGNED_BYTE                 }, // TextureType_RGB8UI        = 23,
+    {   GL_RGB16UI        , GL_RGB_INTEGER,     GL_UNSIGNED_SHORT                }, // TextureType_RGB16UI       = 24,
+    {   GL_RGB32UI        , GL_RGB_INTEGER,     GL_UNSIGNED_INT                  }, // TextureType_RGB32UI       = 25,
+    {   GL_RGBA8          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8         = 26,
+    {   GL_SRGB8_ALPHA8   , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8_ALPHA8  = 27,
+    {   GL_RGBA8_SNORM    , GL_RGBA,            GL_BYTE                          }, // TextureType_RGBA8_SNORM   = 28,
+    {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGB5_A1       = 29,
+    {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA4         = 30,
+    {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, // TextureType_RGB10_A2      = 31,
+    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, // TextureType_RGBA16F       = 33,
+    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, // TextureType_RGBA32F       = 34,
+    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 35,
+    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 36,
+    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 37,
     {}, {}, {}, {},{},                                                              // Compressed Formats
-    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24
-    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32
+    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24 = 43,
+    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32 = 44,
 };
 
 const char* GetGLErrorString(GLenum error) 
@@ -182,7 +184,7 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     bool compressed = !!(flags & TexFlags_Compressed);
 
     __const int defaultMagFilter = IsAndroid() ? GL_NEAREST : GL_LINEAR;
-    __const int mipmapFilter = IsAndroid() ? GL_NEAREST_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_NEAREST;
+    __const int mipmapFilter = GL_LINEAR_MIPMAP_NEAREST; // < higher | lower quality > GL_NEAREST_MIPMAP_NEAREST
     int minFilter = nearest ? GL_NEAREST : GL_LINEAR;
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
@@ -372,13 +374,18 @@ void rFrameBufferAttachColor(Texture texture, int index)
     CHECK_GL_ERROR();
 }
 
+static const int glAtt = GL_COLOR_ATTACHMENT0;
+static const unsigned int glAttachments[8] = {glAtt, glAtt + 1, glAtt+2, glAtt+3, glAtt+4, glAtt+5, glAtt+6, glAtt+7};
+
+void rFrameBufferInvalidate(int numAttachments)
+{
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, numAttachments, glAttachments);
+    CHECK_GL_ERROR();
+}
+
 void rFrameBufferSetNumColorBuffers(int numBuffers)
 {
-    // - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
-    unsigned int attachments[8];
-    for (int i = 0; i < 8; i++) 
-        attachments[i] = GL_COLOR_ATTACHMENT0 + i;
-    glDrawBuffers(numBuffers, attachments);
+    glDrawBuffers(numBuffers, glAttachments);
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/

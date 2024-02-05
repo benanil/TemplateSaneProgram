@@ -35,8 +35,9 @@ int AXStart()
 void AXLoop()
 {
     g_CurrentScene.UpdateSubScene(GLTFScene);
+    SceneRenderer::BeginRendering();
     SceneRenderer::RenderSubScene(&g_CurrentScene, GLTFScene);
-    SceneRenderer::PostProcessPass();
+    SceneRenderer::EndRendering();
     // RenderScene(&FBXScene);
     // todo material and light system
 }

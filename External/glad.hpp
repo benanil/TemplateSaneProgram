@@ -996,6 +996,7 @@ typedef void (*GLADpostcallback)(void *ret, const char *name, GLADapiproc apipro
 #define GL_QUERY_WAIT 0x8E13
 #define GL_R 0x2002
 #define GL_R11F_G11F_B10F 0x8C3A
+#define GL_RGB565 0x8D62
 #define GL_R16 0x822A
 #define GL_R16F 0x822D
 #define GL_R16I 0x8233
@@ -2595,6 +2596,7 @@ typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3IPROC)(GLint x, GLint y, GLint z);
 typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3IVPROC)(const GLint * v);
 typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3SPROC)(GLshort x, GLshort y, GLshort z);
 typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3SVPROC)(const GLshort * v);
+typedef void (GLAD_API_PTR *PFNGLINVALIDATEFRAMEBUFFERPROC)(GLenum target, GLsizei numAttachments, const GLenum * attachments);
 
 GLAD_API_CALL PFNGLACCUMPROC glad_glAccum;
 #define glAccum glad_glAccum
@@ -3952,10 +3954,8 @@ GLAD_API_CALL PFNGLWINDOWPOS3SPROC glad_glWindowPos3s;
 #define glWindowPos3s glad_glWindowPos3s
 GLAD_API_CALL PFNGLWINDOWPOS3SVPROC glad_glWindowPos3sv;
 #define glWindowPos3sv glad_glWindowPos3sv
-
-
-
-
+GLAD_API_CALL PFNGLINVALIDATEFRAMEBUFFERPROC glad_glInvalidateFramebuffer;
+#define glInvalidateFramebuffer glad_glInvalidateFramebuffer
 
 GLAD_API_CALL int gladLoadGLUserPtr( GLADuserptrloadfunc load, void *userptr);
 GLAD_API_CALL int gladLoadGL( GLADloadfunc load);
@@ -4705,7 +4705,7 @@ PFNGLWINDOWPOS3IPROC glad_glWindowPos3i = NULL;
 PFNGLWINDOWPOS3IVPROC glad_glWindowPos3iv = NULL;
 PFNGLWINDOWPOS3SPROC glad_glWindowPos3s = NULL;
 PFNGLWINDOWPOS3SVPROC glad_glWindowPos3sv = NULL;
-
+PFNGLINVALIDATEFRAMEBUFFERPROC glad_glInvalidateFramebuffer = nullptr;
 
 static void glad_gl_load_GL_VERSION_1_0( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_VERSION_1_0) return;
@@ -5015,6 +5015,7 @@ static void glad_gl_load_GL_VERSION_1_0( GLADuserptrloadfunc load, void* userptr
     glad_glVertex4s = (PFNGLVERTEX4SPROC) load(userptr, "glVertex4s");
     glad_glVertex4sv = (PFNGLVERTEX4SVPROC) load(userptr, "glVertex4sv");
     glad_glViewport = (PFNGLVIEWPORTPROC) load(userptr, "glViewport");
+    glad_glInvalidateFramebuffer = (PFNGLINVALIDATEFRAMEBUFFERPROC)load(userptr, "glInvalidateFramebuffer");
 }
 static void glad_gl_load_GL_VERSION_1_1( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_VERSION_1_1) return;

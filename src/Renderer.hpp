@@ -215,6 +215,7 @@ void        rFrameBufferAttachColor(Texture texture, int index);
 
 void        rFrameBufferSetNumColorBuffers(int numBuffers);
 
+void        rFrameBufferInvalidate(int numAttachments);
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Shader                                   */
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -271,28 +272,29 @@ enum TextureType_
     TextureType_RGB8_SNORM	   = 17,
     TextureType_R11F_G11F_B10  = 18,
     TextureType_RGB9_E5        = 19,
-    TextureType_RGB16F         = 20,
-    TextureType_RGB32F         = 21,
-    TextureType_RGB8UI         = 22,
-    TextureType_RGB16UI        = 23,
-    TextureType_RGB32UI        = 24,
-    TextureType_RGBA8          = 25,
-    TextureType_SRGB8_ALPHA8   = 26,
-    TextureType_RGBA8_SNORM	   = 27,
-    TextureType_RGB5_A1        = 28,
-    TextureType_RGBA4          = 29,
-    TextureType_RGB10_A2       = 30,
-    TextureType_RGBA16F	       = 31,
-    TextureType_RGBA32F	       = 33,
-    TextureType_RGBA8UI	       = 34,
-    TextureType_RGBA16UI       = 35,
-    TextureType_RGBA32UI       = 36,
+    TextureType_RGB565         = 20,
+    TextureType_RGB16F         = 21,
+    TextureType_RGB32F         = 22,
+    TextureType_RGB8UI         = 23,
+    TextureType_RGB16UI        = 24,
+    TextureType_RGB32UI        = 25,
+    TextureType_RGBA8          = 26,
+    TextureType_SRGB8_ALPHA8   = 27,
+    TextureType_RGBA8_SNORM    = 28,
+    TextureType_RGB5_A1        = 29,
+    TextureType_RGBA4          = 30,
+    TextureType_RGB10_A2       = 31,
+    TextureType_RGBA16F        = 33,
+    TextureType_RGBA32F        = 34,
+    TextureType_RGBA8UI        = 35,
+    TextureType_RGBA16UI       = 36,
+    TextureType_RGBA32UI       = 37,
     // Compressed Formats
-    TextureType_CompressedR    = 37,
-    TextureType_CompressedRG   = 38,
-	TextureType_CompressedRGB  = 39,
-	TextureType_CompressedRGBA = 40,
+    TextureType_CompressedR    = 38,
+    TextureType_CompressedRG   = 39,
+	TextureType_CompressedRGB  = 40,
+	TextureType_CompressedRGBA = 41,
     // Depth Formats
-    TextureType_DepthStencil24 = 41,
-    TextureType_DepthStencil32 = 42
+    TextureType_DepthStencil24 = 42,
+    TextureType_DepthStencil32 = 43
 };

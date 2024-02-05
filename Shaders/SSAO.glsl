@@ -1,7 +1,4 @@
 
-#define MakeVec3(x, y, z) vec3(x, y, z)
-#define MakeVec2(x, y) vec2(x, y)
-
 const vec2 Noise[32] = vec2[32](
     vec2(0.195175, 0.736741),
     vec2(0.244343, -0.188865),
@@ -41,8 +38,6 @@ in vec2 texCoord;
 
 uniform sampler2D depthMap;
 uniform sampler2D normalTex;
-uniform sampler2D noiseTex;
-// uniform sampler2D positionTex;
 
 uniform mat4 Proj;
 uniform mat4 View;
@@ -84,7 +79,7 @@ void main()
 #endif
     const float radius    = 1.0;
 
-    float howFar = 1.0 - (baseDepth * baseDepth);
+    float howFar = 1.0 - baseDepth;
     vec2 pixelRange = screenSize * texelSize * howFar;
 
     float occlusion  = 0.0;
