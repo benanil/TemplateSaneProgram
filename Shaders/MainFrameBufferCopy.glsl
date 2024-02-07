@@ -1,11 +1,12 @@
-layout(location = 0) out vec3 oFragColor;
-layout(location = 1) out vec3 oNormal;
 
-uniform sampler2D ColorTex;
-uniform sampler2D NormalTex;
-uniform sampler2D DepthTex;
+layout(location = 0) out lowp vec3 oFragColor;
+layout(location = 1) out lowp vec3 oNormal;
 
-in vec2 texCoord;         
+uniform lowp  sampler2D ColorTex;
+uniform lowp  sampler2D NormalTex;
+uniform highp sampler2D DepthTex;
+
+in vec2 texCoord;
 
 float checkerboard(in vec2 uv)
 {

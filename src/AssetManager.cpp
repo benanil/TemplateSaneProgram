@@ -340,83 +340,87 @@ int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 // https://copyprogramming.com/howto/how-to-pack-normals-into-gl-int-2-10-10-10-rev
-inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v)
+inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v) {
+    const uint32_t xs = v.x < 0.0f, ys = v.y < 0.0f, zs = v.z < 0.0f;   
+    return zs << 29 | ((uint32_t)(v.z * 511 + (zs << 9)) & 511) << 20 |
+           ys << 19 | ((uint32_t)(v.y * 511 + (ys << 9)) & 511) << 10 |
+           xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);;
+}
+
+inline uint32_t Pack_INT_2_10_10_10_REV(Vector4f v)
 {
-	const uint32_t xs = v.x < 0;
-	const uint32_t ys = v.y < 0;
-	const uint32_t zs = v.z < 0;
-	uint32_t vi =
-	       zs << 29 | ((uint32_t)(v.z * 511 + (zs << 9)) & 511) << 20 |
-	       ys << 19 | ((uint32_t)(v.y * 511 + (ys << 9)) & 511) << 10 |
-	       xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);
-	return vi;
+    const uint32_t xs = v.x < 0.0f, ys = v.y < 0.0f, zs = v.z < 0.0f, ws = v.w < 0.0f;
+    return ws << 31 | ((uint32_t)(v.w + (ws << 1)) & 1) << 30 |
+           zs << 29 | ((uint32_t)(v.z * 511 + (zs << 9)) & 511) << 20 |
+           ys << 19 | ((uint32_t)(v.y * 511 + (ys << 9)) & 511) << 10 |
+           xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);
 }
 
 void CreateVerticesIndices(ParsedGLTF* gltf)
 {
-	AMesh* meshes = gltf->meshes;
-	
-	// BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT
-	const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
-	
-	// pre allocate all vertices and indices 
-	gltf->allVertices = new AVertex[gltf->totalVertices];
-	gltf->allIndices  = AllocAligned(gltf->totalIndices * sizeof(uint32_t) + 16, alignof(uint32)); // 16->give little bit of space for memcpy
-	
-	AVertex* currVertex = (AVertex*)gltf->allVertices;
-	uint32_t* currIndices = (uint32_t*)gltf->allIndices;
-	
-	int vertexCursor = 0;
-	int indexCursor = 0;
-
-	for (int m = 0; m < gltf->numMeshes; ++m)
-	{
-		// get number of vertex, getting first attribute count because all of the others are same
-		AMesh mesh = meshes[m];
-		for (uint64_t p = 0; p < mesh.numPrimitives; p++)
-		{
-			APrimitive& primitive = mesh.primitives[p];
-			uint32_t* beforeCopy = (uint32_t*)primitive.indices;
-			primitive.indices = currIndices;
-			
-			for (int i = 0; i < primitive.numIndices; i++)
-			{
-				currIndices[i] = beforeCopy[i] + vertexCursor;
-			}
-
-			primitive.indexOffset = indexCursor;
-			indexCursor += primitive.numIndices;
-
-			vertexCursor += primitive.numVertices;
-			currIndices  += primitive.numIndices;
-
-			// https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
-			primitive.vertices = currVertex;
-			Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
-			Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
-			Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
-			Vector4f* tangents  = (Vector4f*)primitive.vertexAttribs[3];
-			
-			for (int v = 0; v < primitive.numVertices; v++)
-			{
-				Vector4f tangent = tangents ? tangents[v] : Vector4f::Zero();
-				currVertex[v].position  = positions[v];
-				currVertex[v].texCoord  = texCoords[v];
-				currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normals[v]);
-				ConvertFloatToHalf(currVertex[v].tangent, &tangent.x, 4);
-			}
-			currVertex += primitive.numVertices;
-		}
-	}
-
-	for (int i = 0; i < gltf->numBuffers; i++)
-	{
-		FreeAllText((char*)gltf->buffers[i].uri);
-		gltf->buffers[i].uri = nullptr;
-	}
-	delete[] gltf->buffers;
-	gltf->numBuffers = 0;
-	gltf->buffers = nullptr;
+    AMesh* meshes = gltf->meshes;
+    
+    // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT
+    const int TypeToSize[8] = { 1, 1, 2, 2, 4, 4, 4 };
+    
+    // pre allocate all vertices and indices 
+    gltf->allVertices = new AVertex[gltf->totalVertices];
+    gltf->allIndices  = AllocAligned(gltf->totalIndices * sizeof(uint32_t) + 16, alignof(uint32)); // 16->give little bit of space for memcpy
+    
+    AVertex* currVertex = (AVertex*)gltf->allVertices;
+    uint32_t* currIndices = (uint32_t*)gltf->allIndices;
+    
+    int vertexCursor = 0;
+    int indexCursor = 0;
+    
+    for (int m = 0; m < gltf->numMeshes; ++m)
+    {
+        // get number of vertex, getting first attribute count because all of the others are same
+        AMesh mesh = meshes[m];
+        for (uint64_t p = 0; p < mesh.numPrimitives; p++)
+        {
+            APrimitive& primitive = mesh.primitives[p];
+            uint32_t* beforeCopy = (uint32_t*)primitive.indices;
+            primitive.indices = currIndices;
+            
+            for (int i = 0; i < primitive.numIndices; i++)
+            {
+                currIndices[i] = beforeCopy[i] + vertexCursor;
+            }
+            
+            primitive.indexOffset = indexCursor;
+            indexCursor += primitive.numIndices;
+            
+            vertexCursor += primitive.numVertices;
+            currIndices  += primitive.numIndices;
+            
+            // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
+            primitive.vertices = currVertex;
+            Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
+            Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
+            Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
+            Vector4f* tangents  = (Vector4f*)primitive.vertexAttribs[3];
+            
+            for (int v = 0; v < primitive.numVertices; v++)
+            {
+                Vector4f tangent = tangents ? tangents[v] : Vector4f::Zero();
+                currVertex[v].position  = positions[v];
+                currVertex[v].texCoord  = ConvertToHalf2(&texCoords[v].x);
+                currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normals[v]);
+                currVertex[v].tangent   = Pack_INT_2_10_10_10_REV(tangent);
+            }
+            currVertex += primitive.numVertices;
+        }
+    }
+    
+    for (int i = 0; i < gltf->numBuffers; i++)
+    {
+        FreeAllText((char*)gltf->buffers[i].uri);
+        gltf->buffers[i].uri = nullptr;
+    }
+    delete[] gltf->buffers;
+    gltf->numBuffers = 0;
+    gltf->buffers = nullptr;
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -424,7 +428,7 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 19;
+const int ABMMeshVersion = 20;
 
 bool IsABMLastVersion(const char* path)
 {

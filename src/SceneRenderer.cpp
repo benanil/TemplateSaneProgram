@@ -41,7 +41,7 @@ namespace SceneRenderer
     Texture     m_SSAOTexture;
     
     // deferred rendering
-    Shader      m_DeferredPBRShader;
+     Shader      m_DeferredPBRShader;
 
     // Gbuffer uniform locations
     unsigned int lAlbedo     , lNormalMap, lHasNormalMap, 
@@ -213,6 +213,7 @@ static void RenderShadows(SubScene* subScene, DirectionalLight& sunLight)
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
     rSetViewportSize(windowSize.x, windowSize.y);
+    rBindFrameBuffer(m_MainFrameBuffer.Buffer);
 }
 
 inline Shader FullScreenShaderFromPath(const char* path)
@@ -249,8 +250,7 @@ static void SetupShadowRendering()
     AX_SHADER_VERSION_PRECISION()
     R"(
         layout(location = 0) in vec3 aPosition;
-        uniform mat4 model;
-        uniform mat4 lightMatrix;
+        uniform mat4 model, lightMatrix;
         
         void main() {
             gl_Position =  model * lightMatrix * vec4(aPosition, 1.0);
@@ -306,18 +306,17 @@ void RenderSubScene(Scene* scene, SubSceneID subsceneId)
 {
     SubScene* subScene = scene->GetSubScene(subsceneId);
     ParsedGLTF& data = subScene->data;
-    
+    DirectionalLight sunLight = scene->m_SunLight;
+
     // todo: fix this
-    static int twice = 2; // render shadows only once if not dynamic
-    if (twice == 0)
-    {
-        DirectionalLight sunLight = scene->m_SunLight;
-        Vector2i windowSize;
-        wGetWindowSize(&windowSize.x, &windowSize.y);
-        WindowResizeCallback(windowSize.x, windowSize.y);
-        RenderShadows(subScene, sunLight);
+    static int first = 1; // render shadows only once if not dynamic
+    if (first == 1) {
+        if (IsAndroid()) RenderShadows(subScene, sunLight);
     }
-    twice = MAX(twice - 1, -1);
+        
+    first = 0;
+
+    if (!IsAndroid()) RenderShadows(subScene, sunLight); // realtime shadows
     
     rBindShader(m_GBufferShader);
     m_Camera.Update();

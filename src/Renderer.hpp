@@ -102,8 +102,8 @@ struct AVertex
 {
     Vector3f position;
     int      normal;
-    half     tangent[4];
-    Vector2f texCoord;
+    int      tangent;
+    half2    texCoord;
 };
 
 /*//////////////////////////////////////////////////////////////////////////*/

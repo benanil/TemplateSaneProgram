@@ -1,11 +1,12 @@
-layout(location = 0) out vec3 oFragColor;
-layout(location = 1) out vec3 oNormal;
 
-uniform sampler2D ColorTex;
-uniform sampler2D NormalTex;
-uniform sampler2D DepthTex;
+layout(location = 0) out lowp vec3 oFragColor;
+layout(location = 1) out lowp vec3 oNormal;
 
-in vec2 texCoord;         
+uniform lowp sampler2D ColorTex;
+uniform lowp sampler2D NormalTex;
+uniform      sampler2D DepthTex;
+
+in vec2 texCoord;
 
 float checkerboard(in vec2 uv)
 {
@@ -14,19 +15,25 @@ float checkerboard(in vec2 uv)
 }
 
 void main() {
-    oFragColor = texture(ColorTex , texCoord).rgb;
+    // oFragColor = texture(ColorTex , texCoord).rgb;
     oNormal    = texture(NormalTex, texCoord).rgb;
     
-    // // #ifdef 1
-    // https://eleni.mutantstargoat.com/hikiko/depth-aware-upsampling-2/
     float d1 = textureOffset(DepthTex, texCoord, ivec2(0, 0)).r;
     float d2 = textureOffset(DepthTex, texCoord, ivec2(0, 1)).r;
     float d3 = textureOffset(DepthTex, texCoord, ivec2(1, 1)).r;
     float d4 = textureOffset(DepthTex, texCoord, ivec2(1, 0)).r;
     
-    gl_FragDepth = mix(max(max(d1, d2), max(d3, d4)),
-                       min(min(d1, d2), min(d3, d4)),
-                       checkerboard(texCoord));
+    gl_FragDepth = (d1 + d2 + d3 + d4) * 0.25;
+    // // #ifdef 1
+    // // https://eleni.mutantstargoat.com/hikiko/depth-aware-upsampling-2/
+    // float d1 = textureOffset(DepthTex, texCoord, ivec2(0, 0)).r;
+    // float d2 = textureOffset(DepthTex, texCoord, ivec2(0, 1)).r;
+    // float d3 = textureOffset(DepthTex, texCoord, ivec2(1, 1)).r;
+    // float d4 = textureOffset(DepthTex, texCoord, ivec2(1, 0)).r;
+    // 
+    // gl_FragDepth = mix(max(max(d1, d2), max(d3, d4)),
+    //                    min(min(d1, d2), min(d3, d4)),
+    //                    checkerboard(texCoord));
     // // #else
     // vec4 edges = vec4(textureOffset(DepthTex, texCoord, ivec2( 1,  1)).r,
     //                   textureOffset(DepthTex, texCoord, ivec2(-1, -1)).r,

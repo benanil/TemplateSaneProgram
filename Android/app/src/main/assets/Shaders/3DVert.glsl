@@ -1,13 +1,13 @@
 
-layout(location = 0) in highp vec3 aPos;
-layout(location = 1) in mediump vec3 aNormal;
-layout(location = 2) in mediump vec4 aTangent;
-layout(location = 3) in highp vec2 aTexCoords;
+layout(location = 0) in highp   vec3 aPos;
+layout(location = 1) in lowp    vec3 aNormal;
+layout(location = 2) in lowp    vec4 aTangent;
+layout(location = 3) in mediump vec2 aTexCoords;
 
 out highp   vec3 vFragPos;
-out highp   vec2 vTexCoords;
+out mediump vec2 vTexCoords;
 out highp   vec4 vLightSpaceFrag;
-out mediump mat3 vTBN;
+out lowp    mat3 vTBN;
 
 uniform highp mat4 mvp;
 uniform highp mat4 model;
@@ -21,18 +21,21 @@ uniform int hasNormalMap;
 // https://developer.android.com/games/optimize/vertex-data-management
 void main()
 {
-    vFragPos   = vec3(model * vec4(aPos, 1.0));   
+    vFragPos   = vec3(model * vec4(aPos, 1.0));
     vTexCoords = aTexCoords; 
     
-    mediump vec3 normal = normalize(vec3(model * vec4(normalize(aNormal), 0.0)));
-    vTBN[2] = aNormal; // if has no tangents use vertex normal
+    lowp mat3 lowModel = mat3(normalize(model[0].xyz),
+                              normalize(model[1].xyz),
+                              normalize(model[2].xyz));
+    lowp vec3 normal = (lowModel * normalize(aNormal));
+    vTBN[2] = normal; // if has no tangents use vertex normal
 #ifndef __ANDROID__
     if (hasNormalMap == 1)
     {
-        mediump vec3 T = normalize(vec3(model * vec4(aTangent.xyz, 0.0)));
-        mediump vec3 N = normal;
+        lowp vec3 T = (lowModel * normalize(aTangent.xyz));
+        lowp vec3 N = normal;
         T = normalize(T - dot(T, N) * N);
-        mediump vec3 B = cross(N, T) * aTangent.w;
+        lowp vec3 B = cross(N, T) * aTangent.w;
 
         vTBN = mat3(T, B, N);
     }

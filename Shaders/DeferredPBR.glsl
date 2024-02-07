@@ -6,52 +6,52 @@
     #define saturateMediump(x) x
 #endif
 
-// #ifdef __ANDROID__
-//     #define float16 mediump float
-//     #define half2   mediump vec2
-//     #define half3   mediump vec3
-// #else
-#define float16 float
-#define half2   vec2
-#define half3   vec3
-// #endif
+#ifdef __ANDROID__
+    #define float16 mediump float
+    #define half2   mediump vec2
+    #define half3   mediump vec3
+#else
+    #define float16 float
+    #define half2   vec2
+    #define half3   vec3
+#endif
 
 layout(location = 0) out vec4 oFragColor; // TextureType_RGB8
 
 in vec2 texCoord;
 
-uniform sampler2D uAlbedoTex;
-uniform sampler2D uShadowMetallicRoughnessTex;
-uniform sampler2D uNormalTex;
-uniform sampler2D uDepthMap;
-uniform sampler2D aoTex; // < ambient occlusion
+uniform mediump sampler2D uAlbedoTex;
+uniform mediump sampler2D uShadowMetallicRoughnessTex;
+uniform mediump sampler2D uNormalTex;
+uniform highp   sampler2D uDepthMap;
+uniform lowp    sampler2D aoTex; // < ambient occlusion
 
 uniform highp   vec3 viewPos;
 uniform mediump vec3 sunDir;
 
-uniform highp   mat4 uInvView;
-uniform highp   mat4 uInvProj;
+uniform highp mat4 uInvView;
+uniform highp mat4 uInvProj;
 
 const float gamma = 2.2;
 const float PI = 3.1415926535;
 
-vec4 toLinear(vec4 sRGB)
+mediump vec4 toLinear(mediump vec4 sRGB)
 {
-    return sRGB * sRGB; // < gamma 2.2
+    // return sRGB * sRGB; // < gamma 2.0
     bvec4 cutoff = lessThan(sRGB, vec4(0.04045));
-    vec4 higher = pow((sRGB + vec4(0.055))/vec4(1.055), vec4(2.4));
-    vec4 lower = sRGB/vec4(12.92);
-    return mix(higher, lower, cutoff);
+    mediump vec4 higher = pow((sRGB + vec4(0.055)) / vec4(1.055), vec4(2.4));
+    mediump vec4 lower = sRGB / vec4(12.92);
+    return mix(higher, lower, cutoff); // gamma 2.2
 }
 
 // https://google.github.io/filament/Filament.html
 float16 D_GGX(float16 roughness, float16 NoH, const half3 n, const half3 h)
 {
     #if defined(__ANDROID__)
-    vec3 NxH = cross(n, h);
-    float oneMinusNoHSquared = dot(NxH, NxH);
+    half3 NxH = cross(n, h);
+    float16 oneMinusNoHSquared = dot(NxH, NxH);
     #else
-    float oneMinusNoHSquared = 1.0 - NoH * NoH;
+    float16 oneMinusNoHSquared = 1.0 - NoH * NoH;
     #endif
     float16 a = NoH * roughness;
     float16 k = roughness / (oneMinusNoHSquared + a * a);
@@ -64,7 +64,7 @@ float16 V_SmithGGXCorrelatedFast(float16 NoV, float16 NoL, float16 roughness) {
     return 0.5 / mix(2.0 * NoL * NoV, NoL + NoV, roughness);
 }
 
-float V_Neubelt(float NoV, float NoL) {
+float16 V_Neubelt(float16 NoV, float16 NoL) {
     // Neubelt and Pettineo 2013, "Crafting a Next-gen Material Pipeline for The Order: 1886"
     return saturateMediump(1.0 / (4.0 * (NoL + NoV - NoL * NoV)));
 }
@@ -91,18 +91,18 @@ half3 StandardBRDF(half3 color, half3 l, half3 v, half3 n, float16 roughness, fl
     float16 LoH = clamp(dot(l, h), 0.0, 1.0);
     float16 D = D_GGX(roughness, NoH, n, h);
     
-    float lum = dot(color, vec3(0.3, 0.59, 0.11));
+    float16 lum = dot(color, vec3(0.3, 0.59, 0.11));
     float16 f0 = mix(0.020, lum, metallic * 0.20);
-    float16 shadow3 = shadow * shadow * shadow;
-
+    float16 shadow4 = shadow * shadow;
+    shadow4 *= shadow4;
     float16 F = F_Schlick(LoH, f0); // F_Schlick2(LoH, 0.4, f90);
-    float16 V = V_Neubelt(NoV, NoL); //V_SmithGGXCorrelatedFast(NoV, NoL, roughness);// 
+    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);// V_Neubelt(NoV, NoL); //
     float16 lightIntensity = 1.0;
     // // specular BRDF
-    float16 Fr = (D * V) * F * shadow3 * 0.65; 
+    float16 Fr = (D * V) * F * shadow4 * 0.65;
     // diffuse BRDF
     color *= lightIntensity;
-    float16 darkness = max(NoL * shadow3, 0.05);
+    float16 darkness = max(NoL * shadow4, 0.05);
     half3 ambient = color * (1.0-darkness) * 0.05;
     half3 Fd = (color / 3.1415926535) * darkness;
 
@@ -128,48 +128,48 @@ vec3 WorldSpacePosFromDepthBuffer()
     return vsPos.xyz ;
 }
 
-vec3 GammaCorrect(vec3 x) {
-    return sqrt(x); // pow(x, vec3(1.0 / gamma)); // with sqrt gamma is 2.0
+half3 GammaCorrect(half3 x) {
+    return pow(x, vec3(1.0 / gamma)); //  sqrt(x); // with sqrt gamma is 2.0
 }
 
 // https://www.shadertoy.com/view/WdjSW3
-vec3 CustomToneMapping(vec3 x)
+half3 CustomToneMapping(half3 x)
 {
     return GammaCorrect(x / (1.0 + x)); // reinhard
 #ifdef __ANDROID__
     return x / (x + 0.155) * 1.019; // < doesn't require gamma correction
 #else
     //return  x / (x + 0.0832) * 0.982;
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
+    const float16 a = 2.51;
+    const float16 b = 0.03;
+    const float16 c = 2.43;
+    const float16 d = 0.59;
+    const float16 e = 0.14;
     return GammaCorrect((x * (a * x + b)) / (x * (c * x + d) + e));
 #endif
 }
 
 // https://www.shadertoy.com/view/lsKSWR
-float Vignette(vec2 uv)
+float16 Vignette(mediump vec2 uv)
 {
 	uv *= vec2(1.0f) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
-	float vig = uv.x * uv.y * 15.0f; // multiply with sth for intensity
+	float16 vig = uv.x * uv.y * 15.0f; // multiply with sth for intensity
 	vig = pow(vig, 0.15f); // change pow for modifying the extend of the  vignette
 	return vig; 
 }
 
 #ifdef __ANDROID__
 // gaussian blur
-float Blur5(float a, float b, float c, float d, float e) 
+lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp float e) 
 {
-    const float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
+    const lowp float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
     return Weights5[0]*a + Weights5[1]*(b+c) + Weights5[2]*(d+e);
 }
 #endif
 
-float GetAO(float shadow)
+lowp float GetAO(float shadow)
 {
-    float ao = 0.0;
+    lowp float ao = 0.0;
     #ifdef __ANDROID__
     {
         ao = Blur5(texture(aoTex, texCoord).r,
@@ -193,24 +193,23 @@ float GetAO(float shadow)
     }
     #endif
     // we want ao only if there is shadow 
-    float invAO = 1.0 - ao;
+    lowp float invAO = 1.0 - ao;
     invAO *= step(shadow, 0.50);
     return 1.0 - invAO;
 }
 
 void main()
 {
-    vec3  shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
-    vec3  normal = texture(uNormalTex, texCoord).rgb * 2.0 - 1.0;
-    vec3  albedo = toLinear(texture(uAlbedoTex, texCoord)).rgb;
+    half3 shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
+    half3 normal = texture(uNormalTex, texCoord).rgb * 2.0 - 1.0;
+    half3 albedo = toLinear(texture(uAlbedoTex, texCoord)).rgb;
     normal = normalize(normal);
-    float shadow = shadMetRough.x;
-    vec3 viewRay = GetViewRay();
+    float16 shadow = shadMetRough.x;
     // vec3 pos = WorldSpacePosFromDepthBuffer(texCoord);
-    vec3 v = -viewRay;// -normalize(WorldSpacePosFromDepthBuffer()); // normalize(viewPos - pos);
+    half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); // normalize(viewPos - pos);
 
-    vec3 lighting = StandardBRDF(albedo, sunDir, v, normal, shadMetRough.y, shadMetRough.z, shadow);
-    vec3 pbr = lighting * shadow;
+    half3 lighting = StandardBRDF(albedo, sunDir, viewRay, normal, shadMetRough.y, shadMetRough.z * shadMetRough.z, shadow);
+    lighting *= shadow;
  
-    oFragColor = CustomToneMapping(pbr).xyzz * GetAO(shadow) * Vignette(texCoord);
+    oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetAO(shadow);
 }

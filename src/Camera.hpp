@@ -36,12 +36,11 @@ struct Camera
 
 		viewportSize = xviewPortSize;
 		position = MakeVec3(0.0f, 3.0f, 0.0f);
-		Front = MakeVec3(0.5f, 0.0f, -0.5f);
-
+        CalculateLook();
 		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
-		Update(true);
+		Update();
 		RecalculateView();
 	}
 
@@ -77,12 +76,24 @@ struct Camera
 #endif
 	}
 
-	void Update(bool pass=false)
+    void CalculateLook() // from yaw pitch
+    {
+        Front.x = Cos(yaw * DegToRad) * Cos(pitch * DegToRad);
+        Front.y = Sin(pitch * DegToRad);
+        Front.z = Sin(yaw * DegToRad) * Cos(pitch * DegToRad);
+        Front.NormalizeSelf();
+        // also re-calculate the Right and Up vector
+        // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
+        Right = Vector3f::NormalizeEst(Vector3f::Cross(Front, Vector3f::Up()));
+        Up = Vector3f::Cross(Right, Front);
+    }
+
+	void Update()
 	{
 		bool pressing = GetMouseDown(MouseButton_Right);
-		if (!pressing && !pass) { wasPressing = false; return; }
+		if (!pressing) { wasPressing = false; return; }
 
-		float dt = pass ? 0.05f : (float)GetDeltaTime() * 2.0f;
+		float dt = (float)GetDeltaTime() * 2.0f;
 		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 1.2f;
 
 		Vector2f mousePos;
@@ -102,14 +113,7 @@ struct Camera
 				pitch = Clamp(pitch, -89.0f, 89.0f);
 			}
 
-			Front.x = cosf(yaw * DegToRad) * cosf(pitch * DegToRad);
-			Front.y = sinf(pitch * DegToRad);
-			Front.z = sinf(yaw * DegToRad) * cosf(pitch * DegToRad);
-			Front.NormalizeSelf();
-			// also re-calculate the Right and Up vector
-			// normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
-			Right = Vector3f::Normalize(Vector3f::Cross(Front, Vector3f::Up()));
-			Up = Vector3f::Cross(Right, Front);
+			CalculateLook();
 		}
 #ifdef __ANDROID__
 		else if (wasPressing && diff.x + diff.y < 130.0f)

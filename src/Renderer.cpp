@@ -478,8 +478,8 @@ void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
     {
         { 3, GraphicType_Float   },
         { 3, GraphicType_XYZ10W2 },
-        { 4, GraphicType_Half    },
-        { 2, GraphicType_Float   }
+        { 4, GraphicType_XYZ10W2 },
+        { 2, GraphicType_Half    }
     };
 
     desc.layout = inputLayout;
@@ -580,7 +580,7 @@ static void CheckShaderError(uint shader)
     if (isCompiled == GL_FALSE)
     {
         GLint maxLength = 1024;
-        char infoLog[1024]{};
+        char infoLog[1024]={};
         glGetShaderInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);
@@ -595,7 +595,7 @@ static void CheckLinkerError(uint shader)
     if (isCompiled == GL_FALSE)
     {
         GLint maxLength = 1024;
-        char infoLog[1024]{};
+        char infoLog[1024]={};
         glGetProgramInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);

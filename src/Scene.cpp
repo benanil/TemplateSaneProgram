@@ -17,8 +17,6 @@ const int SceneVersion = 0;
 
 void Scene::Init()
 {
-    float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
-    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
     //m_MatrixNeedsUpdate = bitset_create();
 }
 
@@ -229,6 +227,8 @@ int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
 void Scene::UpdateSubScene(SubSceneID scene)
 {
     // Scene* scene = &loadedScenes[sceneID];
+    float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
+    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(cosf(time)) + 0.1f, sinf(time)));
 }
 
 SubScene* Scene::GetSubScene(SubSceneID scene)
