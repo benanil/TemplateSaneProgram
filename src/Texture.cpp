@@ -52,7 +52,7 @@ namespace {
 	};
 }
 
-const int g_AXTextureVersion = 1234;
+const int g_AXTextureVersion = 12345;
 
 // note: maybe we will need to check for data changed or not.
 bool IsTextureLastVersion(const char* path)
@@ -154,6 +154,7 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 		}
 	}
 }
+
 #endif // __ANDROID__
 
 static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMobile)
@@ -360,15 +361,13 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 	AFile file = AFileOpen(texturePath, AOpenFlag_Read);
 	int version = 0;
 	AFileRead(&version, sizeof(int), file);
-	ASSERT(version == g_AXTextureVersion);
+	ASSERT(version == g_AXTextureVersion); // probably using old version, find newer version of texture or reload the gltf or fbx scene
 
-	Array<ImageInfo> imageInfos(numImages);
+	ScopedPtr<ImageInfo> imageInfos = new ImageInfo[numImages];
 
 	for (int i = 0; i < numImages; i++)
 	{
-		ImageInfo info;
-		AFileRead(&info, sizeof(ImageInfo), file);
-		imageInfos.PushBack(info);
+		AFileRead(&imageInfos.ptr[i], sizeof(ImageInfo), file);
 	}
 
 	uint64_t decompressedSize, compressedSize;
@@ -386,7 +385,7 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 
 	for (int i = 0; i < numImages; i++)
 	{
-		ImageInfo info = imageInfos[i];
+		ImageInfo info = imageInfos.ptr[i];
 		if (info.width == 0)
 			continue;
 

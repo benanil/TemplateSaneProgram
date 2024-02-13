@@ -20,6 +20,21 @@ layout(location = 0) out vec4 oFragColor; // TextureType_RGB8
 
 in vec2 texCoord;
 
+struct LightInstance
+{
+    vec3 position;
+    mediump vec3 direction;
+    highp   uint color;
+    mediump float intensity;
+    mediump float cutoff; // < zero if this is point light
+    mediump float range; 
+};
+
+uniform LightInstance uPointLights[16];
+uniform LightInstance uSpotLights[16];
+uniform int uNumSpotLights;
+uniform int uNumPointLights;
+
 uniform mediump sampler2D uAlbedoTex;
 uniform mediump sampler2D uShadowMetallicRoughnessTex;
 uniform mediump sampler2D uNormalTex;
@@ -43,6 +58,8 @@ mediump vec4 toLinear(mediump vec4 sRGB)
     mediump vec4 lower = sRGB / vec4(12.92);
     return mix(higher, lower, cutoff); // gamma 2.2
 }
+
+float sqr(float x) { return x*x; }
 
 // https://google.github.io/filament/Filament.html
 float16 D_GGX(float16 roughness, float16 NoH, const half3 n, const half3 h)
@@ -92,14 +109,14 @@ half3 StandardBRDF(half3 color, half3 l, half3 v, half3 n, float16 roughness, fl
     float16 D = D_GGX(roughness, NoH, n, h);
     
     float16 lum = dot(color, vec3(0.3, 0.59, 0.11));
-    float16 f0 = mix(0.020, lum, metallic * 0.20);
+    float16 f0 = mix(0.0075, lum, metallic * 0.15);
     float16 shadow4 = shadow * shadow;
     shadow4 *= shadow4;
     float16 F = F_Schlick(LoH, f0); // F_Schlick2(LoH, 0.4, f90);
     float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);// V_Neubelt(NoV, NoL); //
     float16 lightIntensity = 1.0;
     // // specular BRDF
-    float16 Fr = (D * V) * F * shadow4 * 0.65;
+    float16 Fr = (D * V) * F * shadow4 * 0.20;
     // diffuse BRDF
     color *= lightIntensity;
     float16 darkness = max(NoL * shadow4, 0.05);
@@ -107,6 +124,23 @@ half3 StandardBRDF(half3 color, half3 l, half3 v, half3 n, float16 roughness, fl
     half3 Fd = (color / 3.1415926535) * darkness;
 
     return  (Fd + Fr) + ambient;
+}
+
+float16 Reflection(half3 l, half3 n, half3 v)
+{
+    half3 h = normalize(v + l);
+    float16 ldh = max(dot(l, h), 0.0);
+    half3  rl = reflect(-l, n);
+    float16 s = dot(rl, v);
+    s = ldh * ldh * s;
+    return s * s;
+}
+
+half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
+{
+    float16 ndl = max(dot(l, n), 0.2);
+    float16 r = Reflection(l, n, v);
+    return albedo * ndl + (r * 0.1);
 }
 
 vec3 GetViewRay()
@@ -165,6 +199,16 @@ lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp fl
     const lowp float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
     return Weights5[0]*a + Weights5[1]*(b+c) + Weights5[2]*(d+e);
 }
+
+mediump vec4 unpackUnorm4x8(uint x)
+{
+    return vec4(
+        float((x >> 0u ) & 0xFFu) / 255.0,
+        float((x >> 8u ) & 0xFFu) / 255.0,
+        float((x >> 16u) & 0xFFu) / 255.0,
+        float((x >> 24u) & 0xFFu) / 255.0
+    ); 
+}
 #endif
 
 lowp float GetAO(float shadow)
@@ -204,12 +248,60 @@ void main()
     half3 normal = texture(uNormalTex, texCoord).rgb * 2.0 - 1.0;
     half3 albedo = toLinear(texture(uAlbedoTex, texCoord)).rgb;
     normal = normalize(normal);
-    float16 shadow = shadMetRough.x;
-    // vec3 pos = WorldSpacePosFromDepthBuffer(texCoord);
-    half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); // normalize(viewPos - pos);
+    
+    float16 shadow    = shadMetRough.x;
+    float16 metallic  = shadMetRough.y;
+    float16 roughness = shadMetRough.z * shadMetRough.z;
 
-    half3 lighting = StandardBRDF(albedo, sunDir, viewRay, normal, shadMetRough.y, shadMetRough.z * shadMetRough.z, shadow);
-    lighting *= shadow;
- 
-    oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetAO(shadow);
+    vec3 pos = WorldSpacePosFromDepthBuffer();
+    half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); // normalize(viewPos - pos);
+    half3 sunColor = vec3(0.98f, 0.90, 0.88);
+    half3 lighting = Lighting(albedo * sunColor, sunDir, normal, viewRay); 
+
+    for (int i = 0; i < uNumPointLights; i++)
+    {
+        half3 lightDir = pos - uPointLights[i].position;
+        float16 len = length(lightDir);
+        float16 range = uPointLights[i].range;
+        float16 intensity = min(len, range) / range;
+    
+        intensity = intensity * intensity;
+        intensity = 1.0 - intensity;
+        intensity *= uPointLights[i].intensity;
+    
+        lightDir = lightDir / len; // < normalize
+        half3 lightColor = unpackUnorm4x8(uPointLights[i].color).xyz;
+        lightColor = lightColor * lightColor; // convert to linear space
+        half3 color = mix(albedo, lightColor, 0.55);
+        lighting += Lighting(color, lightDir, normal, viewRay) * intensity;
+        shadow = min(shadow + intensity, 1.0);
+    }
+    
+    for (int i = 0; i < uNumSpotLights; i++)
+    {
+        LightInstance spotLight = uSpotLights[i];
+        half3 lightDir = pos - spotLight.position;
+        float16 len = length(lightDir);
+        lightDir /= len;
+        float16 angle = dot(lightDir, spotLight.direction);
+        
+        if (angle > spotLight.cutoff && len < spotLight.range)
+        {
+            angle = angle * (1.0 / spotLight.cutoff);
+            angle = 1.0 - angle;
+            len = min(len, spotLight.range) / spotLight.range;
+            len = 1.0 - len;
+            float16 effect = len * len * angle * angle;
+            float16 intensity = spotLight.intensity * effect;
+            half3 lightColor = unpackUnorm4x8(spotLight.color).xyz;
+            lightColor = lightColor * lightColor;
+            half3 color = mix(albedo, lightColor, 0.55);
+    
+            lighting *= 0.18 + intensity;
+            lighting += Lighting(color, lightDir, normal, viewRay) * intensity;
+            shadow += min(shadow + intensity, 1.0);
+        }
+    }
+
+    oFragColor =  CustomToneMapping(lighting).xyzz * shadow * Vignette(texCoord) * GetAO(shadow);
 }

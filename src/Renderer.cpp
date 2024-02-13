@@ -192,6 +192,13 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : defaultMagFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmap ? mipmapFilter : minFilter);
 
+    int numMips = MAX((int)Log2((unsigned)width) >> 1, 1) - 1;
+    if (mipmap) {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, numMips);
+        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, 4);
+    }
+
     texture.width  = width;
     texture.height = height;
     texture.buffer = (unsigned char*)data;
@@ -220,10 +227,6 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     }
     #else
     {
-        int numMips = MAX((int)Log2((unsigned)width) >> 1, 1) - 1;
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, numMips);
         int mip = 0;
         do
         {
@@ -527,27 +530,54 @@ Shader rGetCurrentShader()
     return {currentShader};
 }
 
-unsigned int rGetUniformLocation(const char* name)
+int rGetUniformLocation(const char* name)
 {
     return glGetUniformLocation(currentShader, name);
 }
 
-unsigned int rGetUniformLocation(Shader shader, const char* name)
+int rGetUniformLocation(Shader shader, const char* name)
 {
     return glGetUniformLocation(shader.handle, name);
 }
 
-void rSetShaderValue(int   value, unsigned int location)
-{ 
-    glUniform1i(location, value);
+void rSetShaderValue(int   value, int location) { glUniform1i(location, value); }
+void rSetShaderValue(uint  value, int location) { glUniform1ui(location, value); }
+void rSetShaderValue(float value, int location) { glUniform1f(location, value); }
+
+// zero dynamic memory allocation
+void rGetUniformArrayLocations(int begin, char* arrayText, int* locations, int numLocations, const char* uniformName)
+{
+    MemsetZero(arrayText, 32);
+    int nameLen = (int)strlen(uniformName);
+    ASSERT(nameLen < 32);
+    AX_ASSUME(nameLen < 32);
+    SmallMemCpy(arrayText, uniformName, nameLen);
+
+    for (int i = 0; i < 10; i++)
+    {
+        arrayText[begin + 0] = '0' + (i % 10);
+        locations[i] = rGetUniformLocation(arrayText);
+    }
+    
+    nameLen += 1;
+
+    while (nameLen > begin) // move to right by one character
+    {
+        arrayText[nameLen] = arrayText[nameLen-1];
+        nameLen--;
+    }
+    arrayText[begin + 1] = '0';
+    
+    ASSERT(numLocations < 100);
+    for (int i = 10; i < numLocations; i++)
+    {
+        arrayText[begin + 0] = '0' + (i / 10);
+        arrayText[begin + 1] = '0' + (i % 10);
+        locations[i] = rGetUniformLocation(arrayText);
+    }
 }
 
-void rSetShaderValue(float value, unsigned int location)
-{ 
-    glUniform1f(location, value);
-}
-
-void rSetShaderValue(const void* value, unsigned int location, GraphicType type)
+void rSetShaderValue(const void* value, int location, GraphicType type)
 {
     switch (type)
     {
@@ -557,7 +587,7 @@ void rSetShaderValue(const void* value, unsigned int location, GraphicType type)
 
         case GraphicType_Vector2f:    glUniform2fv(location, 1, (const float*)value); break;
         case GraphicType_Vector3f:    glUniform3fv(location, 1, (const float*)value); break;
-        case GraphicType_Vector4f:    glUniform4fv(location, 1, (const float*)value); break;
+        case GraphicType_vec_t:    glUniform4fv(location, 1, (const float*)value); break;
      
         case GraphicType_Matrix2: glUniformMatrix2fv(location, 1, GL_FALSE, (const float*)value); break;
         case GraphicType_Matrix3: glUniformMatrix3fv(location, 1, GL_FALSE, (const float*)value); break;
@@ -641,24 +671,20 @@ Shader rCreateFullScreenShader(const char* fragmentSource)
     AX_SHADER_VERSION_PRECISION()
     "out vec2 texCoord;\n\
     void main(){\n\
-    	float x = -1.0 + float((gl_VertexID & 1) << 2);\n\
-    	float y = -1.0 + float((gl_VertexID & 2) << 1);\n\
-    	texCoord.x = (x + 1.0) * 0.5;\n\
-    	texCoord.y = (y + 1.0) * 0.5;\n\
-    	//texCoord.y = 1.0 - texCoord.y;\n\
-        gl_Position = vec4(x, y, 0, 1);\n\
+        float x = -1.0 + float((gl_VertexID & 1) << 2);\n\
+        float y = -1.0 + float((gl_VertexID & 2) << 1);\n\
+        texCoord.x = (x + 1.0) * 0.5;\n\
+        texCoord.y = (y + 1.0) * 0.5;\n\
+        gl_Position = vec4(x, y, 0.0, 1.0);\n\
     }";
     return rCreateShader(vertexShaderSource, fragmentSource);
 }
 
 Shader rImportShader(const char* vertexPath, const char* fragmentPath)
 {
-    char* vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    char* fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    
-    Shader shader = rCreateShader(vertexText, fragmentText);
-    FreeAllText(vertexText);
-    FreeAllText(fragmentText);
+    ScopedText vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    Shader shader = rCreateShader(vertexText.text, fragmentText.text);
     return shader;
 }
 
@@ -684,7 +710,7 @@ static void CreateDefaultTexture()
     for (int i = 0; i < (32 * 32); i++)
     {
         img[i * 2 + 0] = 85;  // metallic 
-        img[i * 2 + 1] = 125; // roughness
+        img[i * 2 + 1] = 155; // roughness
     }
     g_DefaultTexture = rCreateTexture(32, 32, img, TextureType_RG8, TexFlags_None).handle;
 }
@@ -735,6 +761,17 @@ void rSetDepthTest(bool val)
 void rSetDepthWrite(bool val) 
 {
     glDepthMask(val); 
+}
+
+void rSetBlending(bool val)
+{
+    void(*EnableDisable[2])(unsigned int) = { glDisable, glEnable};
+    EnableDisable[val](GL_BLEND);
+}
+
+void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst)
+{
+    glBlendFunc((int)src, (int)dst);
 }
 
 void rClearDepth()

@@ -2,9 +2,9 @@
 layout(location = 0) out lowp vec3 oFragColor;
 layout(location = 1) out lowp vec3 oNormal;
 
-uniform lowp sampler2D ColorTex;
-uniform lowp sampler2D NormalTex;
-uniform      sampler2D DepthTex;
+uniform lowp  sampler2D ColorTex;
+uniform lowp  sampler2D NormalTex;
+uniform highp sampler2D DepthTex;
 
 in vec2 texCoord;
 

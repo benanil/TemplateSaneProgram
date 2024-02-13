@@ -26,6 +26,7 @@ set(SOURCES
     src/Scene.cpp
     src/SceneRenderer.cpp
     src/Texture.cpp
+    External/bitset.c
 )
 
 if(AX_GAME_BUILD)
@@ -35,10 +36,10 @@ endif()
 # add astc encoder and ufbx if we are in editor build.
 if(NOT AX_GAME_BUILD)
   
-	list(APPEND SOURCES 
-       External/ufbx.c
-       External/zstd.c # game build include all zstd library. (compressor and decompressor)
-       External/ProcessDxtc.cpp) # compress dxt and bcn textures
+  list(APPEND SOURCES 
+     External/ufbx.c
+     External/zstd.c # game build include all zstd library. (compressor and decompressor)
+     External/ProcessDxtc.cpp) # compress dxt and bcn textures
 
   # Add all .cpp files from External/astc-encoder to the SOURCES list
   file(GLOB ASTC_ENCODER_SOURCES External/astc-encoder/*.cpp)

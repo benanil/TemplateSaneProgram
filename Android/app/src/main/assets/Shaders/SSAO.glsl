@@ -1,7 +1,4 @@
 
-#define MakeVec3(x, y, z) vec3(x, y, z)
-#define MakeVec2(x, y) vec2(x, y)
-
 const vec2 Noise[32] = vec2[32](
     vec2(0.195175, 0.736741),
     vec2(0.244343, -0.188865),
@@ -41,8 +38,6 @@ in vec2 texCoord;
 
 uniform sampler2D depthMap;
 uniform sampler2D normalTex;
-uniform sampler2D noiseTex;
-// uniform sampler2D positionTex;
 
 uniform mat4 Proj;
 uniform mat4 View;
@@ -65,10 +60,10 @@ vec3 ConvertToViewNormal(vec3 normal) {
 
 void main()
 {
-    vec3 baseNormal = texture(normalTex, texCoord).rgb * vec3(2.0) - vec3(1.0);
+    vec3 baseNormal = texture(normalTex, texCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
     float baseDepth = texture(depthMap, texCoord).r;
 
-    // optional scaling for normals that parallel to us,
+    // optional scaling for normals that parallel to view,
     // we might want to sample less range for parallel normals (walls that we look sideways)
     vec2 sampleScale = vec2(1.0) - abs(ConvertToViewNormal(baseNormal).rg);
     sampleScale.x = mix(0.2, 1.0, sampleScale.x);
@@ -77,10 +72,14 @@ void main()
     vec2 screenSize = vec2(textureSize(normalTex, 0));
     vec2 texelSize = vec2(1.0) / screenSize;
     
+#ifndef __ANDROID__
     const int numSamples  = 12;
+#else
+    const int numSamples  = 8;
+#endif
     const float radius    = 1.0;
 
-    float howFar = 1.0 - (baseDepth * baseDepth);
+    float howFar = 1.0 - baseDepth;
     vec2 pixelRange = screenSize * texelSize * howFar;
 
     float occlusion  = 0.0;
@@ -90,18 +89,17 @@ void main()
         vec2 sampleCoord = texCoord + offset;
 
         float depth = texture(depthMap, sampleCoord).r;
-        vec3 normal = texture(normalTex, sampleCoord).rgb * vec3(2.0) - vec3(1.0);
+        vec3 normal = texture(normalTex, sampleCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
 
         // calculate square distance, because distance function uses sqrt
         vec3 diff = baseNormal - normal;
         float normalDiffSqr = dot(diff, diff);
         float depthDiff  = abs(depth - baseDepth);
-        float rangeCheck = depthDiff < 0.0001 ? 1.0 : 0.0;
+        float rangeCheck = depthDiff < 0.00005 ? 1.0 : 0.0;
         occlusion += normalDiffSqr * rangeCheck;
     }
     
-    // max distance between two unit vectors are two, we need 0-1 range divide by 2
-    float darkening = 0.0;
+    // max distance between two unit vectors are two, we need 0-1 range divide by 2(*.5)
     occlusion = 1.0 - saturate((sqrt(occlusion) * 0.5) / float(numSamples));
     occlusion = EaseOut(occlusion);
     

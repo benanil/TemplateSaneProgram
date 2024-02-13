@@ -1,4 +1,5 @@
 
+#define ALPHA_CUTOFF 0
 precision mediump sampler2DShadow;
 
 layout(location = 0) out lowp vec3 oFragColor; // TextureType_RGB8
@@ -27,7 +28,7 @@ float ShadowLookup(vec4 loc, vec2 offset)
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const vec4 minShadow = vec4(0.35);
+    const vec4 minShadow = vec4(0.25);
     #ifdef __ANDROID__
     vec2 offset;
     const vec2 mixer = vec2(1.037, 1.137);
@@ -59,16 +60,17 @@ float ShadowCalculation()
 
 void main()
 {
-    #if ALPHA_CUTOFF
-    if (color.a < 0.001)
-        discard;
+    lowp vec4 color = texture(albedo, vTexCoords);
+    #if ALPHA_CUTOFF == 1
+        if (color.a < 0.001)
+            discard;
     #endif
 
     lowp vec3  normal    = vTBN[2];
     lowp float metallic  = 0.5;
     lowp float roughness = 0.3;
 
-    #ifndef __ANDROID__
+    #if !defined(__ANDROID__)
     if (hasNormalMap == 1)
     {
         // obtain normal from normal map in range [0,1]
@@ -85,7 +87,7 @@ void main()
     #endif
     float shadow = ShadowCalculation();
     oShadowMetallicRoughness = vec3(shadow, metallic, roughness);
-    oFragColor = texture(albedo, vTexCoords).rgb;
+    oFragColor = color.rgb;
     oNormal    = normal + vec3(1.0) * vec3(0.5); // convert to 0-1 range
     //oPosition  = vFragPos;
 }

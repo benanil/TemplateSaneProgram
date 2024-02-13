@@ -5,6 +5,11 @@
 #include <string.h>
 
 #include "bitset.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern inline void bitset_print(const bitset_t *b);
 extern inline bool bitset_for_each(const bitset_t *b, bitset_iterator iterator,
                                    void *ptr);
@@ -420,3 +425,7 @@ bool bitset_trim(bitset_t * bitset) {
   bitset->arraysize = newsize;
   return true;
 }
+
+#ifdef __cplusplus
+}
+#endif

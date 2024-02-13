@@ -40,10 +40,10 @@ struct LightInstance
 {
     Vector3f position;
     Vector3f direction; 
-    Vector3f color;
+    uint  color;
     float intensity;
-    float innerCutoff; // < zero if this is point light
-    float outerCutoff; // < zero if this is point light
+    float cutoff; // < angle of SpotLight between 0.01-1.0, zero if this is point light.
+    float range; // < how far light can reach
 };
 
 struct DirectionalLight
@@ -75,10 +75,12 @@ public:
     Array<uint8_t>       m_Bitmasks; // indicates to entitys mask. user can use this as wood, enemy, stone, metal etc.
     Array<MeshInstance>  m_MeshInstances;
     // lights
-    Array<LightInstance> m_LightInstances;
+    Array<LightInstance> m_PointLights;
+    Array<LightInstance> m_SpotLights;
     DirectionalLight     m_SunLight;
 
     Array<SubScene> m_LoadedSubScenes;
+    static const int IsPointMask = 0x80000000;
 
 public:
     
@@ -101,23 +103,27 @@ public:
     void SetMeshPosition(MeshId id, Vector3f position);
     
     //------------------------------------------------------------------------
+    LightId AddLight(LightInstance& instance);
+
     LightId AddSpotLight(
         Vector3f position,
         Vector3f direction,
         int color,
         float intensity,
-        float innerCutoff,
-        float outerCutoff
+        float cutoff,
+        float range
     );
     
     LightId AddPointLight(
         Vector3f position,
-        Vector3f direction,
         int color,
-        float intensity
+        float intensity,
+        float range
     );
 
-    void RemoveLight(MeshId id);
+    void UpdateLight(LightId id);
+
+    void RemoveLight(LightId id);
 
     // import GLTF, FBX, or OBJ file into scene
     int ImportSubScene(SubSceneID* subsceneID, const char* inPath, float scale);
@@ -125,11 +131,20 @@ public:
     void UpdateSubScene(SubSceneID scene);
     
     SubScene* GetSubScene(SubSceneID scene);
+
+private:
+
+    LightId AddLight(Array<LightInstance>& array, Vector3f position, Vector3f direction, int color, float intensity, float cutoff, float range);
 };
 
 // note: we might need scene system that stores subscenes so we don't have to destroy subscenes each time we change scene
 
 extern Scene g_CurrentScene;
+
+
+
+
+
 
 
 

@@ -9,6 +9,10 @@
 
 #include "portability.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct bitset_s {
     uint64_t * CBITSET_RESTRICT array;
     /* For simplicity and performance, we prefer to have a size and a capacity that is a multiple of 64 bits.
@@ -243,5 +247,9 @@ inline bool bitset_for_each(const bitset_t *b, bitset_iterator iterator, void *p
   return true;
 }
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif
+

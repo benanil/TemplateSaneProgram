@@ -513,7 +513,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 
         // char fps[9]{};
         // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
-        // SetWindowName(fps);
+        // wSetWindowName(fps);
 
         // Do OpenGL rendering here
         AXLoop();

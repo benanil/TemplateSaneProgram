@@ -9,8 +9,8 @@
 #pragma once
 
 #include "../ASTL/Additional/GLTFParser.hpp"
-#include "../ASTL/Math/Vector.hpp"
 #include "../ASTL/Common.hpp"
+#include "../ASTL/Math/Vector.hpp"
 
 #ifdef __ANDROID__  
 #define AX_SHADER_VERSION_PRECISION() "#version 300 es\n"              \
@@ -18,11 +18,9 @@
                                       "precision mediump sampler2D;\n" \
                                       "precision mediump int;\n"       \
                                       "#define __ANDROID__ 1\n"        \
-                                      "#define ALPHA_CUTOFF 0\n"       \
                                       "bool IsAndroid() { return true; }\n"
 #else
 #define AX_SHADER_VERSION_PRECISION() "#version 420 core \n"          \
-                                      "#define ALPHA_CUTOFF 0\n" \
                                       "bool IsAndroid() { return false; }\n"
 #endif
 
@@ -56,7 +54,7 @@ enum GraphicType_
 
     GraphicType_Vector2f,
     GraphicType_Vector3f,
-    GraphicType_Vector4f,
+    GraphicType_vec_t,
 
     GraphicType_Vector2i,
     GraphicType_Vector3i,
@@ -95,7 +93,6 @@ struct InputLayoutDesc
     InputLayout* layout; 
     int stride;
 };
-
 
 // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
 struct AVertex
@@ -141,6 +138,13 @@ void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
 void rInitRenderer();
 
 void rDestroyRenderer();
+
+void rSetBlending(bool val);
+
+enum rBlendFunc_ { rBlendFunc_Zero, rBlendFunc_One };
+typedef int rBlendFunc;
+
+void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst);
 
 void rSetDepthTest(bool val);
 
@@ -231,22 +235,31 @@ void   rDeleteShader(Shader shader);
 void   rBindShader(Shader shader);
 
 // Todo(Anil): lookup uniforms
-unsigned int rGetUniformLocation(const char* name);
+int rGetUniformLocation(const char* name);
 
-unsigned int rGetUniformLocation(Shader shader, const char* name);
+int rGetUniformLocation(Shader shader, const char* name);
+
+// usage:
+// char arrayText[32] = {};
+// int begin = sizeof("uPointLights");
+// rGetUniformArrayLocations(begin, arrayText, lPointLightPositions, "uPointLights[0].position");
+void rGetUniformArrayLocations(int begin, char* arrayText, int* outUniformLocations, int numLocations, const char* uniformName);
 
 Shader rGetCurrentShader();
 
 void rSetMaterial(AMaterial* material);
 
 // sets uniform to binded shader
-void rSetShaderValue(const void* value, unsigned int location, GraphicType type);
+void rSetShaderValue(const void* value, int location, GraphicType type);
 
 // sets uniform to binded shader
-void rSetShaderValue(int value, unsigned int location);
+void rSetShaderValue(int value, int location);
 
 // sets uniform to binded shader
-void rSetShaderValue(float value, unsigned int location);
+void rSetShaderValue(uint value, int location);
+
+// sets uniform to binded shader
+void rSetShaderValue(float value, int location);
 
 
 // Warning! Order is important

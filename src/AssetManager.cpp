@@ -347,13 +347,15 @@ inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v) {
            xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);;
 }
 
-inline uint32_t Pack_INT_2_10_10_10_REV(Vector4f v)
+inline uint32_t Pack_INT_2_10_10_10_REV(vec_t v)
 {
-    const uint32_t xs = v.x < 0.0f, ys = v.y < 0.0f, zs = v.z < 0.0f, ws = v.w < 0.0f;
-    return ws << 31 | ((uint32_t)(v.w + (ws << 1)) & 1) << 30 |
-           zs << 29 | ((uint32_t)(v.z * 511 + (zs << 9)) & 511) << 20 |
-           ys << 19 | ((uint32_t)(v.y * 511 + (ys << 9)) & 511) << 10 |
-           xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);
+	float x = VecGetX(v), y = VecGetX(v), z = VecGetX(v), w = VecGetX(v); 
+
+    const uint32_t xs = x < 0.0f, ys = y < 0.0f, zs = z < 0.0f, ws = w < 0.0f;
+    return ws << 31 | ((uint32_t)(w       + (ws << 1)) & 1) << 30 |
+           zs << 29 | ((uint32_t)(z * 511 + (zs << 9)) & 511) << 20 |
+           ys << 19 | ((uint32_t)(y * 511 + (ys << 9)) & 511) << 10 |
+           xs << 9  | ((uint32_t)(x * 511 + (xs << 9)) & 511);
 }
 
 void CreateVerticesIndices(ParsedGLTF* gltf)
@@ -399,11 +401,11 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
             Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
             Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
             Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
-            Vector4f* tangents  = (Vector4f*)primitive.vertexAttribs[3];
+            vec_t* tangents  = (vec_t*)primitive.vertexAttribs[3];
             
             for (int v = 0; v < primitive.numVertices; v++)
             {
-                Vector4f tangent = tangents ? tangents[v] : Vector4f::Zero();
+                vec_t tangent = tangents ? tangents[v] : VecZero();
                 currVertex[v].position  = positions[v];
                 currVertex[v].texCoord  = ConvertToHalf2(&texCoords[v].x);
                 currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normals[v]);
@@ -428,7 +430,7 @@ void CreateVerticesIndices(ParsedGLTF* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 20;
+const int ABMMeshVersion = 25;
 
 bool IsABMLastVersion(const char* path)
 {
@@ -564,6 +566,7 @@ int SaveGLTFBinary(ParsedGLTF* gltf, const char* path)
 		AFileWrite(&data, sizeof(uint64_t), file);
      
 		AFileWrite(&material.alphaCutoff, sizeof(float), file);
+		AFileWrite(&material.alphaMode, sizeof(int), file);
         
 		WriteGLTFString(material.name, file);
 	}
@@ -777,6 +780,7 @@ int LoadGLTFBinary(const char* path, ParsedGLTF* gltf)
 		material.doubleSided     = data & 0x1;
         
 		AFileRead(&material.alphaCutoff, sizeof(float), file);
+		AFileRead(&material.alphaMode, sizeof(int), file);
 
 		ReadGLTFString(material.name, file, stringAllocator);
 	}

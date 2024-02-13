@@ -17,7 +17,7 @@ const int SceneVersion = 0;
 
 void Scene::Init()
 {
-    //m_MatrixNeedsUpdate = bitset_create();
+    m_MatrixNeedsUpdate = bitset_create();
 }
 
 void Scene::Destroy()
@@ -40,7 +40,7 @@ void Scene::Destroy()
         FreeParsedGLTF(&scene->data);
     }
     m_LoadedSubScenes.Clear();
-    // bitset_free(m_MatrixNeedsUpdate);
+    if (m_MatrixNeedsUpdate) bitset_free(m_MatrixNeedsUpdate);
 }
 
 void Scene::Save(const char* path)
@@ -58,7 +58,7 @@ void Scene::Save(const char* path)
     
     // note: if size of scene file is too big we can only use matrices to save transforms
     int numMeshes = m_MeshInstances.m_count;
-    int numLights = m_LightInstances.m_count;
+    int numLights = m_PointLights.m_count;
     
     AFileWrite(&numMeshes, sizeof(int), file);
     AFileWrite(&numLights, sizeof(int), file);
@@ -67,7 +67,7 @@ void Scene::Save(const char* path)
     AFileWrite(m_Matrices.Data(), sizeof(Matrix4) * numMeshes, file);
     AFileWrite(m_Bitmasks.Data(), sizeof(uint8_t) * numMeshes, file);
     
-    AFileWrite(m_LightInstances.Data(), sizeof(LightInstance) * numLights, file);
+    AFileWrite(m_PointLights.Data(), sizeof(LightInstance) * numLights, file);
     AFileWrite(&m_SunLight, sizeof(DirectionalLight), file);
 
     AFileClose(file);
@@ -99,13 +99,13 @@ void Scene::Load(const char* path)
     m_MeshInstances.Resize(numMeshInstances);
     m_Matrices.Resize(numMeshInstances);
     m_Bitmasks.Resize(numMeshInstances);
-    m_LightInstances.Resize(numLightInstances);
+    m_PointLights.Resize(numLightInstances);
     
     AFileRead(m_MeshInstances.Data(), sizeof(MeshInstance) * numMeshInstances, file);
     AFileRead(m_Matrices.Data(), sizeof(Matrix4) * numMeshInstances, file);
     AFileRead(m_Bitmasks.Data(), sizeof(uint8_t) * numMeshInstances, file);
     
-    AFileRead(m_LightInstances.Data(), sizeof(LightInstance) * numLightInstances, file);
+    AFileRead(m_PointLights.Data(), sizeof(LightInstance) * numLightInstances, file);
     AFileRead(&m_SunLight, sizeof(DirectionalLight), file);
     AFileClose(file);
 
@@ -147,33 +147,55 @@ void Scene::RemoveMesh(MeshId id)
     m_ScaleRotations.RemoveUnordered(id);
 }
 
-LightId Scene::AddSpotLight(Vector3f position, Vector3f direction, int color, float intensity, float innerCutoff, float outerCutoff)
+LightId Scene::AddLight(Array<LightInstance>& array, Vector3f position, Vector3f direction,
+                        int color, float intensity, float cutoff, float range)
 {
-    m_LightInstances.AddUninitialized(1);
-    LightInstance& instance = m_LightInstances.Back();
-    
+    array.AddUninitialized(1);
+    LightInstance& instance = array.Back();
     instance.position  = position;
     instance.direction = direction;
-    UnpackColorRGBf(color, &instance.color.x);
-    instance.intensity   = intensity;
-    instance.innerCutoff = innerCutoff;
-    instance.outerCutoff = outerCutoff;
-    return m_LightInstances.Size() -1;
+    instance.color     = color;
+    instance.intensity = intensity;
+    instance.cutoff    = cutoff;
+    instance.range     = range;
+    int isPointBit = (int)(cutoff == 0.0f) * IsPointMask;
+    return (array.Size() -1) | isPointBit;
 }
 
-LightId Scene::AddPointLight(Vector3f position, Vector3f direction, int color, float intensity)
+LightId Scene::AddLight(LightInstance& instance)
 {
-    return AddSpotLight(position, direction, color, intensity, 0.0, 0.0);
+    bool isPointLight = instance.cutoff == 0.0f;
+    Array<LightInstance>& array = isPointLight ? m_PointLights : m_SpotLights;
+    int isPointBit = (int)isPointLight * IsPointMask;
+    array.Add(instance);
+    return (array.Size() -1) | isPointBit;
+}
+
+LightId Scene::AddSpotLight(Vector3f position, Vector3f direction, int color, float intensity, float cutoff, float range)
+{
+    return AddLight(m_SpotLights, position, direction, color, intensity, cutoff, range);
+}
+
+LightId Scene::AddPointLight(Vector3f position, int color, float intensity, float range)
+{
+    return AddLight(m_PointLights, position, Vector3f::Zero(), color, intensity, 0.0f, range);
+}
+
+void Scene::UpdateLight(LightId id)
+{
+    
 }
 
 void Scene::RemoveLight(MeshId id)
 {
-    m_LightInstances.RemoveUnordered(id);
+    // remove sign bit
+    Array<LightInstance>& lights = !!(id & IsPointMask) ? m_PointLights : m_SpotLights;
+    lights.RemoveUnordered(id & 0x7FFFFFFF);
 }
 
 int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
 {
-    // there will be many mesh instances they are going to use ushort
+    // There will be many mesh instances they are going to use ushort
     ASSERT(m_LoadedSubScenes.Size() < UINT16_MAX); 
     *sceneID = m_LoadedSubScenes.Size();
     m_LoadedSubScenes.AddUninitialized(1);
@@ -207,10 +229,33 @@ int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
     if (!parsed)
         return 0;
 
-    // load to GPU
+    // Load to GPU
     LoadSceneImages(path, scene->textures, scene->data.numImages);
     
     ParsedGLTF& data = scene->data;
+    
+    // Load AABB's
+    for (int i = 0; i < data.numMeshes; i++)
+    {
+        AMesh mesh = data.meshes[i];
+        for (int j = 0; j < mesh.numPrimitives; j++)
+        {
+            APrimitive& primitive = mesh.primitives[j];
+            AVertex* vertices = (AVertex*)primitive.vertices;
+
+            vec_t minv = VecSet1(FLT_MAX);
+            vec_t maxv = VecSet1(FLT_MIN);
+
+            for (int v = 0; v < primitive.numVertices; v++)
+            {
+                vec_t l = VecLoad(&vertices[v].position.x);
+                minv = VecMin(minv, l);
+                maxv = VecMax(maxv, l);
+            }
+            VecStore(primitive.min, minv);
+            VecStore(primitive.max, maxv);
+        }
+    }
     
     // create big mesh that contains all of the vertices and indices of an scene
     APrimitive primitive = data.meshes[0].primitives[0];
@@ -228,7 +273,7 @@ void Scene::UpdateSubScene(SubSceneID scene)
 {
     // Scene* scene = &loadedScenes[sceneID];
     float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
-    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(cosf(time)) + 0.1f, sinf(time)));
+    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
 }
 
 SubScene* Scene::GetSubScene(SubSceneID scene)
