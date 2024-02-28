@@ -39,10 +39,9 @@ uniform mediump sampler2D uAlbedoTex;
 uniform mediump sampler2D uShadowMetallicRoughnessTex;
 uniform mediump sampler2D uNormalTex;
 uniform highp   sampler2D uDepthMap;
-uniform lowp    sampler2D aoTex; // < ambient occlusion
+uniform lowp    sampler2D uAmbientOclussionTex; // < ambient occlusion
 
-uniform highp   vec3 viewPos;
-uniform mediump vec3 sunDir;
+uniform mediump vec3 uSunDir;
 
 uniform highp mat4 uInvView;
 uniform highp mat4 uInvProj;
@@ -184,7 +183,7 @@ half3 CustomToneMapping(half3 x)
 }
 
 // https://www.shadertoy.com/view/lsKSWR
-float16 Vignette(mediump vec2 uv)
+float16 Vignette(half2 uv)
 {
 	uv *= vec2(1.0f) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
 	float16 vig = uv.x * uv.y * 15.0f; // multiply with sth for intensity
@@ -202,12 +201,10 @@ lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp fl
 
 mediump vec4 unpackUnorm4x8(uint x)
 {
-    return vec4(
-        float((x >> 0u ) & 0xFFu) / 255.0,
-        float((x >> 8u ) & 0xFFu) / 255.0,
-        float((x >> 16u) & 0xFFu) / 255.0,
-        float((x >> 24u) & 0xFFu) / 255.0
-    ); 
+    return vec4(uvec4((x >> 0u ) & 0xFFu,
+                      (x >> 8u ) & 0xFFu,
+                      (x >> 16u) & 0xFFu,
+                      (x >> 24u) & 0xFFu)) / 255.0; 
 }
 #endif
 
@@ -216,24 +213,24 @@ lowp float GetAO(float shadow)
     lowp float ao = 0.0;
     #ifdef __ANDROID__
     {
-        ao = Blur5(texture(aoTex, texCoord).r,
-                   textureOffset(aoTex, texCoord, ivec2(-1, 0)).r,
-                   textureOffset(aoTex, texCoord, ivec2( 1, 0)).r,
-                   textureOffset(aoTex, texCoord, ivec2(-2, 0)).r,
-                   textureOffset(aoTex, texCoord, ivec2( 2, 0)).r);
+        ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
+                   textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
+                   textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
+                   textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
+                   textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
     }
     #else
     {
         // 9x gaussian blur
-        ao += textureOffset(aoTex, texCoord, ivec2(-4.0, 0)).r * 0.05;
-        ao += textureOffset(aoTex, texCoord, ivec2(-3.0, 0)).r * 0.09;
-        ao += textureOffset(aoTex, texCoord, ivec2(-2.0, 0)).r * 0.12;
-        ao += textureOffset(aoTex, texCoord, ivec2(-1.0, 0)).r * 0.15;
-        ao += textureOffset(aoTex, texCoord, ivec2(+0.0, 0)).r * 0.16;
-        ao += textureOffset(aoTex, texCoord, ivec2(+1.0, 0)).r * 0.15;
-        ao += textureOffset(aoTex, texCoord, ivec2(+2.0, 0)).r * 0.12;
-        ao += textureOffset(aoTex, texCoord, ivec2(+3.0, 0)).r * 0.09;
-        ao += textureOffset(aoTex, texCoord, ivec2(+4.0, 0)).r * 0.05;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-4.0, 0)).r * 0.05;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-3.0, 0)).r * 0.09;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2.0, 0)).r * 0.12;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1.0, 0)).r * 0.15;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+0.0, 0)).r * 0.16;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+1.0, 0)).r * 0.15;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+2.0, 0)).r * 0.12;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+3.0, 0)).r * 0.09;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4.0, 0)).r * 0.05;
     }
     #endif
     // we want ao only if there is shadow 
@@ -245,7 +242,7 @@ lowp float GetAO(float shadow)
 void main()
 {
     half3 shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
-    half3 normal = texture(uNormalTex, texCoord).rgb * 2.0 - 1.0;
+    half3 normal = texture(uNormalTex, texCoord).rgb; // * 2.0 - 1.0;
     half3 albedo = toLinear(texture(uAlbedoTex, texCoord)).rgb;
     normal = normalize(normal);
     
@@ -254,9 +251,9 @@ void main()
     float16 roughness = shadMetRough.z * shadMetRough.z;
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
-    half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); // normalize(viewPos - pos);
+    half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); 
     half3 sunColor = vec3(0.98f, 0.90, 0.88);
-    half3 lighting = Lighting(albedo * sunColor, sunDir, normal, viewRay); 
+    half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay); 
 
     for (int i = 0; i < uNumPointLights; i++)
     {
@@ -303,5 +300,5 @@ void main()
         }
     }
 
-    oFragColor =  CustomToneMapping(lighting).xyzz * shadow * Vignette(texCoord) * GetAO(shadow);
+    oFragColor = CustomToneMapping(lighting).xyzz * shadow * Vignette(texCoord) * GetAO(shadow);
 }

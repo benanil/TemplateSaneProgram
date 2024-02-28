@@ -63,6 +63,8 @@ enum GraphicType_
     GraphicType_Matrix2,
     GraphicType_Matrix3,
     GraphicType_Matrix4,
+
+    GraphicType_NormalizeBit = 1 << 31
 };
 typedef int GraphicType;
 
@@ -79,8 +81,6 @@ struct GPUMesh
     int attributes;
 };
 
-constexpr int GraphicTypeNormalizeBit = 1 << 31;
-
 struct InputLayout
 {
     int numComp;
@@ -90,17 +90,27 @@ struct InputLayout
 struct InputLayoutDesc
 {
     int numLayout;
-    InputLayout* layout; 
     int stride;
+    const InputLayout* layout; 
 };
 
 // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
 struct AVertex
 {
     Vector3f position;
-    int      normal;
-    int      tangent;
+    uint     normal;
+    uint     tangent;
     half2    texCoord;
+};
+
+struct ASkinedVertex
+{
+    Vector3f position;
+    uint     normal;
+    uint     tangent;
+    half2    texCoord;
+    uint     joints;  // rgb8u
+    uint     weights; // rgb8u
 };
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -112,11 +122,13 @@ GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int nu
 
 void rDeleteMesh(GPUMesh mesh);
 
-void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh);
+void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined);
 
 void rBindMesh(GPUMesh mesh);
 
 void rRenderMesh(GPUMesh mesh);
+
+int GraphicsTypeToSize(GraphicType type);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Renderer                                 */
@@ -140,6 +152,10 @@ void rInitRenderer();
 void rDestroyRenderer();
 
 void rSetBlending(bool val);
+
+void rDrawLine(Vector3f start, Vector3f end, uint color);
+
+void rDrawAllLines(float* viewProj);
 
 enum rBlendFunc_ { rBlendFunc_Zero, rBlendFunc_One };
 typedef int rBlendFunc;
@@ -205,21 +221,21 @@ struct FrameBuffer
 
 FrameBuffer rCreateFrameBuffer();
 
-void        rDeleteFrameBuffer(FrameBuffer frameBuffer);
-
-bool        rFrameBufferCheck();
-            
-void        rBindFrameBuffer(FrameBuffer frameBuffer);
-            
-void        rUnbindFrameBuffer();
-            
-void        rFrameBufferAttachDepth(Texture texture);
-
-void        rFrameBufferAttachColor(Texture texture, int index);
-
-void        rFrameBufferSetNumColorBuffers(int numBuffers);
-
-void        rFrameBufferInvalidate(int numAttachments);
+void rDeleteFrameBuffer(FrameBuffer frameBuffer);
+     
+bool rFrameBufferCheck();
+     
+void rBindFrameBuffer(FrameBuffer frameBuffer);
+     
+void rUnbindFrameBuffer();
+     
+void rFrameBufferAttachDepth(Texture texture);
+     
+void rFrameBufferAttachColor(Texture texture, int index);
+     
+void rFrameBufferSetNumColorBuffers(int numBuffers);
+     
+void rFrameBufferInvalidate(int numAttachments);
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Shader                                   */
 /*//////////////////////////////////////////////////////////////////////////*/

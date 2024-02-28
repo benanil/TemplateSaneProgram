@@ -2,13 +2,15 @@
 
 #include "Scene.hpp"
 
-int LoadFBX(const char* path, ParsedGLTF* fbxScene, float scale);
+int LoadFBX(const char* path, SceneBundle* fbxScene, float scale);
 
-int SaveGLTFBinary(ParsedGLTF* gltf, const char* path);
+int SaveGLTFBinary(SceneBundle* gltf, const char* path);
 
-int LoadGLTFBinary(const char* path, ParsedGLTF* gltf);
+int LoadGLTFBinary(const char* path, SceneBundle* gltf);
 
-void CreateVerticesIndices(ParsedGLTF* gltf);
+void CreateVerticesIndices(SceneBundle* gltf);
+
+void CreateVerticesIndicesSkined(SceneBundle* gltf);
 
 // ABM = AX binary mesh
 bool IsABMLastVersion(const char* path);
@@ -16,6 +18,6 @@ bool IsABMLastVersion(const char* path);
 bool IsTextureLastVersion(const char* path);
 
 // From Texture.cpp
-void SaveSceneImages(SubScene* scene, char* path);
+void SaveSceneImages(Prefab* scene, char* path);
 
 void LoadSceneImages(char* path, Texture*& textures, int numImages);

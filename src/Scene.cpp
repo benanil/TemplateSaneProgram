@@ -22,24 +22,22 @@ void Scene::Init()
 
 void Scene::Destroy()
 {
-    for (int i = 0; i < m_LoadedSubScenes.Size(); i++)
+    for (int i = 0; i < m_LoadedPrefabs.Size(); i++)
     {
-        SubScene* scene = &m_LoadedSubScenes[i];
-        ParsedGLTF& data = scene->data;
-
+        Prefab* scene = &m_LoadedPrefabs[i];
         rDeleteMesh(scene->bigMesh);
     
         if (scene->textures) {
-            for (int i = 0; i < data.numTextures; i++) {
+            for (int i = 0; i < scene->numTextures; i++) {
                 rDeleteTexture(scene->textures[i]);
             }
         }
 
         delete[] scene->textures;
 
-        FreeParsedGLTF(&scene->data);
+        FreeParsedGLTF((SceneBundle*)scene);
     }
-    m_LoadedSubScenes.Clear();
+    m_LoadedPrefabs.Clear();
     if (m_MatrixNeedsUpdate) bitset_free(m_MatrixNeedsUpdate);
 }
 
@@ -48,12 +46,12 @@ void Scene::Save(const char* path)
     AFile file = AFileOpen(path, AOpenFlag_Write);
     AFileWrite(&SceneVersion, sizeof(int), file);
     
-    int numPrefabs = m_LoadedSubScenes.m_count;
+    int numPrefabs = m_LoadedPrefabs.m_count;
     AFileWrite(&numPrefabs, sizeof(int), file);
     
     for (int i = 0; i < numPrefabs; i++)
     {
-        AFileWrite(m_LoadedSubScenes[i].path, 256, file);
+        AFileWrite(m_LoadedPrefabs[i].path, 256, file);
     }
     
     // note: if size of scene file is too big we can only use matrices to save transforms
@@ -83,11 +81,11 @@ void Scene::Load(const char* path)
 
     int numPrefabs;
     AFileRead(&numPrefabs, sizeof(int), file);
-    m_LoadedSubScenes.Resize(numPrefabs);
+    m_LoadedPrefabs.Resize(numPrefabs);
 
     for (int i = 0; i < numPrefabs; i++)
     {
-        AFileRead(m_LoadedSubScenes[i].path, 256, file);
+        AFileRead(m_LoadedPrefabs[i].path, 256, file);
     }
     
     int numMeshInstances = 0;
@@ -128,7 +126,7 @@ void Scene::SetMeshPosition(MeshId id,  Vector3f position)
     return m_Matrices[id].SetPosition(position);
 }
 
-MeshId Scene::AddMesh(SubSceneID extScene, ushort sceneExtID, ushort meshIndex,
+MeshId Scene::AddMesh(PrefabID extScene, ushort sceneExtID, ushort meshIndex,
                char bitmask, const Matrix4& transformation)
 {
     MeshInstance instance = { sceneExtID, meshIndex };
@@ -188,69 +186,88 @@ void Scene::UpdateLight(LightId id)
 
 void Scene::RemoveLight(MeshId id)
 {
-    // remove sign bit
     Array<LightInstance>& lights = !!(id & IsPointMask) ? m_PointLights : m_SpotLights;
+    // remove sign bit
     lights.RemoveUnordered(id & 0x7FFFFFFF);
 }
 
-int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
+int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
 {
     // There will be many mesh instances they are going to use ushort
-    ASSERT(m_LoadedSubScenes.Size() < UINT16_MAX); 
-    *sceneID = m_LoadedSubScenes.Size();
-    m_LoadedSubScenes.AddUninitialized(1);
+    ASSERT(m_LoadedPrefabs.Size() < UINT16_MAX); 
+    *sceneID = m_LoadedPrefabs.Size();
+    m_LoadedPrefabs.AddUninitialized(1);
 
-    SubScene* scene = &m_LoadedSubScenes[*sceneID];
+    Prefab* scene = &m_LoadedPrefabs[*sceneID];
 
     int parsed = 1;
     char* path = scene->path;
-    MemsetZero(path, sizeof(SubScene::path));
+    MemsetZero(path, sizeof(Prefab::path));
     int pathLen = StringLength(inPath);
     SmallMemCpy(path, inPath, pathLen);
+    
+    bool isGLTF = FileHasExtension(path, pathLen, "gltf");
+    bool isFBX  = FileHasExtension(path, pathLen, "fbx");
 
     ChangeExtension(path, pathLen, "abm");
     bool firstLoad = !FileExist(path) || !IsABMLastVersion(path);
+
     if (firstLoad)
     {
         ASSERT(!IsAndroid());
-        ChangeExtension(path, StringLength(path), "gltf");
-        parsed &= ParseGLTF(path, &scene->data, scale); ASSERT(parsed);
-        CreateVerticesIndices(&scene->data);
+        ASSERT(isGLTF || isFBX);
 
-        ChangeExtension(path, StringLength(path), "abm");
-        parsed &= SaveGLTFBinary(&scene->data, path); ASSERT(parsed);
+        pathLen = StringLength(path);
+
+        if (isGLTF) {
+            ChangeExtension(path, pathLen, "gltf");
+            parsed &= ParseGLTF(path, (SceneBundle*)scene, scale); ASSERT(parsed);
+            
+            if (scene->numSkins > 0) CreateVerticesIndicesSkined((SceneBundle*)scene);
+            else                     CreateVerticesIndices((SceneBundle*)scene);
+        }
+        else if (isFBX) {
+            ChangeExtension(path, pathLen, "fbx");
+            parsed &= LoadFBX(path, (SceneBundle*)scene, scale);
+        }
+
+        // ChangeExtension(path, StringLength(path), "abm");
+        // parsed &= SaveGLTFBinary((ParsedGLTF*)scene, path); ASSERT(parsed);
         SaveSceneImages(scene, path); // save textures as binary
     }
     else
     {
-        parsed = LoadGLTFBinary(path, &scene->data);
+        parsed = LoadGLTFBinary(path, (SceneBundle*)scene);
     }
 
     if (!parsed)
         return 0;
 
     // Load to GPU
-    LoadSceneImages(path, scene->textures, scene->data.numImages);
-    
-    ParsedGLTF& data = scene->data;
+    LoadSceneImages(path, scene->textures, scene->numImages);
     
     // Load AABB's
-    for (int i = 0; i < data.numMeshes; i++)
+    for (int i = 0; i < scene->numMeshes; i++)
     {
-        AMesh mesh = data.meshes[i];
+        AMesh mesh = scene->meshes[i];
         for (int j = 0; j < mesh.numPrimitives; j++)
         {
             APrimitive& primitive = mesh.primitives[j];
-            AVertex* vertices = (AVertex*)primitive.vertices;
+            bool hasSkin = EnumHasBit(primitive.attributes, AAttribType_JOINTS) && 
+                           EnumHasBit(primitive.attributes, AAttribType_WEIGHTS);
+
+            uint64_t vertexSize = hasSkin ? sizeof(ASkinedVertex) : sizeof(AVertex);
+            char* vertices = (char*)primitive.vertices;
 
             vec_t minv = VecSet1(FLT_MAX);
             vec_t maxv = VecSet1(FLT_MIN);
 
             for (int v = 0; v < primitive.numVertices; v++)
             {
-                vec_t l = VecLoad(&vertices[v].position.x);
+                vec_t l = VecLoad((float*)vertices); // at the begining of the vertex we have position
                 minv = VecMin(minv, l);
                 maxv = VecMax(maxv, l);
+                vertices += vertexSize;
             }
             VecStore(primitive.min, minv);
             VecStore(primitive.max, maxv);
@@ -258,25 +275,25 @@ int Scene::ImportSubScene(SubSceneID* sceneID, const char* inPath, float scale)
     }
     
     // create big mesh that contains all of the vertices and indices of an scene
-    APrimitive primitive = data.meshes[0].primitives[0];
-    primitive.indices     = data.allIndices;
-    primitive.vertices    = data.allVertices;
-    primitive.numIndices  = data.totalIndices;
-    primitive.numVertices = data.totalVertices;
+    APrimitive primitive  = scene->meshes[0].primitives[0];
+    primitive.indices     = scene->allIndices;
+    primitive.vertices    = scene->allVertices;
+    primitive.numIndices  = scene->totalIndices;
+    primitive.numVertices = scene->totalVertices;
     primitive.indexType   = GraphicType_UnsignedInt;
-    rCreateMeshFromPrimitive(&primitive, &scene->bigMesh);
-
+    bool isSkined = (bool)(scene->skins != nullptr);
+    rCreateMeshFromPrimitive(&primitive, &scene->bigMesh, isSkined);
     return parsed;
 }
 
-void Scene::UpdateSubScene(SubSceneID scene)
+void Scene::UpdatePrefab(PrefabID scene)
 {
     // Scene* scene = &loadedScenes[sceneID];
-    float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165));
+    float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11)); 
     m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
 }
 
-SubScene* Scene::GetSubScene(SubSceneID scene)
+Prefab* Scene::GetPrefab(PrefabID scene)
 {
-    return &m_LoadedSubScenes[scene];
+    return &m_LoadedPrefabs[scene];
 }

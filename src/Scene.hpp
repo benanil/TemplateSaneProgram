@@ -7,7 +7,7 @@
 #if defined(__ANDROID__)
     #define AX_GAME_BUILD 1
 #else
-    #define AX_GAME_BUILD 1 /* make zero for editor build */
+    #define AX_GAME_BUILD 0 /* make zero for editor build */
 #endif
 
 #include "../ASTL/Array.hpp"
@@ -16,22 +16,21 @@
 #include "Renderer.hpp"
 
 //------------------------------------------------------------------------
-// subscene is GLTF, FBX or OBJ
-struct SubScene
+// prefab is GLTF, FBX or OBJ
+struct Prefab : public SceneBundle 
 {
-    ParsedGLTF data;
     Texture* textures;
-    GPUMesh bigMesh; // contains all of the vertices and indices of an SubScene
+    GPUMesh bigMesh; // contains all of the vertices and indices of an prefab
     char path[128]; // relative path
 };
 
-typedef ushort SubSceneID;
+typedef ushort PrefabID;
 
 //------------------------------------------------------------------------
 
 struct MeshInstance
 {
-    ushort sceneExtIndex; // index of SubScene that contained this mesh
+    ushort sceneExtIndex; // index of prefab that contained this mesh
     ushort meshIndex; // mesh index in gltf scene
 };
 
@@ -64,7 +63,6 @@ struct ScaleRotation
 
 struct Scene
 {
-public:
     // Transformations of the meshes
     // one of these[meshId] gives the data
     Array<Matrix4>       m_Matrices; // matrices are seperate because we can use with instancing
@@ -72,18 +70,17 @@ public:
     bitset_t*            m_MatrixNeedsUpdate;
 
     // Meshes
-    Array<uint8_t>       m_Bitmasks; // indicates to entitys mask. user can use this as wood, enemy, stone, metal etc.
+    Array<uint8_t>       m_Bitmasks; // indicates to entity mask. user can use this as wood, enemy, stone, metal etc.
     Array<MeshInstance>  m_MeshInstances;
     // lights
     Array<LightInstance> m_PointLights;
     Array<LightInstance> m_SpotLights;
     DirectionalLight     m_SunLight;
 
-    Array<SubScene> m_LoadedSubScenes;
+    Array<Prefab> m_LoadedPrefabs;
     static const int IsPointMask = 0x80000000;
 
-public:
-    
+    //------------------------------------------------------------------------
     void Init();
 
     void Destroy();
@@ -93,7 +90,7 @@ public:
     void Load(const char* path);
     
     //------------------------------------------------------------------------
-    MeshId AddMesh(SubSceneID extScene, ushort sceneExtID, ushort meshIndex,
+    MeshId AddMesh(PrefabID extScene, ushort sceneExtID, ushort meshIndex,
                    char bitmask, const Matrix4& transformation);
     
     void RemoveMesh(MeshId id);
@@ -126,11 +123,11 @@ public:
     void RemoveLight(LightId id);
 
     // import GLTF, FBX, or OBJ file into scene
-    int ImportSubScene(SubSceneID* subsceneID, const char* inPath, float scale);
+    int ImportPrefab(PrefabID* prefabID, const char* inPath, float scale);
 
-    void UpdateSubScene(SubSceneID scene);
+    void UpdatePrefab(PrefabID scene);
     
-    SubScene* GetSubScene(SubSceneID scene);
+    Prefab* GetPrefab(PrefabID scene);
 
 private:
 
@@ -140,6 +137,14 @@ private:
 // note: we might need scene system that stores subscenes so we don't have to destroy subscenes each time we change scene
 
 extern Scene g_CurrentScene;
+
+
+
+
+
+
+
+
 
 
 

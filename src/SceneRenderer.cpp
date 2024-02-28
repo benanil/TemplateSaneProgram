@@ -8,6 +8,7 @@
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
 #include "../ASTL/String.hpp"
+
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
 
@@ -19,6 +20,7 @@ namespace SceneRenderer
     Matrix4     m_LightMatrix;
     FrameBuffer m_ShadowFrameBuffer;
     Shader      m_ShadowShader;
+    
     Shader      m_GBufferShader;
     Shader      m_GBufferShaderAlpha;
 
@@ -46,11 +48,20 @@ namespace SceneRenderer
     Shader      m_DeferredPBRShader;
 
     // Gbuffer uniform locations
-    int lAlbedo, lNormalMap, lHasNormalMap, lMetallicMap, lShadowMap, lLightMatrix, lModel, lMvp;
+    int lAlbedo, lNormalMap, lHasNormalMap, lMetallicMap, lShadowMap, lLightMatrix, lModel, lHasSkin, lSunDirG, lViewProj;
+    const int NumJoints = 32;
+    int lInvBindMatrices[NumJoints];
+    int lJointMatrices[NumJoints];
     
     // Deferred uniform locations
-    int lViewPos, lSunDir, lAlbedoTex, lShadowMetallicRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj;
+    int lSunDir, lAlbedoTex, lShadowMetallicRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
     const int NumLights = 16;
+
+    // SSAO uniform locations
+    int sDepthMap, sNormalTex, sView;
+    
+    // SSAO downsample uniform locations
+    int dColorTex, dNormalTex, dDepthTex;
 
     struct LightUniforms
     {
@@ -72,14 +83,15 @@ namespace SceneRenderer
     int lShadowModel, lShadowLightMatrix;
     
     Array<KeyValuePair<ANode*, APrimitive*>> m_DelayedAlphaCutoffs;
+    AMaterial m_defaultMaterial;
 }
 
 namespace ShadowSettings
 {
     const int ShadowMapSize = 1 << (11 + !IsAndroid()); // mobile 2k, pc 4k
-    const float OrthoSize = 35.0f;
-    const float NearPlane = 1.0f;
-    const float FarPlane = 128.0f;
+    const float OrthoSize   = 32.0f;
+    const float NearPlane   = 1.0f;
+    const float FarPlane    = 192.0f;
     
     const float Bias = 0.001f;
     const Vector3f OrthoOffset{};
@@ -189,18 +201,39 @@ static void CreateSkyTexture()
 
 static void GetUniformLocations()
 { 
-    lAlbedo         = rGetUniformLocation(m_GBufferShader, "albedo");
-    lNormalMap      = rGetUniformLocation(m_GBufferShader, "normalMap");
-    lHasNormalMap   = rGetUniformLocation(m_GBufferShader, "hasNormalMap");
-    lMetallicMap    = rGetUniformLocation(m_GBufferShader, "metallicRoughnessMap");
-    lShadowMap      = rGetUniformLocation(m_GBufferShader, "shadowMap");
-    lLightMatrix    = rGetUniformLocation(m_GBufferShader, "lightMatrix");
-    lModel          = rGetUniformLocation(m_GBufferShader, "model");
-    lMvp            = rGetUniformLocation(m_GBufferShader, "mvp");
+    char lightText[32] = {};
+    int arrBegin;
+
+    rBindShader(m_GBufferShader);
+    lSunDirG        = rGetUniformLocation("uSunDir");
+    lAlbedo         = rGetUniformLocation("uAlbedo");
+    lNormalMap      = rGetUniformLocation("uNormalMap");
+    lHasNormalMap   = rGetUniformLocation("uHasNormalMap");
+    lMetallicMap    = rGetUniformLocation("uMetallicRoughnessMap");
+    lShadowMap      = rGetUniformLocation("uShadowMap");
+    lLightMatrix    = rGetUniformLocation("uLightMatrix");
+    lModel          = rGetUniformLocation("uModel");
+    lHasSkin        = rGetUniformLocation("uHasSkin");
+    lViewProj       = rGetUniformLocation("uViewProj");
+    arrBegin = sizeof("uInvBindMatrices");
+    rGetUniformArrayLocations(arrBegin, lightText, lInvBindMatrices, NumJoints, "uInvBindMatrices[0]");
     
+    arrBegin = sizeof("uJointMatrices");
+    rGetUniformArrayLocations(arrBegin, lightText, lJointMatrices, NumJoints, "uJointMatrices[0]");
+    
+    // SSAO uniform locations
+    sDepthMap  = rGetUniformLocation(m_SSAOShader, "uDepthMap");
+    sNormalTex = rGetUniformLocation(m_SSAOShader, "uNormalTex");
+    sView      = rGetUniformLocation(m_SSAOShader, "uView");
+    
+    // SSAO downsample uniform locations
+    rBindShader(m_MainFrameBufferCopyShader);
+    dColorTex  = rGetUniformLocation("uColorTex");
+    dNormalTex = rGetUniformLocation("uNormalTex"); 
+    dDepthTex  = rGetUniformLocation("uDepthTex");
+
     rBindShader(m_DeferredPBRShader);
-    lViewPos                    = rGetUniformLocation("viewPos");
-    lSunDir                     = rGetUniformLocation("sunDir");
+    lSunDir                     = rGetUniformLocation("uSunDir");
     lAlbedoTex                  = rGetUniformLocation("uAlbedoTex");
     lShadowMetallicRoughnessTex = rGetUniformLocation("uShadowMetallicRoughnessTex");
     lNormalTex                  = rGetUniformLocation("uNormalTex");
@@ -209,9 +242,9 @@ static void GetUniformLocations()
     lInvProj                    = rGetUniformLocation("uInvProj");
     lNumPointLights             = rGetUniformLocation("uNumPointLights");
     lNumSpotLights              = rGetUniformLocation("uNumSpotLights");
+    lAmbientOclussionTex        = rGetUniformLocation("uAmbientOclussionTex");
 
-    char lightText[32] = {};
-    int arrBegin = sizeof("uPointLights");
+    arrBegin = sizeof("uPointLights");
     // we get all of the array uniform locations not just first uniform
     rGetUniformArrayLocations(arrBegin, lightText, m_PointLightUniforms.lPositions  , NumLights, "uPointLights[0].position");
     rGetUniformArrayLocations(arrBegin, lightText, m_PointLightUniforms.lColors     , NumLights, "uPointLights[0].color");
@@ -227,35 +260,6 @@ static void GetUniformLocations()
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lIntensities, NumLights, "uSpotLights[0].intensity");
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lCutoffs    , NumLights, "uSpotLights[0].cutoff");
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lRanges     , NumLights, "uSpotLights[0].range");
-}
-
-static void RenderShadows(SubScene* subScene, DirectionalLight& sunLight)
-{
-    rBindShader(m_ShadowShader);
-    rBindFrameBuffer(m_ShadowFrameBuffer);
-    
-    rBeginShadow();
-    rClearDepth();
-
-    rSetViewportSize(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize);
-    
-    Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 150.0f, -sunLight.dir, Vector3f::Up());    
-    Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
-    m_LightMatrix = view * ortho;
-    rSetShaderValue(m_LightMatrix.GetPtr(), lShadowLightMatrix, GraphicType_Matrix4);
-    
-    const Matrix4 model = Matrix4::CreateScale(subScene->data.scale);
-    rSetShaderValue(model.GetPtr(), lShadowModel, GraphicType_Matrix4);
-
-    rRenderMesh(subScene->bigMesh); // render all scene with one draw call
-
-    rEndShadow();
-    rUnbindFrameBuffer();
-
-    Vector2i windowSize;
-    wGetWindowSize(&windowSize.x, &windowSize.y);
-    rSetViewportSize(windowSize.x, windowSize.y);
-    rBindFrameBuffer(m_MainFrameBuffer.Buffer);
 }
 
 inline Shader FullScreenShaderFromPath(const char* path)
@@ -304,7 +308,7 @@ static void SetupShadowRendering()
         uniform mat4 model, lightMatrix;
         
         void main() {
-            gl_Position =  model * lightMatrix * vec4(aPosition, 1.0);
+            gl_Position = model * lightMatrix * vec4(aPosition, 1.0);
         }
     )";
 
@@ -330,7 +334,7 @@ void BeginUpdateLights()
 void UpdateLight(int index, LightInstance* instance)
 {
     index &= 0x7FFFFFF;
-    LightUniforms* uniforms = instance->cutoff > 0.0 ? &m_SpotLightUniforms : &m_PointLightUniforms;
+    LightUniforms* uniforms = instance->cutoff > 0.0f ? &m_SpotLightUniforms : &m_PointLightUniforms;
     rSetShaderValue(&instance->position.x , uniforms->lPositions[index] , GraphicType_Vector3f);
     rSetShaderValue(&instance->direction.x, uniforms->lDirections[index], GraphicType_Vector3f);
     rSetShaderValue(instance->color    , uniforms->lColors[index]);
@@ -356,6 +360,15 @@ void Init()
     wSetWindowResizeCallback(WindowResizeCallback);
 
     SetupShadowRendering();
+    
+    MemsetZero(&m_defaultMaterial, sizeof(AMaterial));
+    m_defaultMaterial.metallicFactor  = 1256;
+    m_defaultMaterial.roughnessFactor = 1256;
+    m_defaultMaterial.diffuseColor    = 0xFCBD8733; 
+    m_defaultMaterial.specularColor   = 0xFCBD8733; 
+    m_defaultMaterial.baseColorFactor = 0xFFFFFFFF;
+    m_defaultMaterial.baseColorTexture.index = -1;
+    m_defaultMaterial.GetNormalTexture().index = -1;
 }
 
 void BeginRendering()
@@ -370,19 +383,98 @@ void BeginRendering()
         rRenderFullScreen(m_SkyTexture.handle);
         rSetDepthTest(true);
     }
+    
+    m_Camera.Update();
+    rBindShader(m_GBufferShader);
+   
+    // shadow uniforms
+    rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
+
+    rSetTexture(m_ShadowTexture, 3, lShadowMap);
 }
 
-static void RenderPrimitive(AMaterial& material, SubScene* subScene, APrimitive& primitive)
+static void RenderShadowOfNode(ANode* node, Prefab* prefab, Matrix4 parentMat)
+{
+    Matrix4 model = parentMat * Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale);
+    // is camera or empty node skip.
+    if (node->type == 1 || node->index == -1)
+    {
+        for (int i = 0; i < node->numChildren; i++)
+        {
+            RenderShadowOfNode(&prefab->nodes[node->children[i]], prefab, model);
+        }
+        return;
+    }
+    rSetShaderValue(model.GetPtr(), lShadowModel, GraphicType_Matrix4);
+    
+    AMesh mesh = prefab->meshes[node->index];
+    for (int i = 0; i < mesh.numPrimitives; i++)
+    {
+        APrimitive* primitive = &mesh.primitives[i];
+        rRenderMeshIndexOffset(prefab->bigMesh, primitive->numIndices, primitive->indexOffset); // render all scene with one draw call
+    }
+    
+    for (int i = 0; i < node->numChildren; i++)
+    {
+        RenderShadowOfNode(&prefab->nodes[node->children[i]], prefab, model);
+    }
+}
+
+static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight)
+{
+    rBindShader(m_ShadowShader);
+    rBindFrameBuffer(m_ShadowFrameBuffer);
+    
+    rBeginShadow();
+    rClearDepth();
+
+    rSetViewportSize(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize);
+    
+    Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 50.0f + m_Camera.position, -sunLight.dir, Vector3f::Up());
+    Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
+    m_LightMatrix = view * ortho;
+
+    rSetShaderValue(m_LightMatrix.GetPtr(), lShadowLightMatrix, GraphicType_Matrix4);
+    
+    bool hasScene = prefab->numScenes > 0;
+    
+    if (!hasScene)
+    {
+        Matrix4 model = Matrix4::CreateScale(prefab->scale);
+        rSetShaderValue(model.GetPtr(), lShadowModel, GraphicType_Matrix4);
+        rRenderMesh(prefab->bigMesh); // render all scene with one draw call
+    }
+    else
+    {
+        AScene defaultScene = prefab->scenes[prefab->defaultSceneIndex];
+        int numNodes = defaultScene.numNodes;
+        for (int i = 0; i < numNodes; i++)
+        {
+            rBindMesh(prefab->bigMesh);
+            RenderShadowOfNode(&prefab->nodes[defaultScene.nodes[i]], prefab, Matrix4::Identity());
+        }
+    }
+
+    rEndShadow();
+    rUnbindFrameBuffer();
+
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
+    rSetViewportSize(windowSize.x, windowSize.y);
+    rBindFrameBuffer(m_MainFrameBuffer.Buffer);
+}
+
+static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& primitive)
 {
     int baseColorIndex = material.baseColorTexture.index;
-    if (subScene->textures && baseColorIndex != -1)
-        rSetTexture(subScene->textures[baseColorIndex], 0, lAlbedo);
+    if (prefab->numTextures > 0 && baseColorIndex != -1)
+        rSetTexture(prefab->textures[baseColorIndex], 0, lAlbedo);
     
     int normalIndex  = material.GetNormalTexture().index;
     int hasNormalMap = EnumHasBit(primitive.attributes, AAttribType_TANGENT) && normalIndex != -1;
     
-    if (subScene->textures && hasNormalMap)
-        rSetTexture(subScene->textures[normalIndex], 1, lNormalMap);
+    if (prefab->numTextures > 0 && hasNormalMap)
+        rSetTexture(prefab->textures[normalIndex], 1, lNormalMap);
     
     rSetShaderValue(hasNormalMap, lHasNormalMap);
     
@@ -397,93 +489,208 @@ static void RenderPrimitive(AMaterial& material, SubScene* subScene, APrimitive&
         rSetTexture(texture, 2, lMetallicMap);
     }
     int offset = primitive.indexOffset;
-    rRenderMeshIndexOffset(subScene->bigMesh, primitive.numIndices, offset);
+    rRenderMeshIndexOffset(prefab->bigMesh, primitive.numIndices, offset);
 }
 
-static void SetMVPOfNode(Matrix4 model, Matrix4& viewProjection)
+static void RecurseNodeMatrices(ANode* node, ANode* nodes, Matrix4 parentMatrix, Matrix4* matrices)
 {
-    Matrix4 mvp = model * viewProjection;
-    rSetShaderValue(mvp.GetPtr()  , lMvp  , GraphicType_Matrix4);
+    for (int c = 0; c < node->numChildren; c++)
+    {
+        int childIndex = node->children[c];
+        ANode* children = &nodes[childIndex];
+        Matrix4 childTranslation = Matrix4::PositionRotationScale(children->translation, children->rotation, children->scale) * parentMatrix;
+        matrices[childIndex] = childTranslation;
+
+        RecurseNodeMatrices(children, nodes, childTranslation, matrices);
+    }
+}
+
+static void EvaluateAnim(Prefab* prefab, int animIndex, float animTime)
+{
+    ASkin& skin = prefab->skins[0];
+    AAnimation& animation = prefab->animations[0];
+    ASSERT(skin.numJoints < 32);
+
+    for (int i = 0; i < skin.numJoints; i++)
+    {
+        rSetShaderValue(skin.inverseBindMatrices + (i * 16), lInvBindMatrices[i], GraphicType_Matrix4);
+    }
+
+    for (int c = 0; c < animation.numChannels; c++)
+    {
+        AAnimChannel& channel = animation.channels[c];
+        ANode* targetNode = &prefab->nodes[channel.targetNode];
+        AAnimSampler& sampler = animation.samplers[channel.sampler];
+
+        float realTime = FMod(animTime, animation.duration);
+        
+        int beginIdx = 0;
+        while (realTime > sampler.input[beginIdx + 1])
+            beginIdx++;
+        
+        vec_t begin = ((vec_t*)sampler.output)[beginIdx]; 
+        vec_t end   = ((vec_t*)sampler.output)[beginIdx + 1];
+        float t = (realTime - sampler.input[beginIdx]) / MAX(sampler.input[beginIdx + 1] - sampler.input[beginIdx], 0.0001f);
+        t = Clamp(t, 0.0f, 1.0f);
+
+        switch (channel.targetPath)
+        {
+            case AAnimTargetPath_Scale:
+                Vec3Store(targetNode->scale, VecLerp(begin, end, t));
+                break;
+            case AAnimTargetPath_Translation:
+                Vec3Store(targetNode->translation, VecLerp(begin, end, t));
+                break;
+            case AAnimTargetPath_Rotation:
+                vec_t rot = QSlerp(begin, end, t);
+                VecStore(targetNode->rotation, rot);
+                ASSERT(Abs(1.0f - VecLenf(rot)) < 0.01f); // is normalized ?
+                break;
+        };
+    }
+    Matrix4 jointMatrices[32];
+
+    if (skin.skeleton == -1)
+    {
+        ASSERT(prefab->numNodes < 64);
+        uint64_t isChildren = 0ull;
+
+        for (int n = 0; n < prefab->numNodes; n++)
+        {
+            for (int c = 0; c < prefab->nodes[n].numChildren; c++)
+            { 
+                int children = prefab->nodes[n].children[c];
+                isChildren |= (1ull << children);
+            }
+        }
+    
+        uint64_t mask = ~0ull >> (64 - prefab->numNodes);
+        uint64_t rootNodes = mask & ~isChildren;
+
+        uint64_t rootIndex = 63ull - LeadingZeroCount(rootNodes);
+        rootNodes >>= rootIndex;
+
+        for (/**/; rootNodes > 0; rootIndex += NextSetBit(&rootNodes))
+        {
+            ANode* rootNode = &prefab->nodes[rootIndex];
+            Matrix4 rootMatrix = Matrix4::PositionRotationScale(rootNode->translation, rootNode->rotation, rootNode->scale);
+            jointMatrices[rootIndex] = rootMatrix;
+            RecurseNodeMatrices(rootNode, prefab->nodes, rootMatrix, jointMatrices);
+        }
+    }
+    else
+    {
+        ANode* rootNode = &prefab->nodes[skin.skeleton];
+        Matrix4 rootMatrix = Matrix4::PositionRotationScale(rootNode->translation, rootNode->rotation, rootNode->scale);
+        jointMatrices[skin.skeleton] = rootMatrix;
+        RecurseNodeMatrices(rootNode, prefab->nodes, rootMatrix, jointMatrices);
+    }
+
+    Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
+    for (int i = 0; i < skin.numJoints; i++)
+    {
+        Matrix4 mat = invMatrices[i] * jointMatrices[skin.joints[i]];
+        rSetShaderValue(mat.GetPtr(), lJointMatrices[i], GraphicType_Matrix4);
+    }
+}
+
+static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix4 viewProjection, bool recurse, bool isAlpha)
+{
+    Matrix4 model = parentMat * Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+
+    // if node is not mesh skip (camera or empty node)
+    if (node.type != 0 || node.index == -1)
+    {
+        for (int i = 0; i < node.numChildren && recurse; i++)
+        {
+            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, viewProjection, recurse, isAlpha);
+        }
+        return;
+    }
+    
     rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
+    AMesh mesh = prefab->meshes[node.index];
+    
+    for (int j = 0; j < mesh.numPrimitives; ++j)
+    {
+        APrimitive& primitive = mesh.primitives[j];
+        bool hasMaterial = prefab->materials && primitive.material != -1;
+        AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
+        vec_t aabbMin = VecLoadA(primitive.min);
+        vec_t aabbMax = VecLoadA(primitive.max);
+        bool shouldDraw = true;
+    
+        shouldDraw &= CheckAABBCulled(aabbMin, aabbMax, m_Camera.frustumPlanes, model);
+        shouldDraw &= primitive.numIndices != 0;
+    
+        // if (!isAlpha && material.alphaMode == AMaterialAlphaMode_Mask) { 
+        //     m_DelayedAlphaCutoffs.EmplaceBack(&node, mesh.primitives + j);
+        //     //shouldDraw = false;
+        // }
+    
+        if (shouldDraw) {
+            // SetMaterial(&material);
+            RenderPrimitive(material, prefab, primitive);
+        }
+
+        for (int i = 0; i < node.numChildren && recurse; i++)
+        {
+            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, viewProjection, recurse, isAlpha);
+        }
+    }
 }
 
 // Renders to gbuffer
-void RenderSubScene(Scene* scene, SubSceneID subsceneId)
+void RenderPrefab(Scene* scene, PrefabID prefabID, int animIndex, float animTime)
 {
-    SubScene* subScene = scene->GetSubScene(subsceneId);
-    ParsedGLTF& data = subScene->data;
+    Prefab* prefab = scene->GetPrefab(prefabID);
     DirectionalLight sunLight = scene->m_SunLight;
 
     // todo: fix this
-    static int first = 1; // render shadows only once if not dynamic
-    if (first == 1) {
-        if (IsAndroid()) RenderShadows(subScene, sunLight);
+    {
+        static int first = 1; // render shadows only once if not dynamic
+        if (first == 1) 
+            if (IsAndroid()) RenderShadows(prefab, sunLight);
+
+        if (!IsAndroid()) 
+            RenderShadows(prefab, sunLight); // realtime shadows
+
+        first = 0;
     }
-        
-    first = 0;
-
-    if (!IsAndroid()) RenderShadows(subScene, sunLight); // realtime shadows
-    
+   
     rBindShader(m_GBufferShader);
-    m_Camera.Update();
+    rSetShaderValue(&sunLight.dir.x, lSunDirG, GraphicType_Vector3f);
+    int skined = (int)(prefab->numSkins > 0);
+    rSetShaderValue(skined, lHasSkin);
+    if (skined)
+    {
+        EvaluateAnim(prefab, animIndex, animTime);
+    }
 
-    // shadow uniforms
-    rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
-    rSetTexture(m_ShadowTexture, 3, lShadowMap);
+    rBindMesh(prefab->bigMesh);
 
-    int numNodes  = data.numNodes;
-    bool hasScene = data.numScenes > 0 && data.scenes[data.defaultSceneIndex].numNodes > 1;
+    Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
+    rSetShaderValue(viewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
+
+    int numNodes  = prefab->numNodes;
+    bool hasScene = prefab->numScenes > 0;
     AScene defaultScene;
     if (hasScene)
     {
-        defaultScene = data.scenes[data.defaultSceneIndex];
+        defaultScene = prefab->scenes[prefab->defaultSceneIndex];
         numNodes = defaultScene.numNodes;
     }
    
-    rBindMesh(subScene->bigMesh);
-
-    Matrix4       viewProjection = m_Camera.view * m_Camera.projection;
-    int numCulled = 0;
-
     for (int i = 0; i < numNodes; i++)
     {
-        ANode& node = hasScene ? data.nodes[defaultScene.nodes[i]] : data.nodes[i];
-        // if node is not mesh skip (camera)
-        if (node.type != 0 || node.index == -1) 
-            continue;
-
-        Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
-        SetMVPOfNode(model, viewProjection);
-        AMesh mesh = data.meshes[node.index];
-
-        for (int j = 0; j < mesh.numPrimitives; ++j)
-        {
-            APrimitive& primitive = mesh.primitives[j];
-            AMaterial material = data.materials[primitive.material];
-            vec_t aabbMin = VecLoadA(primitive.min);
-            vec_t aabbMax = VecLoadA(primitive.max);
-            
-            if (!CheckAABBCulled(aabbMin, aabbMax, m_Camera.frustumPlanes, model))
-            {
-                numCulled++;
-                continue;
-            }
-            
-            if (primitive.numIndices == 0)
-                continue;
-
-            if (material.alphaMode == AMaterialAlphaMode_Mask)
-            { 
-                m_DelayedAlphaCutoffs.EmplaceBack(&node, mesh.primitives +j);
-                continue;
-            }
-            // SetMaterial(&material);
-            RenderPrimitive(material, subScene, primitive);
-        }
+        ANode& node = hasScene ? prefab->nodes[defaultScene.nodes[i]] : prefab->nodes[i];
+        bool shouldRecurse = hasScene, isAlpha = false;
+        RenderNodeRec(node, prefab, Matrix4::Identity(), viewProjection, shouldRecurse, isAlpha);
     }
 
     // Render alpha masked meshes after opaque meshes, to make sure performance is good. (early z)
-    if (m_DelayedAlphaCutoffs.Size() > 0)
+    #if 0
+    if (false) //(m_DelayedAlphaCutoffs.Size() > 0)
     {
         rBindShader(m_GBufferShaderAlpha);
         // shadow uniforms
@@ -491,26 +698,17 @@ void RenderSubScene(Scene* scene, SubSceneID subsceneId)
         rSetTexture(m_ShadowTexture, 3, lShadowMap);
 
         QuickSort<KeyValuePair<ANode*, APrimitive*>>(m_DelayedAlphaCutoffs.Data(), 0, m_DelayedAlphaCutoffs.Size() - 1);
-        ANode* currentNode = nullptr;
-        Matrix4 model;
-
+        // todo we need parent matrix instead of primitive pointer
         for (int i = 0; i < m_DelayedAlphaCutoffs.Size(); i++)
         {
             KeyValuePair<ANode*, APrimitive*> alphaCutoff = m_DelayedAlphaCutoffs[i];
-            if (alphaCutoff.key != currentNode)
-            {
-                currentNode = alphaCutoff.key;
-                model = Matrix4::PositionRotationScale(currentNode->translation, currentNode->rotation, currentNode->scale);
-                SetMVPOfNode(model, viewProjection);
-            }
-            
-            APrimitive& primitive = *alphaCutoff.value;
-            AMaterial material = data.materials[primitive.material];
-
-            RenderPrimitive(material, subScene, primitive);
+            bool recurse = false, isAlpha = true;
+            RenderNodeRec(*alphaCutoff.key, prefab, Matrix4::Identity(), viewProjection, recurse, isAlpha);
         }
         m_DelayedAlphaCutoffs.Resize(0);
     }
+    #endif
+    rDrawAllLines(viewProjection.GetPtr());
 }
 
 static void SSAOPass()
@@ -522,9 +720,9 @@ static void SSAOPass()
         rClearDepth();
         rBindShader(m_MainFrameBufferCopyShader);
 
-        rSetTexture(m_MainFrameBuffer.ColorTexture , 0, rGetUniformLocation("ColorTex"));
-        rSetTexture(m_MainFrameBuffer.NormalTexture, 1, rGetUniformLocation("NormalTex"));
-        rSetTexture(m_MainFrameBuffer.DepthTexture , 2, rGetUniformLocation("DepthTex"));
+        rSetTexture(m_MainFrameBuffer.ColorTexture , 0, dColorTex);
+        rSetTexture(m_MainFrameBuffer.NormalTexture, 1, dNormalTex);
+        rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
         rRenderFullScreen();
     }
 
@@ -536,9 +734,9 @@ static void SSAOPass()
     rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
     rBindShader(m_SSAOShader);
     {
-        rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, rGetUniformLocation("depthMap")); // m_MainFrameBufferHalf.DepthTexture
-        rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, rGetUniformLocation("normalTex"));
-        rSetShaderValue(m_Camera.view.GetPtr(), rGetUniformLocation("View"), GraphicType_Matrix4);
+        rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
+        rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
+        rSetShaderValue(m_Camera.view.GetPtr(), sView, GraphicType_Matrix4);
         
         rRenderFullScreen();
     }
@@ -561,8 +759,7 @@ static void LightingPass()
         Matrix4 invView = Matrix4::Inverse(m_Camera.view);
         Matrix4 invProj = Matrix4::Inverse(m_Camera.projection);
 
-        rSetShaderValue(&m_Camera.position.x, lViewPos, GraphicType_Vector3f);
-        rSetShaderValue(&sunLight.dir.x     , lSunDir , GraphicType_Vector3f);
+        rSetShaderValue(&sunLight.dir.x, lSunDir, GraphicType_Vector3f);
     
         rSetShaderValue(invView.GetPtr(), lInvView, GraphicType_Matrix4);
         rSetShaderValue(invProj.GetPtr(), lInvProj, GraphicType_Matrix4);
@@ -571,7 +768,7 @@ static void LightingPass()
         rSetTexture(m_MainFrameBuffer.ShadowMetallicRoughnessTex, 1, lShadowMetallicRoughnessTex);
         rSetTexture(m_MainFrameBuffer.NormalTexture             , 2, lNormalTex);
         rSetTexture(m_MainFrameBuffer.DepthTexture              , 3, lDepthMap);
-        rSetTexture(m_SSAOTexture                               , 4, rGetUniformLocation("aoTex"));
+        rSetTexture(m_SSAOTexture                               , 4, lAmbientOclussionTex);
     }
 
     rUnbindFrameBuffer(); // < draw to backbuffer after this line
@@ -606,4 +803,4 @@ void Destroy()
     rDeleteFrameBuffer(m_ShadowFrameBuffer);
 }
 
-} // scene renderer namespace end
+} // scene renderer namespace endndndnd

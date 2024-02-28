@@ -6,6 +6,7 @@
 		<SyncFiles>true</SyncFiles>
 		<Recursive>true</Recursive>
 		<ShowEmptyFolders>true</ShowEmptyFolders>
+		<IncludeFilesWithoutExt>false</IncludeFilesWithoutExt>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
 		<BuildCommand>build.bat $(Configuration)</BuildCommand>

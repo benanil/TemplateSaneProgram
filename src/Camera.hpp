@@ -1,61 +1,7 @@
 #pragma once
 
-#include <math.h>
-#include "../ASTL/Math/Transform.hpp"
+#include "../ASTL/Math/Matrix.hpp"
 #include "Platform.hpp"
-
-
-struct FrustumPlanes
-{
-    vec_t planes[6];
-};
-
-inline FrustumPlanes CreateFrustumPlanes(const Matrix4& viewProjection)
-{
-    FrustumPlanes result;
-    Matrix4 C = Matrix4::Transpose(viewProjection);
-    result.planes[0] = VecNorm(VecAdd(C.r[3], C.r[0])); // m_left_plane
-    result.planes[1] = VecNorm(VecSub(C.r[3], C.r[0])); // m_right_plane
-    result.planes[2] = VecNorm(VecAdd(C.r[3], C.r[1])); // m_bottom_plane
-    result.planes[3] = VecNorm(VecSub(C.r[3], C.r[1])); // m_top_plane
-    result.planes[4] = VecNorm(C.r[2]);                 // m_near_plane  
-    // result.planes[5] = VecNorm(VecSub(C.r[3], C.r[2])); // m_far_plane
-    return result;
-}
-
-__forceinline vec_t VECTORCALL MaxPointAlongNormal(const vec_t min, const vec_t max, const vec_t n) 
-{
-    veci_t control = VecCmpGe(n, VecZero());
-    return VecSelect(min, max, control);
-}
-
-inline bool CheckAABBCulled(vec_t minAABB, vec_t maxAABB, const FrustumPlanes& frustum, const Matrix4& matrix)
-{
-    vec_t min = Matrix4::Vector3Transform(minAABB, matrix);
-    vec_t max = Matrix4::Vector3Transform(maxAABB, matrix);
-    
-    for (uint i = 0u; i < 5u; ++i) // make < 6 if you want far plane 
-    {
-        vec_t p = MaxPointAlongNormal(min, max, frustum.planes[i]);
-        if (VecDotf(frustum.planes[i], p) < 0.0f)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-inline bool isPointCulled(const FrustumPlanes& frustum, const Vector3f& _point, const Matrix4& matrix)
-{
-    vec_t point = Matrix4::Vector3Transform(VecLoad(&_point.x), matrix);
-    
-    for (uint i = 0u; i < 5u; ++i)
-    {
-        if (VecDotf(frustum.planes[i], point) < 0.0f)
-            return false;
-    }
-    return true;
-}
 
 struct Camera
 {
@@ -147,16 +93,15 @@ struct Camera
         // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
         Right = Vector3f::NormalizeEst(Vector3f::Cross(Front, Vector3f::Up()));
         Up = Vector3f::Cross(Right, Front);
-		UpdateFrustumPlanes();
     }
 
 	void Update()
 	{
 		bool pressing = GetMouseDown(MouseButton_Right);
-		if (!pressing) { wasPressing = false; return; }
+		float dt = (float)GetDeltaTime();
+		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f);
 
-		float dt = (float)GetDeltaTime() * 2.0f;
-		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 1.2f;
+		if (!pressing) { wasPressing = false; return; }
 
 		Vector2f mousePos;
 		GetMousePos(&mousePos.x, &mousePos.y);
@@ -195,6 +140,7 @@ struct Camera
 
 		InfiniteMouse(mousePos);
 		RecalculateView();
+		UpdateFrustumPlanes();
 	}
 
 	Ray ScreenPointToRay(Vector2f pos) const
@@ -202,7 +148,7 @@ struct Camera
 		// Vector2f coord = MakeVec2(pos.x / (float)viewportSize.x, pos.y / (float)viewportSize.y);
 		// coord.y = 1.0f - coord.y;
 		// coord = coord * 2.0f - 1.0f;
-		// vec_t target = Matrix4::Vector4Transform(MakeVec4(coord.x, coord.y, 1.0f, 1.0f), inverseProjection);
+		// vec_t target = Matrix4::Vector4Transform(VecSetR(coord.x, coord.y, 1.0f, 1.0f), inverseProjection);
 		// target /= target.w;
 		// target = Matrix4::Vector4Transform(target, inverseView);
 		// Vector3f rayDir = Vector3f::Normalize(target.xyz());
@@ -214,7 +160,7 @@ struct Camera
 		// Vector2f coord = MakeVec2(pos.x / (float)viewportSize.x, pos.y / (float)viewportSize.y);
 		// coord.y = 1.0f - coord.y;
 		// coord = coord * 2.0f - 1.0f;
-		// vec_t target = Matrix4::Vector4Transform(MakeVec4(coord.x, coord.y, 1.0f, 1.0f), inverseProjection);
+		// vec_t target = Matrix4::Vector4Transform(VecSetR(coord.x, coord.y, 1.0f, 1.0f), inverseProjection);
 		// target /= target.w;
 		// target = Matrix4::Vector4Transform(target, inverseView);
 		// Vector3f rayDir = Vector3f::Normalize(target.xyz());

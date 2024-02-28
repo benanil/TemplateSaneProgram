@@ -405,7 +405,7 @@ inline bool IsTypeInt(GraphicType type)
     return type != GraphicType_Float && type != GraphicType_Double && type != GraphicType_Half;
 }
 
-inline GLenum GLTypeToSize(GraphicType type)
+int GraphicsTypeToSize(GraphicType type)
 {
     // BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, FLOAT           
     const int TypeToSize[12]={ 1, 1, 2, 2, 4, 4, 4, 2, 4, 4, 8, 2 };
@@ -433,7 +433,7 @@ GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int nu
     CHECK_GL_ERROR();
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GLTypeToSize(indexType), indexBuffer, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GraphicsTypeToSize(indexType), indexBuffer, GL_STATIC_DRAW);
     CHECK_GL_ERROR();
     
     mesh.numIndex = numIndex; 
@@ -449,8 +449,8 @@ GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int nu
     for (int i = 0; i < layoutDesc->numLayout; ++i)
     {
         InputLayout layout = layoutDesc->layout[i];
-        bool isNormalized = !!(layout.type & GraphicTypeNormalizeBit);
-        layout.type &= ~GraphicTypeNormalizeBit;
+        bool isNormalized = !!(layout.type & GraphicType_NormalizeBit);
+        layout.type &= ~GraphicType_NormalizeBit;
 
         if (layout.type == GraphicType_XYZ10W2)
         {
@@ -466,28 +466,30 @@ GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int nu
             glVertexAttribIPointer(i, layout.numComp, GL_BYTE + layout.type, layoutDesc->stride, offset);
 
         glEnableVertexAttribArray(i);
-        offset += layout.numComp * GLTypeToSize(layout.type);
+        offset += layout.numComp * GraphicsTypeToSize(layout.type);
     }
     CHECK_GL_ERROR();
     return mesh;
 }
 
-void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh)
+void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined)
 {
     InputLayoutDesc desc;
-    const int NumLayout = 4;
 
-    InputLayout inputLayout[NumLayout] = 
+    const InputLayout inputLayout[] = 
     {
         { 3, GraphicType_Float   },
         { 3, GraphicType_XYZ10W2 },
         { 4, GraphicType_XYZ10W2 },
-        { 2, GraphicType_Half    }
+        { 2, GraphicType_Half    },
+        // below is for skined vertices
+        { 4, GraphicType_UnsignedByte },
+        { 4, GraphicType_UnsignedByte | GraphicType_NormalizeBit }
     };
 
     desc.layout = inputLayout;
-    desc.stride = sizeof(AVertex); 
-    desc.numLayout = ArraySize(inputLayout);
+    desc.stride = skined ? sizeof(ASkinedVertex) : sizeof(AVertex); 
+    desc.numLayout = skined ? ArraySize(inputLayout) : ArraySize(inputLayout) - 2;
 
     *mesh = rCreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
@@ -540,9 +542,9 @@ int rGetUniformLocation(Shader shader, const char* name)
     return glGetUniformLocation(shader.handle, name);
 }
 
-void rSetShaderValue(int   value, int location) { glUniform1i(location, value); }
-void rSetShaderValue(uint  value, int location) { glUniform1ui(location, value); }
-void rSetShaderValue(float value, int location) { glUniform1f(location, value); }
+void rSetShaderValue(int   value, int location) { glUniform1i(location, value); CHECK_GL_ERROR(); }
+void rSetShaderValue(uint  value, int location) { glUniform1ui(location, value); CHECK_GL_ERROR(); }
+void rSetShaderValue(float value, int location) { glUniform1f(location, value); CHECK_GL_ERROR();  }
 
 // zero dynamic memory allocation
 void rGetUniformArrayLocations(int begin, char* arrayText, int* locations, int numLocations, const char* uniformName)
@@ -715,6 +717,95 @@ static void CreateDefaultTexture()
     g_DefaultTexture = rCreateTexture(32, 32, img, TextureType_RG8, TexFlags_None).handle;
 }
 
+typedef struct {
+    Vector3f pos;
+    uint color;
+} LineVertex;
+
+static int numLines;
+static const int TotalLines = 128;
+static LineVertex lineVertices[TotalLines];
+static GLuint lineVao, lineVbo;
+static Shader lineShader;
+
+static void SetupLineRenderer()
+{
+    numLines = 0;
+    glGenVertexArrays(1, &lineVao);
+    glGenBuffers(1, &lineVbo);
+
+    glBindVertexArray(lineVao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
+    glBufferData(GL_ARRAY_BUFFER, TotalLines * sizeof(LineVertex), lineVertices, GL_DYNAMIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(LineVertex), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(LineVertex), (GLvoid*)(sizeof(Vector3f)));
+    glEnableVertexAttribArray(1);
+
+    const char* VertexShaderSource =
+    AX_SHADER_VERSION_PRECISION()
+    R"(
+        layout(location = 0) in highp vec3 aPos;
+        layout(location = 1) in highp uint aColor;
+        out lowp vec4 vColor;
+        uniform mat4 uViewProj;
+
+        #ifdef __ANDROID__
+        lowp vec4 unpackUnorm4x8(uint x) {
+            return vec4(uvec4((x >> 0u) & 0xFFu, (x >> 8u) & 0xFFu, (x >> 16u) & 0xFFu, (x >> 24u) & 0xFFu)) / 255.0; 
+        }
+        #endif
+        void main() { 
+            vColor = unpackUnorm4x8(aColor);
+            gl_Position = uViewProj * vec4(aPos, 1.0);
+        }
+    )";
+
+    const char* fragmentShaderSource =
+    AX_SHADER_VERSION_PRECISION()
+    R"(
+        in lowp vec4 vColor;
+        out lowp vec4 color;
+        void main() { 
+            color = vec4(vColor.xyz, 1.0);
+        }
+    )";
+    lineShader = rCreateShader(VertexShaderSource, fragmentShaderSource);
+    glLineWidth(10.0f);
+}
+
+void rDrawLine(Vector3f start, Vector3f end, uint color)
+{
+    lineVertices[numLines].pos     = start;
+    lineVertices[numLines++].color = color;
+
+    lineVertices[numLines].pos     = end;
+    lineVertices[numLines++].color = color;
+}
+
+void rDrawAllLines(float* viewProj)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
+
+    LineVertex* bufferData = (LineVertex*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!bufferData) {
+        glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind VBO
+        return;
+    }
+
+    SmallMemCpy(bufferData, lineVertices, numLines * sizeof(LineVertex));
+
+    glUnmapBuffer(GL_ARRAY_BUFFER);
+    rBindShader(lineShader);
+    rSetShaderValue(viewProj, 0, GraphicType_Matrix4);
+    glBindVertexArray(lineVao);
+    glDrawArrays(GL_LINES, 0, numLines);
+    numLines = 0;
+}
+
 static void CreateDefaultScreenShader()
 {
     const char* fragmentShaderSource =
@@ -748,6 +839,7 @@ void rInitRenderer()
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
     CreateDefaultTexture();
     CreateDefaultScreenShader();
+    SetupLineRenderer();
 
     g_TextureLoadBuffer = new unsigned char[g_TextureLoadBufferSize];
 }
@@ -838,6 +930,7 @@ void rSetTexture(Texture texture, int index, unsigned int location)
     glActiveTexture(GL_TEXTURE0 + index);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glUniform1i(location, index);
+    CHECK_GL_ERROR();
 }
 
 void rSetViewportSize(int width, int height)
@@ -849,6 +942,9 @@ void rDestroyRenderer()
 {
     glDeleteTextures(1, &g_DefaultTexture);
     rDeleteShader(m_DefaultFragShader);
+    rDeleteShader(lineShader);
+    glDeleteVertexArrays(1, &lineVao);
+    glDeleteBuffers(1, &lineVbo);
 
     delete[] g_TextureLoadBuffer;
     g_TextureLoadBuffer = nullptr;

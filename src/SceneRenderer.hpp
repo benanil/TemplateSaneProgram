@@ -1,6 +1,6 @@
 
 struct Scene;
-struct SubScene;
+struct Prefab;
 struct LightInstance;
 
 namespace SceneRenderer
@@ -9,7 +9,8 @@ namespace SceneRenderer
 
     void BeginRendering();
 
-    void RenderSubScene(Scene* scene, SubSceneID subsceneId);
+    void RenderPrefab(Scene* scene, PrefabID prefabID, 
+                        int animIndex = 0, float animTime = 0.0f); // animTime is between 0.0-1.0
     
     void PostProcessPass();
 

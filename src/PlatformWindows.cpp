@@ -3,6 +3,7 @@
 *    Purpose: Creating Window, Keyboard and Mouse input, Main Loop  *
 *    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com        *
 ********************************************************************/
+
 #ifdef _WIN32
 
 #ifndef NOMINMAX
@@ -30,24 +31,24 @@
 struct PlatformContextWin
 {
     // Callbacks
-    void(*WindowMoveCallback)  (int  , int)   = nullptr;
-    void(*WindowResizeCallback)(int  , int)   = nullptr;
-    void(*MouseMoveCallback)   (float, float) = nullptr;
-    void(*KeyPressCallback)    (wchar_t)      = nullptr;
-    void(*FocusChangedCallback)(bool)         = nullptr;
+    void(*WindowMoveCallback)  (int, int);
+    void(*WindowResizeCallback)(int, int);
+    void(*MouseMoveCallback)   (float, float);
+    void(*KeyPressCallback)    (wchar_t);
+    void(*FocusChangedCallback)(bool);
     
     // Window
-    int WindowPosX   = 0;
-    int WindowPosY   = 0;
-    int WindowWidth  = 0;
-    int WindowHeight = 0;
-    HWND hwnd       = nullptr;
+    int WindowPosX;
+    int WindowPosY;
+    int WindowWidth;
+    int WindowHeight;
+    HWND hwnd;
 
     // Input Code, 128 bit bitmasks for key states.
-    unsigned long DownKeys[2]={};
-    unsigned long LastKeys[2]={};
-    unsigned long PressedKeys[2]={};
-    unsigned long ReleasedKeys[2]={};
+    unsigned long DownKeys[2];
+    unsigned long LastKeys[2];
+    unsigned long PressedKeys[2];
+    unsigned long ReleasedKeys[2];
     // Mouse
     int    MouseDown, MouseLast, MousePressed, MouseReleased;
     float  MousePosX, MousePosY;
@@ -58,10 +59,9 @@ struct PlatformContextWin
     double   DeltaTime;
 
     bool VSyncActive;
-} PlatformCtx{}; 
+} PlatformCtx;
 
 static char WindowName[64] = { 'S', 'a', 'n', 'e', 'E', 'n', 'g', 'i', 'n', 'e' };
-
 
 void wSetFocusChangedCallback(void(*callback)(bool))         { PlatformCtx.FocusChangedCallback = callback; }
 void SetKeyPressCallback     (void(*callback)(wchar_t))      { PlatformCtx.KeyPressCallback     = callback; }
@@ -463,6 +463,7 @@ extern void rSetViewportSize(int x, int y);
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
     // VMem::Initialise();
+    MemsetZero(&PlatformCtx, sizeof(PlatformContextWin));
     AXInit();
     
     PlatformCtx.hwnd = WindowCreate(inst);

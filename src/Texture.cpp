@@ -157,14 +157,14 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 
 #endif // __ANDROID__
 
-static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMobile)
+static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobile)
 {
 #if !AX_GAME_BUILD
 	if (IsTextureLastVersion(path)) {
 		return;
 	}
-	AImage* images = scene->data.images;
-	int numImages = scene->data.numImages;
+	AImage* images = scene->images;
+	int numImages = scene->numImages;
 	int currentInfo = 0;
     
 	if (numImages == 0) {
@@ -173,21 +173,21 @@ static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMob
 	
 	ASSERT(numImages < 512);
 	std::bitset<512> isNormalMap{};
-	AMaterial* materials = scene->data.materials;
-	int numMaterials = scene->data.numMaterials;
+	AMaterial* materials = scene->materials;
+	int numMaterials = scene->numMaterials;
 	// this makes always positive
 	const short shortWithoutSign = (short)0x7FFF;
  
 	// mark normal maps
 	for (int i = 0; i < numMaterials; i++)
 	{
-		isNormalMap.set(materials[i].GetNormalTexture().index & shortWithoutSign); 
+		isNormalMap.set(materials[i].GetNormalTexture().index & 511); 
 	}
 
 	// if an normal map used as base color, unmark it. (causing problems on sponza)
 	for (int i = 0; i < numMaterials; i++)
 	{
-		isNormalMap.reset(materials[i].baseColorTexture.index & shortWithoutSign);
+		isNormalMap.reset(materials[i].baseColorTexture.index & 511);
 	}
 
 	ScopedPtr<ImageInfo> imageInfos = new ImageInfo[numImages];
@@ -236,6 +236,12 @@ static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMob
 		beforeCompressedSize += imageSize;
 	}
 
+	if (beforeCompressedSize == 0) {
+		scene->numImages   = 0;
+		scene->numTextures = 0;
+		return;
+	}
+		
 	ScopedPtr<unsigned char> toCompressionBuffer = new unsigned char[beforeCompressedSize];
 
 	auto execFn = [&](int numTextures, uint64_t compressionStart, int i) -> void
@@ -261,7 +267,11 @@ static void SaveSceneImagesGeneric(SubScene* scene, char* path, const bool isMob
 			
 			// note: that stb image using new and delete instead of malloc free (I overloaded)
 			ScopedPtr<unsigned char> stbImage = stbi_load(imagePath, &info.width, &info.height, &info.numComp, 0);
-			ASSERT(stbImage.ptr != nullptr);
+			
+			if (stbImage.ptr == nullptr)
+			{
+				stbImage.ptr = new unsigned char[info.width * info.height * info.numComp];
+			}
 
 			int imageSize = info.width * info.height;
 			textureLoadBuffer.Reserve(imageSize * 4);
@@ -414,13 +424,13 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 	AFileClose(file);
 }
 
-static void SaveAndroidCompressedImagesFn(SubScene* scene, char* astcPath)
+static void SaveAndroidCompressedImagesFn(Prefab* scene, char* astcPath)
 {
 	SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
 	delete[] astcPath;
 }
 
-void SaveSceneImages(SubScene* scene, char* path)
+void SaveSceneImages(Prefab* scene, char* path)
 {
 #if !AX_GAME_BUILD
 	// // save dxt textures for desktop
