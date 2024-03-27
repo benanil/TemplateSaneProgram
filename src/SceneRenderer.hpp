@@ -1,21 +1,35 @@
 
+#pragma once
+
 struct Scene;
 struct Prefab;
 struct LightInstance;
+struct AnimationController;
 
 namespace SceneRenderer
 {
+    const int MaxNumJoints = 128;
+    const int MaxNumLights = 16;
+
     void Init();
 
+// Shadow
+    void BeginShadowRendering(Scene* scene);
+
+    void RenderShadowOfPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem);
+
+    void EndShadowRendering();
+
+// Rendering
     void BeginRendering();
 
-    void RenderPrefab(Scene* scene, PrefabID prefabID, 
-                        int animIndex = 0, float animTime = 0.0f); // animTime is between 0.0-1.0
+    void RenderPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem = nullptr);
     
-    void PostProcessPass();
-
     void EndRendering();
 
+    void PostProcessPass();
+
+// Lights
     void BeginUpdateLights();
     
     void UpdateLight(int index, LightInstance* instance);

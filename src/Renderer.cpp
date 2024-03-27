@@ -120,14 +120,14 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RGB5_A1        , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGB5_A1       = 29,
     {   GL_RGBA4          , GL_RGBA,            GL_UNSIGNED_BYTE                 }, // TextureType_RGBA4         = 30,
     {   GL_RGB10_A2       , GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV   }, // TextureType_RGB10_A2      = 31,
-    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, // TextureType_RGBA16F       = 33,
-    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, // TextureType_RGBA32F       = 34,
-    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 35,
-    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 36,
-    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 37,
+    {   GL_RGBA16F        , GL_RGBA,            GL_HALF_FLOAT                    }, // TextureType_RGBA16F       = 32,
+    {   GL_RGBA32F        , GL_RGBA,            GL_FLOAT                         }, // TextureType_RGBA32F       = 33,
+    {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 34,
+    {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 35,
+    {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 36,
     {}, {}, {}, {},{},                                                              // Compressed Formats
-    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24 = 43,
-    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32 = 44,
+    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24 = 41,
+    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32 = 42,
 };
 
 const char* GetGLErrorString(GLenum error) 
@@ -139,7 +139,7 @@ const char* GetGLErrorString(GLenum error)
         case GL_INVALID_OPERATION:             return "GL_INVALID_OPERATION\n";
         case GL_INVALID_FRAMEBUFFER_OPERATION: return "GL_INVALID_FRAMEBUFFER_OPERATION\n";
         case GL_OUT_OF_MEMORY:                 return "GL_OUT_OF_MEMORY\n";
-        default: AX_ERROR("Unknown GL error: %d\n", error); break;
+        default: AX_ERROR("Unknown GL error: %d\n", error);
     }
     return "UNKNOWN_GL_ERROR";
 }
@@ -207,7 +207,12 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     if (!compressed)
     {
         TextureFormat format = TextureFormatTable[type];
-        glTexImage2D(GL_TEXTURE_2D, 0, format.internalFormat, width, height, 0, format.format, format.type, data);
+        if (flags == TexFlags_RawData)
+        {
+            glTexStorage2D(GL_TEXTURE_2D, 1, format.internalFormat, width, height);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format.format, format.type, data);
+        }
+        else glTexImage2D(GL_TEXTURE_2D, 0, format.internalFormat, width, height, 0, format.format, format.type, data);
     }
     else
     #ifndef __ANDROID__ 
@@ -550,11 +555,11 @@ void rSetShaderValue(float value, int location) { glUniform1f(location, value); 
 void rGetUniformArrayLocations(int begin, char* arrayText, int* locations, int numLocations, const char* uniformName)
 {
     MemsetZero(arrayText, 32);
-    int nameLen = (int)strlen(uniformName);
+    int nameLen = (int)StringLength(uniformName);
     ASSERT(nameLen < 32);
     AX_ASSUME(nameLen < 32);
     SmallMemCpy(arrayText, uniformName, nameLen);
-
+    // read uniform locations between 0-9
     for (int i = 0; i < 10; i++)
     {
         arrayText[begin + 0] = '0' + (i % 10);
@@ -568,13 +573,31 @@ void rGetUniformArrayLocations(int begin, char* arrayText, int* locations, int n
         arrayText[nameLen] = arrayText[nameLen-1];
         nameLen--;
     }
-    arrayText[begin + 1] = '0';
-    
-    ASSERT(numLocations < 100);
+    // read uniform locations between 10-99
     for (int i = 10; i < numLocations; i++)
     {
         arrayText[begin + 0] = '0' + (i / 10);
         arrayText[begin + 1] = '0' + (i % 10);
+        locations[i] = rGetUniformLocation(arrayText);
+    }
+
+    if (numLocations < 100) 
+        return;
+
+    nameLen += 1;
+    while (nameLen > begin){
+        arrayText[nameLen] = arrayText[nameLen-1];
+        nameLen--;
+    }
+
+    ASSERT(numLocations < 1000);
+    // read uniform locations between 100-999
+    for (int i = 100; i < numLocations; i++)
+    {
+        int x = i / 100;
+        arrayText[begin + 0] = '0' + x;
+        arrayText[begin + 1] = '0' + ((i - (x * 100)) / 10);
+        arrayText[begin + 2] = '0' + (i % 10);
         locations[i] = rGetUniformLocation(arrayText);
     }
 }
@@ -589,7 +612,7 @@ void rSetShaderValue(const void* value, int location, GraphicType type)
 
         case GraphicType_Vector2f:    glUniform2fv(location, 1, (const float*)value); break;
         case GraphicType_Vector3f:    glUniform3fv(location, 1, (const float*)value); break;
-        case GraphicType_vec_t:    glUniform4fv(location, 1, (const float*)value); break;
+        case GraphicType_Vector4f:    glUniform4fv(location, 1, (const float*)value); break;
      
         case GraphicType_Matrix2: glUniformMatrix2fv(location, 1, GL_FALSE, (const float*)value); break;
         case GraphicType_Matrix3: glUniformMatrix3fv(location, 1, GL_FALSE, (const float*)value); break;
@@ -598,6 +621,7 @@ void rSetShaderValue(const void* value, int location, GraphicType type)
             ASSERT(0 && "Shader set value Graphic type invalid. type:");
             break;
     }
+    CHECK_GL_ERROR();
 }
 
 void rSetMaterial(AMaterial* material)
@@ -635,6 +659,71 @@ static void CheckLinkerError(uint shader)
     }
 }
 
+Shader rCreateComputeShader(const char* source)
+{
+    // Vertex shader
+    GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(computeShader, 1, &source, NULL);
+    glCompileShader(computeShader);
+    CheckShaderError(computeShader);
+    
+    uint program = glCreateProgram();
+    glAttachShader(program, computeShader);
+    glLinkProgram(program);
+    CheckLinkerError(program);
+    glDeleteShader(computeShader);
+    return { program };
+}
+
+Shader rImportComputeShader(const char* path)
+{
+    ScopedText text = ReadAllText(path, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    Shader shader = rCreateComputeShader(text.text);
+    return shader;
+}
+
+ComputeBuffer rComputeShaderCreateBuffer(Shader compute, int size, const char* name, const void* data)
+{
+    ComputeBuffer res;
+    glGenBuffers(1, &res.handle);
+    glBindBuffer(GL_UNIFORM_BUFFER, res.handle);
+    glBufferData(GL_UNIFORM_BUFFER, size, data, GL_STATIC_DRAW);
+    
+    res.index = glGetUniformBlockIndex(compute.handle, name);
+    glUniformBlockBinding(compute.handle, res.index, 0);
+    return res;
+}
+
+void rComputeShaderBindBuffer(int binding, int buffer)
+{
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buffer);
+    CHECK_GL_ERROR();
+}
+
+void rBindTextureToCompute(Texture texture, int unit, TextureAccess access)
+{
+    const int accessMap[3] = { GL_READ_ONLY, GL_WRITE_ONLY, GL_READ_WRITE };
+    // For example
+    glBindImageTexture(unit,          /* unit, note that we're not offsetting GL_TEXTURE0 */
+                       texture.handle,/* a 2D texture for example */
+                       0,             /* miplevel */
+                       GL_FALSE,      /* bool layered: we cannot use layered */
+                       0,             /* int layer: this is ignored */
+                       accessMap[access], /* we're only writing to it */
+                       TextureFormatTable[texture.type].internalFormat); /* ie: rgb8, r32f */
+    CHECK_GL_ERROR();
+}
+
+void rDispatchComputeShader(Shader shader, int workGroupsX, int workGroupsY, int workGroupsZ)
+{
+    glDispatchCompute(workGroupsX, workGroupsY, workGroupsZ);
+    CHECK_GL_ERROR();
+}
+
+void rComputeShaderBarier() {
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+}
+
 Shader rCreateShader(const char* vertexSource, const char* fragmentSource)
 {
     // Vertex shader
@@ -642,22 +731,16 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource)
     glShaderSource(vertexShader, 1, &vertexSource, NULL);
     glCompileShader(vertexShader);
     CheckShaderError(vertexShader);
-    // Check for compile time errors
-    GLint success;
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success); ASSERT(success);
     // Fragment shader
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
     glCompileShader(fragmentShader);
     CheckShaderError(fragmentShader);
-    // Check for compile time errors
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success); ASSERT(success);
     // Link shaders
     uint shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
-    // Check for linking errors
     CheckLinkerError(shaderProgram);
 
     glDeleteShader(vertexShader);
@@ -753,11 +836,6 @@ static void SetupLineRenderer()
         out lowp vec4 vColor;
         uniform mat4 uViewProj;
 
-        #ifdef __ANDROID__
-        lowp vec4 unpackUnorm4x8(uint x) {
-            return vec4(uvec4((x >> 0u) & 0xFFu, (x >> 8u) & 0xFFu, (x >> 16u) & 0xFFu, (x >> 24u) & 0xFFu)) / 255.0; 
-        }
-        #endif
         void main() { 
             vColor = unpackUnorm4x8(aColor);
             gl_Position = uViewProj * vec4(aPos, 1.0);
@@ -788,6 +866,8 @@ void rDrawLine(Vector3f start, Vector3f end, uint color)
 
 void rDrawAllLines(float* viewProj)
 {
+    // Todo: android does not support glMapBuffer
+#ifndef __ANDROID__
     glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
 
     LineVertex* bufferData = (LineVertex*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
@@ -803,6 +883,7 @@ void rDrawAllLines(float* viewProj)
     rSetShaderValue(viewProj, 0, GraphicType_Matrix4);
     glBindVertexArray(lineVao);
     glDrawArrays(GL_LINES, 0, numLines);
+#endif
     numLines = 0;
 }
 
@@ -879,16 +960,14 @@ void rClearDepthStencil()
 void rBeginShadow()
 {
     glReadBuffer(GL_NONE);
-    glCullFace(GL_FRONT);
+    // glCullFace(GL_FRONT);
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    CHECK_GL_ERROR();
 }
 
 void rEndShadow()
 {
-    glCullFace(GL_BACK);
+    // glCullFace(GL_BACK);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    CHECK_GL_ERROR();
 }
 
 void rClearColor(float r, float g, float b, float a)

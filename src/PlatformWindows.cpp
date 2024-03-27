@@ -116,9 +116,9 @@ void wSetVSync(bool active)
 /*                          Keyboard and Mouse Input                            */
 /********************************************************************************/
 
-inline bool GetBit128(unsigned long bits[2], int idx)   { return !!(bits[idx > 63] & (1ul << (idx & 63ul))); }
-inline void SetBit128(unsigned long bits[2], int idx)   { bits[idx > 63] |= 1ul << (idx & 63); }
-inline void ResetBit128(unsigned long bits[2], int idx) { bits[idx > 63] &= ~(1ul << (idx & 63)); }
+inline bool GetBit128(unsigned long bits[2], int idx)   { return !!(bits[idx > 63] & (1ull << (idx & 63ul))); }
+inline void SetBit128(unsigned long bits[2], int idx)   { bits[idx > 63] |= 1ull << (idx & 63); }
+inline void ResetBit128(unsigned long bits[2], int idx) { bits[idx > 63] &= ~(1ull << (idx & 63)); }
 
 bool GetKeyDown(char c)     { return GetBit128(PlatformCtx.DownKeys, c); }
 
@@ -412,7 +412,7 @@ HGLRC InitOpenGL(HDC dc)
     int attrib[] =
     {
         0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
-        0x2092, 2, // WGL_CONTEXT_MINOR_VERSION_ARB
+        0x2092, 3, // WGL_CONTEXT_MINOR_VERSION_ARB
         0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
 #ifdef DEBUG
         // ask for debug context for non "Release" builds

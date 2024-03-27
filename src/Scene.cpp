@@ -24,18 +24,31 @@ void Scene::Destroy()
 {
     for (int i = 0; i < m_LoadedPrefabs.Size(); i++)
     {
-        Prefab* scene = &m_LoadedPrefabs[i];
-        rDeleteMesh(scene->bigMesh);
+        Prefab* prefab = &m_LoadedPrefabs[i];
+        rDeleteMesh(prefab->bigMesh);
     
-        if (scene->textures) {
-            for (int i = 0; i < scene->numTextures; i++) {
-                rDeleteTexture(scene->textures[i]);
+        if (prefab->gpuTextures) {
+            for (int i = 0; i < prefab->numTextures; i++) {
+                rDeleteTexture(prefab->gpuTextures[i]);
             }
         }
 
-        delete[] scene->textures;
+        for (int s = 0; s < prefab->numSkins; s++)
+        {
+            delete[] prefab->skins[s].inverseBindMatrices;
+        }
 
-        FreeParsedGLTF((SceneBundle*)scene);
+        if (prefab->numAnimations > 0)
+        {
+            // all of the sampler input and outputs are allocated in one buffer.
+            // at the end of the CreateVerticesIndicesSkined function
+            delete[] prefab->animations[0].samplers[0].input;
+            delete[] (vec_t*)prefab->animations[0].samplers[0].output;
+        }
+
+        delete[] prefab->gpuTextures;
+
+        FreeSceneBundle((SceneBundle*)prefab);
     }
     m_LoadedPrefabs.Clear();
     if (m_MatrixNeedsUpdate) bitset_free(m_MatrixNeedsUpdate);
@@ -181,7 +194,7 @@ LightId Scene::AddPointLight(Vector3f position, int color, float intensity, floa
 
 void Scene::UpdateLight(LightId id)
 {
-    
+    // todo: implement Scene::UpdateLight
 }
 
 void Scene::RemoveLight(MeshId id)
@@ -199,23 +212,26 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
     m_LoadedPrefabs.AddUninitialized(1);
 
     Prefab* scene = &m_LoadedPrefabs[*sceneID];
-
+    MemsetZero(scene, sizeof(Prefab));
+    
+    scene->firstTimeRender = true;
     int parsed = 1;
     char* path = scene->path;
-    MemsetZero(path, sizeof(Prefab::path));
     int pathLen = StringLength(inPath);
     SmallMemCpy(path, inPath, pathLen);
     
     bool isGLTF = FileHasExtension(path, pathLen, "gltf");
     bool isFBX  = FileHasExtension(path, pathLen, "fbx");
+    bool isOBJ  = FileHasExtension(path, pathLen, "obj");
 
     ChangeExtension(path, pathLen, "abm");
-    bool firstLoad = !FileExist(path) || !IsABMLastVersion(path);
+    bool firstLoad = !IsABMLastVersion(path);
 
     if (firstLoad)
     {
-        ASSERT(!IsAndroid());
-        ASSERT(isGLTF || isFBX);
+        if_constexpr (IsAndroid()) {
+            AX_ERROR("file is not exist, or version does not match: %s", path);
+        }
 
         pathLen = StringLength(path);
 
@@ -226,13 +242,18 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
             if (scene->numSkins > 0) CreateVerticesIndicesSkined((SceneBundle*)scene);
             else                     CreateVerticesIndices((SceneBundle*)scene);
         }
+        else if (isOBJ) {
+            // todo: make scene bundle from obj
+            ChangeExtension(path, pathLen, "obj");
+            ASSERT(0);
+        }
         else if (isFBX) {
             ChangeExtension(path, pathLen, "fbx");
             parsed &= LoadFBX(path, (SceneBundle*)scene, scale);
         }
 
-        // ChangeExtension(path, StringLength(path), "abm");
-        // parsed &= SaveGLTFBinary((ParsedGLTF*)scene, path); ASSERT(parsed);
+        ChangeExtension(path, StringLength(path), "abm");
+        parsed &= SaveGLTFBinary((SceneBundle*)scene, path); ASSERT(parsed);
         SaveSceneImages(scene, path); // save textures as binary
     }
     else
@@ -244,7 +265,7 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
         return 0;
 
     // Load to GPU
-    LoadSceneImages(path, scene->textures, scene->numImages);
+    LoadSceneImages(path, scene->gpuTextures, scene->numImages);
     
     // Load AABB's
     for (int i = 0; i < scene->numMeshes; i++)
@@ -286,11 +307,11 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
     return parsed;
 }
 
-void Scene::UpdatePrefab(PrefabID scene)
+void Scene::Update()
 {
-    // Scene* scene = &loadedScenes[sceneID];
-    float time = (float)(2.85 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11)); 
+    float time = (float)(3.15 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11)); 
     m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
+    // m_SunLight.dir = MakeVec3(0.1f, 0.8f, 0.05f);
 }
 
 Prefab* Scene::GetPrefab(PrefabID scene)

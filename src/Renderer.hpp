@@ -13,27 +13,25 @@
 #include "../ASTL/Math/Vector.hpp"
 
 #ifdef __ANDROID__  
-#define AX_SHADER_VERSION_PRECISION() "#version 300 es\n"              \
-                                      "precision highp float;\n"     \
+#define AX_SHADER_VERSION_PRECISION() "#version 310 es\n"              \
+                                      "precision highp float;\n"       \
                                       "precision mediump sampler2D;\n" \
                                       "precision mediump int;\n"       \
                                       "#define __ANDROID__ 1\n"        \
                                       "bool IsAndroid() { return true; }\n"
 #else
-#define AX_SHADER_VERSION_PRECISION() "#version 420 core \n"          \
+#define AX_SHADER_VERSION_PRECISION() "#version 430 core \n"          \
                                       "bool IsAndroid() { return false; }\n"
 #endif
 
 typedef int TextureType;
 
-struct Shader { unsigned int handle; };
-
 struct Texture
 {
     int width, height;
     unsigned int handle;
-    unsigned char* buffer;
     TextureType type;
+    unsigned char* buffer;
 };
 
 enum GraphicType_
@@ -54,7 +52,7 @@ enum GraphicType_
 
     GraphicType_Vector2f,
     GraphicType_Vector3f,
-    GraphicType_vec_t,
+    GraphicType_Vector4f,
 
     GraphicType_Vector2i,
     GraphicType_Vector3i,
@@ -103,7 +101,7 @@ struct AVertex
     half2    texCoord;
 };
 
-struct ASkinedVertex
+struct alignas(16) ASkinedVertex
 {
     Vector3f position;
     uint     normal;
@@ -134,6 +132,16 @@ int GraphicsTypeToSize(GraphicType type);
 /*                                 Renderer                                 */
 /*//////////////////////////////////////////////////////////////////////////*/
 
+enum rBlendFunc_  { 
+    rBlendFunc_Zero, 
+    rBlendFunc_One 
+};
+typedef int rBlendFunc;
+
+struct Shader {
+    unsigned int handle; 
+};
+
 // renders an texture to screen with given shader
 void rRenderFullScreen(Shader fullScreenShader, unsigned int texture);
 
@@ -156,9 +164,6 @@ void rSetBlending(bool val);
 void rDrawLine(Vector3f start, Vector3f end, uint color);
 
 void rDrawAllLines(float* viewProj);
-
-enum rBlendFunc_ { rBlendFunc_Zero, rBlendFunc_One };
-typedef int rBlendFunc;
 
 void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst);
 
@@ -187,16 +192,22 @@ enum TexFlags_
     TexFlags_MipMap      = 1,
     TexFlags_Compressed  = 2,
     TexFlags_ClampToEdge = 4,
-    TexFlags_Nearest     = 8
+    TexFlags_Nearest     = 8,
+    // no filtering or wrapping
+    TexFlags_RawData     = TexFlags_Nearest | TexFlags_ClampToEdge
 };
 
 typedef int TexFlags;
 
+enum DepthType_ { 
+    DepthType_16, 
+    DepthType_24, 
+    DepthType_32 
+};
+typedef int DepthType;
+
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags);
-
-enum DepthType_ { DepthType_16, DepthType_24, DepthType_32 };
-typedef int DepthType;
 
 Texture rCreateDepthTexture(int width, int height, DepthType depthType);
 
@@ -207,15 +218,13 @@ void rDeleteTexture(Texture texture);
 
 void rSetTexture(Texture texture, int index, unsigned int loc);
 
-// a = b
-void rCopyTexture(Texture a, Texture b);
+void rCopyTexture(Texture dst, Texture src);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Frame Buffer                             */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-struct FrameBuffer
-{
+struct FrameBuffer {
     unsigned int handle;
 };
 
@@ -240,15 +249,36 @@ void rFrameBufferInvalidate(int numAttachments);
 /*                                 Shader                                   */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-Shader rCreateShader(const char* vertexSource, const char* fragmentSource);
+struct ComputeBuffer {
+    unsigned int handle; int index; 
+};
 
+enum TextureAccess_ { 
+    TextureAccess_ReadOnly, 
+    TextureAccess_WriteOnly, 
+    TextureAccess_ReadWrite 
+};
+typedef int TextureAccess;
+
+void rBindShader(Shader shader);
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource);
+Shader rImportShader(const char* vertexSource, const char* fragmentSource);
 Shader rCreateFullScreenShader(const char* fragmentSource);
 
-Shader rImportShader(const char* vertexSource, const char* fragmentSource);
+// ComputeShader
+Shader rCreateComputeShader(const char* source);
+Shader rImportComputeShader(const char* path);
+ComputeBuffer rComputeShaderCreateBuffer(Shader compute, int size, const char* name, const void* data = nullptr);
 
-void   rDeleteShader(Shader shader);
+void rComputeShaderBindBuffer(int binding, int buffer);
 
-void   rBindShader(Shader shader);
+void rBindTextureToCompute(Texture texture, int unit, TextureAccess access);
+// Don't forget bind before this function
+void rDispatchComputeShader(Shader shader, int workGroupsX, int workGroupsY, int workGroupsZ);
+
+void rComputeShaderBarier();
+
+void rDeleteShader(Shader shader);
 
 // Todo(Anil): lookup uniforms
 int rGetUniformLocation(const char* name);
@@ -279,7 +309,7 @@ void rSetShaderValue(float value, int location);
 
 
 // Warning! Order is important
-enum TextureType_
+enum TextureType_ 
 {
     TextureType_R8             = 0,
     TextureType_R8_SNORM       = 1,
@@ -313,17 +343,17 @@ enum TextureType_
     TextureType_RGB5_A1        = 29,
     TextureType_RGBA4          = 30,
     TextureType_RGB10_A2       = 31,
-    TextureType_RGBA16F        = 33,
-    TextureType_RGBA32F        = 34,
-    TextureType_RGBA8UI        = 35,
-    TextureType_RGBA16UI       = 36,
-    TextureType_RGBA32UI       = 37,
+    TextureType_RGBA16F        = 32,
+    TextureType_RGBA32F        = 33,
+    TextureType_RGBA8UI        = 34,
+    TextureType_RGBA16UI       = 35,
+    TextureType_RGBA32UI       = 36,
     // Compressed Formats
-    TextureType_CompressedR    = 38,
-    TextureType_CompressedRG   = 39,
-	TextureType_CompressedRGB  = 40,
-	TextureType_CompressedRGBA = 41,
+    TextureType_CompressedR    = 37,
+    TextureType_CompressedRG   = 38,
+	TextureType_CompressedRGB  = 39,
+	TextureType_CompressedRGBA = 40,
     // Depth Formats
-    TextureType_DepthStencil24 = 42,
-    TextureType_DepthStencil32 = 43
+    TextureType_DepthStencil24 = 41,
+    TextureType_DepthStencil32 = 42
 };

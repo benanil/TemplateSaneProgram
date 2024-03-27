@@ -15,59 +15,48 @@ uniform highp mat4 uModel;
 uniform highp mat4 uLightMatrix;
 uniform highp mat4 uViewProj;
 
-uniform highp mat4 uInvBindMatrices[32];
-uniform highp mat4 uJointMatrices[32];
-
+uniform highp sampler2D uAnimTex;
 uniform mediump vec3 uSunDir;
 
 uniform int uHasNormalMap;
-uniform int uHasSkin;
+uniform int uHasAnimation;
+
+mat4 JointMatrixFromIndex(int x)
+{
+    x *= 3;
+    int y = x / 600;
+    x = x % 600;
+    return transpose(mat4(
+       texelFetch(uAnimTex, ivec2(x + 0, y), 0),
+       texelFetch(uAnimTex, ivec2(x + 1, y), 0),
+       texelFetch(uAnimTex, ivec2(x + 2, y), 0),
+       vec4(0.0f, 0.0f, 0.0f, 1.0f)
+    ));
+}
 
 // https://developer.android.com/games/optimize/vertex-data-management
 void main()
 {
     highp mat4 model = uModel;
-    vec4 weights = normalize(aWeights);
 
-    if (uHasSkin == 1)
-    {
-        model = (uJointMatrices[aJoints.x] * weights.x)
-              + (uJointMatrices[aJoints.y] * weights.y)
-              + (uJointMatrices[aJoints.z] * weights.z)
-              + (uJointMatrices[aJoints.w] * weights.w);
+    if (uHasAnimation > 0) {
+        model = model * JointMatrixFromIndex(gl_VertexID);
     }
-    vFragPos   = vec3(model * vec4(aPos, 1.0));
-    vTexCoords = aTexCoords; 
+
+    vTBN[0] = normalize(vec3(model * vec4(aTangent.xyz, 0.0))); 
+    vTBN[2] = normalize(vec3(model * vec4(aNormal, 0.0)));
+    vTBN[1] = cross(vTBN[0], vTBN[2]) * aTangent.w;
     
-    lowp mat3 lowModel = mat3(normalize(model[0].xyz),
-                              normalize(model[1].xyz),
-                              normalize(model[2].xyz));
-    lowp vec3 normal = (lowModel * normalize(aNormal));
-    vTBN[2] = normal; // if has no tange.nts use vertex normal
-
-#ifndef __ANDROID__
-    if (uHasNormalMap == 1)
-    {
-        lowp vec3 T = (lowModel * normalize(aTangent.xyz));
-        lowp vec3 N = normal;
-        T = normalize(T - dot(T, N) * N);
-        lowp vec3 B = cross(N, T) * aTangent.w;
-
-        vTBN = mat3(T, B, N);
-    }
-#endif
+    vec4 outPos = model * vec4(aPos, 1.0);
+    mediump vec3 normal = vTBN[2];
     
-    // for shadow, this matrix converts [-1, 1] space to [0, 1]
-    const mat4 biasMatrix = mat4( 
-        0.5, 0.0, 0.0, 0.0,
-        0.0, 0.5, 0.0, 0.0,
-        0.0, 0.0, 0.5, 0.0,
-        0.5, 0.5, 0.5, 1.0
-    );
+    // float biasPosOffset = 0.5 + (1.0 - dot(normal, uSunDir)); // clamp(tan(acos(dot(normal, uSunDir)))*0.8, 0.0, 3.0);
+    vec3 normalBias = -uSunDir * 0.04; //normal * clamp(biasPosOffset, -0.5, 1.0);
+ 
+    vLightSpaceFrag = uLightMatrix * (model * vec4(aPos + normalBias, 1.0));
+    vLightSpaceFrag.xyz = vLightSpaceFrag.xyz * 0.5 + 0.5; // [-1,1] to [0, 1]
 
-    float biasPosOffset = 0.5 + (1.0 - dot(normal, uSunDir)); // clamp(tan(acos(ndl))*0.8, 0.0, 3.0)
-
-    vLightSpaceFrag = biasMatrix * model * uLightMatrix * vec4(aPos + (normal * biasPosOffset), 1.0);
-
-    gl_Position = uViewProj * (model * vec4(aPos, 1.0));//vec4(locPos.xyz / locPos.w, 1.0);
-}
+    vTexCoords  = aTexCoords; 
+    vFragPos    = outPos.xyz / outPos.w;
+    gl_Position = uViewProj * outPos;
+} 

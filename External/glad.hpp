@@ -177,6 +177,13 @@ typedef void (*GLADpostcallback)(void *ret, const char *name, GLADapiproc apipro
 
 #endif /* GLAD_PLATFORM_H_ */
 
+#define GL_SHADER_STORAGE_BUFFER 0x90D2
+#define GL_SHADER_STORAGE_BUFFER_BINDING 0x90D3
+#define GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT 0x90DF
+#define GL_SHADER_STORAGE_BUFFER_SIZE 0x90D5
+#define GL_SHADER_STORAGE_BUFFER_START 0x90D4
+#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
+
 #define GL_2D 0x0600
 #define GL_2_BYTES 0x1407
 #define GL_3D 0x0601
@@ -1490,6 +1497,13 @@ typedef void (*GLADpostcallback)(void *ret, const char *name, GLADapiproc apipro
 #define GL_ZOOM_X 0x0D16
 #define GL_ZOOM_Y 0x0D17
 
+#define GL_COMPUTE_SHADER 0x91B9
+#define GL_COMPUTE_SHADER_BIT 0x00000020
+#define GL_COMPUTE_SHADER_INVOCATIONS 0x82F5
+#define GL_COMPUTE_SUBROUTINE 0x92ED
+#define GL_COMPUTE_SUBROUTINE_UNIFORM 0x92F3
+#define GL_COMPUTE_TEXTURE 0x82A0
+#define GL_COMPUTE_WORK_GROUP_SIZE 0x8267
 
 #ifndef __khrplatform_h_
 #define __khrplatform_h_
@@ -1917,6 +1931,12 @@ GLAD_API_CALL int GLAD_GL_EXT_texture_sRGB_RG8;
 #define GL_S3_s3tc 1
 GLAD_API_CALL int GLAD_GL_S3_s3tc;
 
+
+typedef void (GLAD_API_PTR *PFNGLMEMORYBARRIERPROC)(GLbitfield barriers);
+typedef void (GLAD_API_PTR *PFNGLMEMORYBARRIERBYREGIONPROC)(GLbitfield barriers);
+
+typedef void (GLAD_API_PTR *PFNGLDISPATCHCOMPUTEPROC)(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z);
+typedef void (GLAD_API_PTR *PFNGLDISPATCHCOMPUTEINDIRECTPROC)(GLintptr indirect);
 
 typedef void (GLAD_API_PTR *PFNGLACCUMPROC)(GLenum op, GLfloat value);
 typedef void (GLAD_API_PTR *PFNGLACTIVETEXTUREPROC)(GLenum texture);
@@ -2597,6 +2617,17 @@ typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3IVPROC)(const GLint * v);
 typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3SPROC)(GLshort x, GLshort y, GLshort z);
 typedef void (GLAD_API_PTR *PFNGLWINDOWPOS3SVPROC)(const GLshort * v);
 typedef void (GLAD_API_PTR *PFNGLINVALIDATEFRAMEBUFFERPROC)(GLenum target, GLsizei numAttachments, const GLenum * attachments);
+
+GLAD_API_CALL PFNGLMEMORYBARRIERPROC glad_glMemoryBarrier;
+#define glMemoryBarrier glad_glMemoryBarrier
+GLAD_API_CALL PFNGLMEMORYBARRIERBYREGIONPROC glad_glMemoryBarrierByRegion;
+#define glMemoryBarrierByRegion glad_glMemoryBarrierByRegion
+
+
+GLAD_API_CALL PFNGLDISPATCHCOMPUTEPROC glad_glDispatchCompute;
+#define glDispatchCompute glad_glDispatchCompute
+GLAD_API_CALL PFNGLDISPATCHCOMPUTEINDIRECTPROC glad_glDispatchComputeIndirect;
+#define glDispatchComputeIndirect glad_glDispatchComputeIndirect
 
 GLAD_API_CALL PFNGLACCUMPROC glad_glAccum;
 #define glAccum glad_glAccum
@@ -3961,6 +3992,12 @@ GLAD_API_CALL int gladLoadGLUserPtr( GLADuserptrloadfunc load, void *userptr);
 GLAD_API_CALL int gladLoadGL( GLADloadfunc load);
 
 
+typedef void (GLAD_API_PTR *PFNGLSHADERSTORAGEBLOCKBINDINGPROC)(GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding);
+
+#define glShaderStorageBlockBinding glad_glShaderStorageBlockBinding
+GLAD_API_CALL PFNGLSTENCILFUNCPROC glad_glStencilFunc;
+
+
 #ifdef GLAD_GL
 
 GLAD_API_CALL int gladLoaderLoadGL(void);
@@ -4025,8 +4062,10 @@ int GLAD_GL_EXT_texture_sRGB_R8 = 0;
 int GLAD_GL_EXT_texture_sRGB_RG8 = 0;
 int GLAD_GL_S3_s3tc = 0;
 
+PFNGLMEMORYBARRIERPROC glad_glMemoryBarrier = NULL;
+PFNGLMEMORYBARRIERBYREGIONPROC glad_glMemoryBarrierByRegion = NULL;
 
-
+PFNGLSHADERSTORAGEBLOCKBINDINGPROC glad_glShaderStorageBlockBinding = 0;
 PFNGLACCUMPROC glad_glAccum = NULL;
 PFNGLACTIVETEXTUREPROC glad_glActiveTexture = NULL;
 PFNGLALPHAFUNCPROC glad_glAlphaFunc = NULL;
@@ -4707,8 +4746,24 @@ PFNGLWINDOWPOS3SPROC glad_glWindowPos3s = NULL;
 PFNGLWINDOWPOS3SVPROC glad_glWindowPos3sv = NULL;
 PFNGLINVALIDATEFRAMEBUFFERPROC glad_glInvalidateFramebuffer = nullptr;
 
+PFNGLDISPATCHCOMPUTEPROC glad_glDispatchCompute = NULL;
+PFNGLDISPATCHCOMPUTEINDIRECTPROC glad_glDispatchComputeIndirect = NULL;
+
+typedef void (GLAD_API_PTR *PFNGLBINDIMAGETEXTUREPROC)(GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format);
+
+PFNGLBINDIMAGETEXTUREPROC glad_glBindImageTexture = NULL;
+
+GLAD_API_CALL PFNGLBINDIMAGETEXTUREPROC glad_glBindImageTexture;
+#define glBindImageTexture glad_glBindImageTexture
+
 static void glad_gl_load_GL_VERSION_1_0( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_VERSION_1_0) return;
+    
+    glad_glShaderStorageBlockBinding = (PFNGLSHADERSTORAGEBLOCKBINDINGPROC) load(userptr, "glShaderStorageBlockBinding");
+    glad_glBindImageTexture = (PFNGLBINDIMAGETEXTUREPROC) load(userptr, "glBindImageTexture");
+    glad_glDispatchCompute = (PFNGLDISPATCHCOMPUTEPROC) load(userptr, "glDispatchCompute");
+    glad_glDispatchComputeIndirect = (PFNGLDISPATCHCOMPUTEINDIRECTPROC) load(userptr, "glDispatchComputeIndirect");
+
     glad_glAccum = (PFNGLACCUMPROC) load(userptr, "glAccum");
     glad_glAlphaFunc = (PFNGLALPHAFUNCPROC) load(userptr, "glAlphaFunc");
     glad_glBegin = (PFNGLBEGINPROC) load(userptr, "glBegin");

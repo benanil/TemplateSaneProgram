@@ -18,7 +18,9 @@ set(AX_GAME_BUILD FALSE)
 set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     ASTL/Additional/OBJParser.cpp
+    ASTL/Additional/Profiler.cpp
     
+    src/Animation.cpp
     src/AssetManager.cpp
     src/SaneProgram.cpp
     src/Renderer.cpp

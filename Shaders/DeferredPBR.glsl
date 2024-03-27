@@ -51,11 +51,8 @@ const float PI = 3.1415926535;
 
 mediump vec4 toLinear(mediump vec4 sRGB)
 {
-    // return sRGB * sRGB; // < gamma 2.0
-    bvec4 cutoff = lessThan(sRGB, vec4(0.04045));
-    mediump vec4 higher = pow((sRGB + vec4(0.055)) / vec4(1.055), vec4(2.4));
-    mediump vec4 lower = sRGB / vec4(12.92);
-    return mix(higher, lower, cutoff); // gamma 2.2
+    // https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
+    return sRGB * (sRGB * (sRGB * 0.305306011 + 0.682171111) + 0.012522878);
 }
 
 float sqr(float x) { return x*x; }
@@ -185,9 +182,9 @@ half3 CustomToneMapping(half3 x)
 // https://www.shadertoy.com/view/lsKSWR
 float16 Vignette(half2 uv)
 {
-	uv *= vec2(1.0f) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
-	float16 vig = uv.x * uv.y * 15.0f; // multiply with sth for intensity
-	vig = pow(vig, 0.15f); // change pow for modifying the extend of the  vignette
+	uv *= vec2(1.0) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
+	float16 vig = uv.x * uv.y * 15.0; // multiply with sth for intensity
+	vig = pow(vig, 0.15); // change pow for modifying the extend of the  vignette
 	return vig; 
 }
 
@@ -197,14 +194,6 @@ lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp fl
 {
     const lowp float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
     return Weights5[0]*a + Weights5[1]*(b+c) + Weights5[2]*(d+e);
-}
-
-mediump vec4 unpackUnorm4x8(uint x)
-{
-    return vec4(uvec4((x >> 0u ) & 0xFFu,
-                      (x >> 8u ) & 0xFFu,
-                      (x >> 16u) & 0xFFu,
-                      (x >> 24u) & 0xFFu)) / 255.0; 
 }
 #endif
 
@@ -222,15 +211,15 @@ lowp float GetAO(float shadow)
     #else
     {
         // 9x gaussian blur
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-4.0, 0)).r * 0.05;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-3.0, 0)).r * 0.09;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2.0, 0)).r * 0.12;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1.0, 0)).r * 0.15;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+0.0, 0)).r * 0.16;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+1.0, 0)).r * 0.15;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+2.0, 0)).r * 0.12;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+3.0, 0)).r * 0.09;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4.0, 0)).r * 0.05;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-4, 0)).r * 0.05;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-3, 0)).r * 0.09;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r * 0.12;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r * 0.15;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+0, 0)).r * 0.16;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+1, 0)).r * 0.15;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+2, 0)).r * 0.12;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+3, 0)).r * 0.09;
+        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4, 0)).r * 0.05;
     }
     #endif
     // we want ao only if there is shadow 
@@ -242,7 +231,7 @@ lowp float GetAO(float shadow)
 void main()
 {
     half3 shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
-    half3 normal = texture(uNormalTex, texCoord).rgb; // * 2.0 - 1.0;
+    half3 normal = texture(uNormalTex, texCoord).rgb * 2.0 - 1.0;
     half3 albedo = toLinear(texture(uAlbedoTex, texCoord)).rgb;
     normal = normalize(normal);
     
@@ -252,7 +241,7 @@ void main()
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
     half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); 
-    half3 sunColor = vec3(0.98f, 0.90, 0.88);
+    half3 sunColor = vec3(0.98f, 0.94, 0.91);
     half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay); 
 
     for (int i = 0; i < uNumPointLights; i++)

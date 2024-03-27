@@ -36,11 +36,9 @@ const vec2 Noise[32] = vec2[32](
 out float Result;
 in vec2 texCoord;
 
-uniform sampler2D depthMap;
-uniform sampler2D normalTex;
-
-uniform mat4 Proj;
-uniform mat4 View;
+uniform sampler2D uDepthMap;
+uniform sampler2D uNormalTex;
+uniform mat4 uView;
 
 const float PI = 3.141592653589793238;
 const float FarPlane = 1000.0f;
@@ -55,13 +53,13 @@ float EaseOut(float x) {
 }
 
 vec3 ConvertToViewNormal(vec3 normal) {
-    return vec3(View * vec4(normal, 0.0));
+    return vec3(uView * vec4(normal, 0.0));
 }
 
 void main()
 {
-    vec3 baseNormal = texture(normalTex, texCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
-    float baseDepth = texture(depthMap, texCoord).r;
+    vec3 baseNormal = texture(uNormalTex, texCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
+    float baseDepth = texture(uDepthMap, texCoord).r;
 
     // optional scaling for normals that parallel to view,
     // we might want to sample less range for parallel normals (walls that we look sideways)
@@ -69,7 +67,7 @@ void main()
     sampleScale.x = mix(0.2, 1.0, sampleScale.x);
     sampleScale.y = mix(0.2, 1.0, sampleScale.y);
 
-    vec2 screenSize = vec2(textureSize(normalTex, 0));
+    vec2 screenSize = vec2(textureSize(uNormalTex, 0));
     vec2 texelSize = vec2(1.0) / screenSize;
     
 #ifndef __ANDROID__
@@ -88,8 +86,8 @@ void main()
         vec2 offset = Noise[i].xy * pixelRange;
         vec2 sampleCoord = texCoord + offset;
 
-        float depth = texture(depthMap, sampleCoord).r;
-        vec3 normal = texture(normalTex, sampleCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
+        float depth = texture(uDepthMap, sampleCoord).r;
+        vec3 normal = texture(uNormalTex, sampleCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
 
         // calculate square distance, because distance function uses sqrt
         vec3 diff = baseNormal - normal;

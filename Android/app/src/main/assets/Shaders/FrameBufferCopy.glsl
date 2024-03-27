@@ -14,7 +14,7 @@ float checkerboard(in vec2 uv)
 
 void main() {
 
-    oFragColor   = texture(ColorTex , texCoord).rgb;
+    // oFragColor   = texture(ColorTex , texCoord).rgb;
     oNormal      = texture(NormalTex, texCoord).rgb;
     
     float d1 = textureOffset(DepthTex, texCoord, ivec2(0, 0)).r;

@@ -19,9 +19,20 @@
 // prefab is GLTF, FBX or OBJ
 struct Prefab : public SceneBundle 
 {
-    Texture* textures;
+    Texture* gpuTextures;
     GPUMesh bigMesh; // contains all of the vertices and indices of an prefab
     char path[128]; // relative path
+    bool firstTimeRender;
+
+    Texture GetGPUTexture(int index)
+    {
+        return gpuTextures[textures[index].source];
+    }
+
+    ANode* GetNodePtr(int index)
+    {
+        return &nodes[index];
+    }
 };
 
 typedef ushort PrefabID;
@@ -125,9 +136,9 @@ struct Scene
     // import GLTF, FBX, or OBJ file into scene
     int ImportPrefab(PrefabID* prefabID, const char* inPath, float scale);
 
-    void UpdatePrefab(PrefabID scene);
+    void Update();
     
-    Prefab* GetPrefab(PrefabID scene);
+    Prefab* GetPrefab(PrefabID prefab);
 
 private:
 

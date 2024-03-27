@@ -38,7 +38,6 @@ in vec2 texCoord;
 
 uniform sampler2D uDepthMap;
 uniform sampler2D uNormalTex;
-
 uniform mat4 uView;
 
 const float PI = 3.141592653589793238;

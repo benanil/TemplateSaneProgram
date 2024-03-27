@@ -76,7 +76,7 @@ bool GetKeyReleased(char c) { return false; }
 
 Touch GetTouch(int index) { return PlatformCtx.Fingers[index]; }
 
-int NumTouchPressed() { return PopCount(PlatformCtx.FingerDown); }
+int NumTouchPressed() { return PopCount32(PlatformCtx.FingerDown); }
 
 bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.FingerDown & 0b11); }
 bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.FingerReleased & 0b11); }

@@ -173,7 +173,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
             if (umesh->vertex_tangent.exists)
             {
                 vec_t tangent = Vec3Load((float*)(umesh->vertex_normal.values.data + j));
-                tangent = VecSetW(tangent, 1.0f);
+                VecSetW(tangent, 1.0f);
                 currentVertex[j].tangent = Pack_INT_2_10_10_10_REV(tangent);
             }
         }
@@ -257,7 +257,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
             matrices[j].r[1] = Vec3Load(&uMatrix.cols[1].x); 
             matrices[j].r[2] = Vec3Load(&uMatrix.cols[2].x); 
             matrices[j].r[3] = Vec3Load(&uMatrix.cols[3].x); 
-            matrices[j].r[3] = VecSetW(matrices[j].r[3], 1.0f); 
+            VecSetW(matrices[j].r[3], 1.0f); 
         }
         
         for (uint32_t j = 0u; j < numJoints; j++)
@@ -500,14 +500,7 @@ void CreateVerticesIndices(SceneBundle* gltf)
         }
     }
     
-    for (int i = 0; i < gltf->numBuffers; i++)
-    {
-        FreeAllText((char*)gltf->buffers[i].uri);
-        gltf->buffers[i].uri = nullptr;
-    }
-    delete[] gltf->buffers;
-    gltf->numBuffers = 0;
-    gltf->buffers = nullptr;
+    FreeGLTFBuffers(gltf);
 }
 
 void CreateVerticesIndicesSkined(SceneBundle* gltf)
@@ -609,6 +602,10 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
                 }
                 currVertex[j].joints  = packedJoints;
                 currVertex[j].weights = packedWeights;
+
+                if (currVertex[j].weights == 0)
+                    currVertex[j].weights = 0XFF000000u;
+
                 joints  += jointOffset; // stride offset at the end of the struct
                 weights += weightOffset;
             }
@@ -627,9 +624,6 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
         ASkin& skin = gltf->skins[s];
         Matrix4* inverseBindMatrices = new Matrix4[skin.numJoints];
         SmallMemCpy(inverseBindMatrices, skin.inverseBindMatrices, sizeof(Matrix4) * skin.numJoints);
-        for (int i = 0; i < skin.numJoints; i++)
-            ;//inverseBindMatrices[i] = Matrix4::Transpose(inverseBindMatrices[i]);
-
         skin.inverseBindMatrices = (float*)inverseBindMatrices;
     }
 
@@ -664,14 +658,7 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
         }
     }
 
-    for (int i = 0; i < gltf->numBuffers; i++)
-    {
-        FreeAllText((char*)gltf->buffers[i].uri);
-        gltf->buffers[i].uri = nullptr;
-    }
-    delete[] gltf->buffers;
-    gltf->numBuffers = 0;
-    gltf->buffers = nullptr;
+    FreeGLTFBuffers(gltf);
 }
 
 
@@ -680,12 +667,14 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 34;
+const int ABMMeshVersion = 38;
 
 bool IsABMLastVersion(const char* path)
 {
+    if (!FileExist(path))
+        return false;
     AFile file = AFileOpen(path, AOpenFlag_Read);
-    if (AFileSize(file) < sizeof(short) * 12) 
+    if (AFileSize(file) < sizeof(short) * 16) 
         return false;
     int version = 0;
     AFileRead(&version, sizeof(int), file);
@@ -733,6 +722,7 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
     AFileWrite(&gltf->numCameras, sizeof(short), file);
     AFileWrite(&gltf->numScenes, sizeof(short), file);
     AFileWrite(&gltf->numSkins, sizeof(short), file);
+    AFileWrite(&gltf->numAnimations, sizeof(short), file);
     AFileWrite(&gltf->defaultSceneIndex, sizeof(short), file);
     short isSkined = (short)(gltf->skins != nullptr);
     AFileWrite(&isSkined, sizeof(short), file);
@@ -757,13 +747,14 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
     AFileWrite(compressedBuffer, afterCompSize, file);
 
     delete[] compressedBuffer;
-    
+    // Note: anim morph targets aren't saved
+
     for (int i = 0; i < gltf->numMeshes; i++)
     {
         AMesh mesh = gltf->meshes[i];
         WriteGLTFString(mesh.name, file);
         
-        AFileWrite(&mesh.numPrimitives, sizeof(int), file);
+        AFileWrite(&mesh.numPrimitives  , sizeof(int), file);
         
         for (int j = 0; j < mesh.numPrimitives; j++)
         {
@@ -773,10 +764,10 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
             AFileWrite(&primitive.numIndices , sizeof(int), file);
             AFileWrite(&primitive.numVertices, sizeof(int), file);
             AFileWrite(&primitive.indexOffset, sizeof(int), file);
-            AFileWrite(&primitive.jointType, sizeof(short), file);
-            AFileWrite(&primitive.jointCount, sizeof(short), file);
+            AFileWrite(&primitive.jointType  , sizeof(short), file);
+            AFileWrite(&primitive.jointCount , sizeof(short), file);
             AFileWrite(&primitive.jointStride, sizeof(short), file);
-            AFileWrite(&primitive.material, sizeof(short), file);
+            AFileWrite(&primitive.material   , sizeof(short), file);
         }
     }
     
@@ -871,6 +862,37 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
         AFileWrite(skin.joints, sizeof(int) * skin.numJoints, file);
     }
     
+    int totalAnimSamplerInput = 0;
+    if (gltf->numAnimations > 0)
+    {
+        for (int a = 0; a < gltf->numAnimations; a++)
+            for (int s = 0; s < gltf->animations[a].numSamplers; s++)
+                totalAnimSamplerInput += gltf->animations[a].samplers[s].count;
+    }
+
+    AFileWrite(&totalAnimSamplerInput, sizeof(int), file);
+    if (totalAnimSamplerInput > 0) {
+        // all sampler input and outputs are allocated in one buffer each. at the end of the CreateVerticesIndicesSkined function
+        AFileWrite(gltf->animations[0].samplers[0].input, sizeof(float) * totalAnimSamplerInput, file);
+        AFileWrite(gltf->animations[0].samplers[0].output, sizeof(vec_t) * totalAnimSamplerInput, file);
+    }
+
+    for (int i = 0; i < gltf->numAnimations; i++)
+    {
+        AAnimation animation = gltf->animations[i];
+        AFileWrite(&animation.numSamplers, sizeof(int), file);
+        AFileWrite(&animation.numChannels, sizeof(int), file);
+        AFileWrite(&animation.duration, sizeof(float), file);
+        AFileWrite(animation.channels, sizeof(AAnimChannel) * animation.numChannels, file);
+        
+        for (int j = 0; j < animation.numSamplers; j++)
+        {
+            AFileWrite(&animation.samplers[j].count, sizeof(int), file);
+            AFileWrite(&animation.samplers[j].numComponent, sizeof(int), file);
+            AFileWrite(&animation.samplers[j].interpolation, sizeof(float), file);
+        }
+    }
+    
     AFileClose(file);
 #endif
     return 1;
@@ -932,6 +954,7 @@ int LoadGLTFBinary(const char* path, SceneBundle* gltf)
     AFileRead(&gltf->numCameras, sizeof(short), file);
     AFileRead(&gltf->numScenes, sizeof(short), file);
     AFileRead(&gltf->numSkins, sizeof(short), file);
+    AFileRead(&gltf->numAnimations, sizeof(short), file);
     AFileRead(&gltf->defaultSceneIndex, sizeof(short), file);
     short isSkined;
     AFileRead(&isSkined, sizeof(short), file);
@@ -939,13 +962,14 @@ int LoadGLTFBinary(const char* path, SceneBundle* gltf)
     AFileRead(&gltf->totalIndices, sizeof(int), file);
     AFileRead(&gltf->totalVertices, sizeof(int), file);
     
-    uint64_t vertexSize = isSkined ? sizeof(ASkinedVertex) : sizeof(AVertex);
-    
+    size_t vertexSize = isSkined ? sizeof(ASkinedVertex) : sizeof(AVertex);
+    size_t vertexAlignment = isSkined ? alignof(ASkinedVertex) : alignof(AVertex);
+
     {
         uint64_t allVertexSize = gltf->totalVertices * vertexSize;
         uint64_t allIndexSize  = gltf->totalIndices * sizeof(uint32_t);
         
-        gltf->allVertices = AllocAligned(vertexSize * gltf->totalVertices, alignof(float)); // divide / 4 to get number of floats
+        gltf->allVertices = AllocAligned(vertexSize * gltf->totalVertices, vertexAlignment); // divide / 4 to get number of floats
         gltf->allIndices = AllocAligned(allIndexSize, alignof(uint32_t));
         
         char* compressedBuffer = new char[allVertexSize];
@@ -1106,6 +1130,43 @@ int LoadGLTFBinary(const char* path, SceneBundle* gltf)
         skin.joints = new int[skin.numJoints];
         AFileRead(skin.inverseBindMatrices, sizeof(Matrix4) * skin.numJoints, file);
         AFileRead(skin.joints, sizeof(int) * skin.numJoints, file);
+    }
+
+    int totalAnimSamplerInput = 0;
+    AFileRead(&totalAnimSamplerInput, sizeof(int), file);
+    float* currSamplerInput;
+    vec_t* currSamplerOutput;
+
+    if (totalAnimSamplerInput) {
+        currSamplerInput = new float[totalAnimSamplerInput]{};
+        currSamplerOutput = new vec_t[totalAnimSamplerInput]{};
+        AFileRead(currSamplerInput, sizeof(float) * totalAnimSamplerInput, file);
+        AFileRead(currSamplerOutput, sizeof(vec_t) * totalAnimSamplerInput, file);
+    }
+
+    if (gltf->numAnimations) gltf->animations = new AAnimation[gltf->numAnimations]{};
+    for (int i = 0; i < gltf->numAnimations; i++)
+    {
+        AAnimation& animation = gltf->animations[i];
+
+        AFileRead(&animation.numSamplers, sizeof(int), file);
+        AFileRead(&animation.numChannels, sizeof(int), file);
+        AFileRead(&animation.duration, sizeof(float), file);
+        animation.channels = new AAnimChannel[animation.numChannels];
+        AFileRead(animation.channels, sizeof(AAnimChannel) * animation.numChannels, file);
+        animation.samplers = new AAnimSampler[animation.numSamplers];
+
+        for (int j = 0; j < animation.numSamplers; j++)
+        {
+            AFileRead(&animation.samplers[j].count, sizeof(int), file);
+            AFileRead(&animation.samplers[j].numComponent, sizeof(int), file);
+            AFileRead(&animation.samplers[j].interpolation, sizeof(float), file);
+            int count = animation.samplers[j].count;
+            animation.samplers[j].input = currSamplerInput;
+            animation.samplers[j].output = (float*)currSamplerOutput;
+            currSamplerInput += count;
+            currSamplerOutput += count;
+        }
     }
 
     AFileClose(file);

@@ -1,13 +1,15 @@
 
 
 #include "Renderer.hpp"
+#include "Animation.hpp"
 #include "Platform.hpp"
 
 #include "Scene.hpp"
 #include "SceneRenderer.hpp"
 
-PrefabID GLTFScene = 0;
-PrefabID AnimatedScene = 0;
+static PrefabID GLTFPrefab = 0;
+static PrefabID AnimatedPrefab = 0;
+static AnimationController animationController;
 
 void AXInit()
 {
@@ -21,20 +23,24 @@ void AXInit()
 // return 1 if success
 int AXStart()
 {
-    if (!g_CurrentScene.ImportPrefab(&GLTFScene, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     {
         AX_ERROR("gltf scene load failed");
         return 0;
     }
    
-    if (!g_CurrentScene.ImportPrefab(&AnimatedScene, "Meshes/Cessium Man/CesiumMan.gltf", 1.0f))
+    g_CurrentScene.Init();
+    if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Paladin/Paladin.gltf", 1.0f))
     {
         AX_ERROR("gltf scene load failed2");
         return 0;
     }
 
-    g_CurrentScene.Init();
+    Prefab* animatedPrefab = g_CurrentScene.GetPrefab(AnimatedPrefab);
+    MemsetZero(&animationController, sizeof(AnimationController));
+    CreateAnimationController(animatedPrefab, &animationController);
     SceneRenderer::Init();
+    StartAnimationSystem();
 
     SceneRenderer::BeginUpdateLights();
 
@@ -55,23 +61,39 @@ int AXStart()
     return 1;
 }
 
+// static double t;
 // do rendering and main loop here
 void AXLoop()
 {
-    g_CurrentScene.UpdatePrefab(GLTFScene);
-    SceneRenderer::BeginRendering();
+    g_CurrentScene.Update();
     
-    float t = (float)TimeSinceStartup();
-    SceneRenderer::RenderPrefab(&g_CurrentScene, GLTFScene, 0, t);
-    SceneRenderer::RenderPrefab(&g_CurrentScene, AnimatedScene, 0, t);
-
-    SceneRenderer::EndRendering();
+    double t = (double)TimeSinceStartup();
+    Scene* currentScene = &g_CurrentScene;
+    
+    using namespace SceneRenderer;
+    EvaluateAnimOfPrefab(currentScene->GetPrefab(AnimatedPrefab), 2, t, &animationController);
+    
+    BeginShadowRendering(&g_CurrentScene);
+    {
+        RenderShadowOfPrefab(&g_CurrentScene, GLTFPrefab, nullptr);
+        RenderShadowOfPrefab(&g_CurrentScene, AnimatedPrefab, &animationController);
+    }
+    EndShadowRendering();
+    
+    BeginRendering();
+    {
+        RenderPrefab(&g_CurrentScene, GLTFPrefab, nullptr);
+        RenderPrefab(&g_CurrentScene, AnimatedPrefab, &animationController);
+    }
+    EndRendering();
     // RenderScene(&FBXScene);
-    // todo material and light system
+    // todo material system
 }
 
 void AXExit()
 {
     g_CurrentScene.Destroy();
+    ClearAnimationController(&animationController);
+    DestroyAnimationSystem();
     SceneRenderer::Destroy();
 }

@@ -33,10 +33,10 @@ struct Camera
 		verticalFOV = 65.0f;
 		nearClip = 0.1f;
 		farClip = 500.0f;
-		pitch = 5.0f, yaw = -160.0f , senstivity = 10.0f;
+		pitch = 1.0f, yaw = -160.0f , senstivity = 10.0f;
 
 		viewportSize = xviewPortSize;
-		position = MakeVec3(2.5f, 4.0f, 0.0f);
+		position = MakeVec3(5.5f, 4.0f, 0.0f);
         CalculateLook();
 		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 

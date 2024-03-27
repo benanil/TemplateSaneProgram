@@ -24,6 +24,7 @@ add_library(game SHARED
         ../../../../../src/SaneProgram.cpp
         ../../../../../src/Renderer.cpp
         ../../../../../src/Scene.cpp
+        ../../../../../src/Animation.cpp
         ../../../../../src/SceneRenderer.cpp
         ../../../../../src/AssetManager.cpp
         ../../../../../src/Texture.cpp

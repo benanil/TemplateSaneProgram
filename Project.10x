@@ -17,7 +17,7 @@
 		<CancelBuild></CancelBuild>
 		<RunCommand></RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
-		<DebugCommand>C:\Users\Administrator\Desktop\raddbg\raddbg.exe</DebugCommand>
+		<DebugCommand>C:\Users\Administrator\Desktop\raddbg</DebugCommand>
 		<ExePathCommand></ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
@@ -37,10 +37,11 @@
 			<Define>__ARM_NEON__</Define>
 			<Define>AX_USE_WINDOW</Define>
 			<Define>_WIN32</Define>
-			<Define>__clang__</Define>
+			<Define>_MSC_VER</Define>
 			<Define>_M_X64</Define>
 			<Define>__SSE2__</Define>
 			<Define>__AVX2__</Define>
+			<Define>AX_SUPPORT_SSE</Define>
 		</Defines>
 		<ConfigProperties>
 			<ConfigAndPlatform>
