@@ -214,6 +214,10 @@ Texture rCreateDepthTexture(int width, int height, DepthType depthType);
 // Imports texture from disk and loads to GPU
 Texture rLoadTexture(const char* path, bool mipmap);
 
+// upload image data to GPU, warning: texture should be created with TexFlaags_RawData
+// for now you can only update with same format and same width and height
+void rUpdateTexture(Texture texture, void* data);
+
 void rDeleteTexture(Texture texture);
 
 void rSetTexture(Texture texture, int index, unsigned int loc);

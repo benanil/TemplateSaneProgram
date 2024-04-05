@@ -1,15 +1,18 @@
 
-
 #include "Renderer.hpp"
 #include "Animation.hpp"
 #include "Platform.hpp"
 
 #include "Scene.hpp"
 #include "SceneRenderer.hpp"
+#include "CharacterController.hpp"
+#include "Camera.hpp"
+
 
 static PrefabID GLTFPrefab = 0;
 static PrefabID AnimatedPrefab = 0;
-static AnimationController animationController;
+
+CharacterController characterController={};
 
 void AXInit()
 {
@@ -36,12 +39,11 @@ int AXStart()
         return 0;
     }
 
-    Prefab* animatedPrefab = g_CurrentScene.GetPrefab(AnimatedPrefab);
-    MemsetZero(&animationController, sizeof(AnimationController));
-    CreateAnimationController(animatedPrefab, &animationController);
-    SceneRenderer::Init();
     StartAnimationSystem();
+    Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
+    characterController.Start(paladin);
 
+    SceneRenderer::Init();
     SceneRenderer::BeginUpdateLights();
 
     g_CurrentScene.AddPointLight(MakeVec3(-13.0f, 7.0f, -1.5f), PackColorRGBU32(0.58f, 0.52f, 0.40f), 0.380f, 12.0f);
@@ -61,31 +63,37 @@ int AXStart()
     return 1;
 }
 
+
 // static double t;
 // do rendering and main loop here
 void AXLoop()
 {
-    g_CurrentScene.Update();
-    
-    double t = (double)TimeSinceStartup();
     Scene* currentScene = &g_CurrentScene;
+    currentScene->Update();
     
+    float deltaTime = (float)GetDeltaTime();
+
+    // animate and control the movement of character
+    characterController.Update(deltaTime);
+    AnimationController* animController = &characterController.animationController;
+
     using namespace SceneRenderer;
-    EvaluateAnimOfPrefab(currentScene->GetPrefab(AnimatedPrefab), 2, t, &animationController);
-    
-    BeginShadowRendering(&g_CurrentScene);
+
+    BeginShadowRendering(currentScene);
     {
-        RenderShadowOfPrefab(&g_CurrentScene, GLTFPrefab, nullptr);
-        RenderShadowOfPrefab(&g_CurrentScene, AnimatedPrefab, &animationController);
+        RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
+        RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
     }
     EndShadowRendering();
-    
+
     BeginRendering();
     {
-        RenderPrefab(&g_CurrentScene, GLTFPrefab, nullptr);
-        RenderPrefab(&g_CurrentScene, AnimatedPrefab, &animationController);
+        RenderPrefab(currentScene, GLTFPrefab, nullptr);
+        RenderPrefab(currentScene, AnimatedPrefab, animController);
     }
     EndRendering();
+
+
     // RenderScene(&FBXScene);
     // todo material system
 }
@@ -93,7 +101,7 @@ void AXLoop()
 void AXExit()
 {
     g_CurrentScene.Destroy();
-    ClearAnimationController(&animationController);
+    characterController.Destroy();
     DestroyAnimationSystem();
     SceneRenderer::Destroy();
 }

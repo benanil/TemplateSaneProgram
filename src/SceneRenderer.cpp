@@ -57,8 +57,6 @@ namespace SceneRenderer
     int lAlbedo, lNormalMap, lHasNormalMap, lMetallicMap, lShadowMap, lLightMatrix, 
         lModel , lHasAnimation, lSunDirG, lViewProj, lAnimTex;
 
-    int lJointMatrices[MaxNumJoints];
-    
     // Deferred uniform locations
     int lSunDir, lAlbedoTex, lShadowMetallicRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
 
@@ -91,6 +89,11 @@ namespace SceneRenderer
     AMaterial m_defaultMaterial;
 
     bool m_ShadowFollowCamera = false;
+
+    Camera* GetCamera()
+    {
+        return &m_Camera;
+    }
 }
 
 namespace ShadowSettings
@@ -386,7 +389,7 @@ void BeginRendering()
 
 static void RenderShadowOfNode(ANode* node, Prefab* prefab, Matrix4 parentMat)
 {
-    Matrix4 model = parentMat * Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale);
+    Matrix4 model = Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale) * parentMat;
     // is camera or empty node skip.
     if (node->type == 1 || node->index == -1)
     {
@@ -414,7 +417,7 @@ static void RenderShadowOfNode(ANode* node, Prefab* prefab, Matrix4 parentMat)
 static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight, AnimationController* animSystem)
 {
     int hasAnimation = (int)(animSystem != nullptr);
-    if (hasAnimation) rSetTexture(animSystem->jointComputeOutTex, 0, rGetUniformLocation("uAnimTex"));
+    if (hasAnimation) rSetTexture(animSystem->matrixTex, 0, rGetUniformLocation("uAnimTex"));
     rSetShaderValue(hasAnimation, rGetUniformLocation("uHasAnimation"));
 
     bool hasScene = prefab->numScenes > 0;
@@ -445,7 +448,7 @@ void BeginShadowRendering(Scene* scene)
     rSetViewportSize(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize);
     rClearDepth();
 
-    Vector3f offset = m_ShadowFollowCamera ? m_Camera.position : Vector3f::Zero();
+    Vector3f offset = m_ShadowFollowCamera ? m_Camera.targetPos : Vector3f::Zero();
     Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 50.0f + offset, -sunLight.dir, Vector3f::Up());
     Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
     m_LightMatrix = view * ortho;
@@ -460,10 +463,10 @@ void RenderShadowOfPrefab(Scene* scene, PrefabID prefabID, AnimationController* 
     DirectionalLight sunLight = scene->m_SunLight;
     // todo: fix this
     // render shadows only once if not dynamic
-    // if (prefab->firstTimeRender == 1 && IsAndroid())
-    //     RenderShadows(prefab, sunLight, animSystem);
-    // 
-    // if (!IsAndroid()) 
+    if (prefab->firstTimeRender == 1 && IsAndroid())
+        RenderShadows(prefab, sunLight, animSystem);
+    
+    if (!IsAndroid()) 
         RenderShadows(prefab, sunLight, animSystem); // realtime shadows
     
     prefab->firstTimeRender = 0;
@@ -509,7 +512,7 @@ static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& pri
 
 static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix4 viewProjection, bool recurse)
 {
-    Matrix4 model = parentMat * Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale);
+    Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale) * parentMat;
 
     // if node is not mesh skip (camera or empty node)
     if (node.type != 0 || node.index == -1)
@@ -581,7 +584,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
 
     if (hasAnimation)
     {
-        rSetTexture(animSystem->jointComputeOutTex, 4, lAnimTex);
+        rSetTexture(animSystem->matrixTex, 4, lAnimTex);
     }
 
     for (int i = 0; i < numNodes; i++)
@@ -616,6 +619,36 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         m_DelayedAlphaCutoffs.Resize(0);
     }
     rDrawAllLines(viewProjection.GetPtr());
+}
+
+static bool MeshInstanceIndexCompare(MeshInstance* a, MeshInstance* b)
+{
+    return a->meshIndex < b->meshIndex;
+}
+
+void RenderAllSceneContent(Scene* scene)
+{
+    // MeshInstance* instances = scene->m_MeshInstances.Data();
+    // const int numInstances = scene->m_MeshInstances.Size();
+    // 
+    // QuickSortFn(instances, 0, numInstances - 1, MeshInstanceIndexCompare);
+    // 
+    // {
+    //     rBindShader(m_GBufferShader);
+    //     rSetShaderValue(&scene->m_SunLight.dir.x, lSunDirG, GraphicType_Vector3f);
+    //     rSetShaderValue(hasAnimation, lHasAnimation);
+    // 
+    //     rBindMesh(prefab->bigMesh);
+    // 
+    //     Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
+    //     rSetShaderValue(viewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
+    //     rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
+    // }
+    // 
+    // for (const MeshInstance& instance : scene->m_MeshInstances.Size())
+    // {
+    //     
+    // }
 }
 
 static void SSAOPass()

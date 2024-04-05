@@ -33,6 +33,17 @@ struct Prefab : public SceneBundle
     {
         return &nodes[index];
     }
+
+    int GetRootNodeIdx()
+    {
+        int node = 0;
+        if (numScenes > 0) {
+            AScene defaultScene = scenes[defaultSceneIndex];
+            node = defaultScene.nodes[0];
+        }
+        return node;
+    }
+
 };
 
 typedef ushort PrefabID;
@@ -101,9 +112,12 @@ struct Scene
     void Load(const char* path);
     
     //------------------------------------------------------------------------
-    MeshId AddMesh(PrefabID extScene, ushort sceneExtID, ushort meshIndex,
+    MeshId AddMesh(PrefabID prefabId, ushort meshIndex,
                    char bitmask, const Matrix4& transformation);
     
+    // add copy of prefab into the scene, this will convert AScene and ANode's to Node and Scene's
+    void AddPrefab(PrefabID prefabId, const Matrix4& transformation);
+
     void RemoveMesh(MeshId id);
     
     Vector3f GetMeshPosition(MeshId id);

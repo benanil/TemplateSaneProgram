@@ -10,7 +10,7 @@ if "%1"=="Debug" (
 )
 
 REM Compile the C++ code using clang++
-REM clang++ -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mwindows -luser32 ^
+REM clang++ -std=c++14 -O3 -mavx2 -mfma -march=native -msse4.2 -mwindows -luser32 ^
 REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS  ^
 REM src/SaneProgram.cpp ^
 REM ASTL/Additional/GLTFParser.cpp ^
@@ -19,6 +19,7 @@ REM External/zstddeclib.c ^
 REM src/PlatformWindows.cpp ^
 REM src/AssetManager.cpp ^
 REM src/Animation.cpp ^
+REM src/CharacterController.cpp ^
 REM src/Renderer.cpp ^
 REM src/Scene.cpp ^
 REM src/SceneRenderer.cpp ^
@@ -63,7 +64,7 @@ REM External/astc-encoder/wuffs-v0.3.cpp                          ^
 
 
 REM REM Compile the C++ code using g++
-REM g++ -std=c++14 -O3 -mavx2 -march=native -msse4.2 -mwindows -luser32 ^
+REM g++ -std=c++14 -O3 -mavx2 -mfma -march=native -msse4.2 -mwindows -luser32 ^
 REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables ^
 REM src/SaneProgram.cpp ^
 REM ASTL/Additional/GLTFParser.cpp ^
@@ -105,6 +106,7 @@ REM External/astc-encoder/wuffs-v0.3.cpp                          ^
 REM src/PlatformWindows.cpp ^
 REM src/AssetManager.cpp ^
 REM src/Animation.cpp ^
+REM src/CharacterController.cpp ^
 REM src/Renderer.cpp ^
 REM src/Scene.cpp ^
 REM src/SceneRenderer.cpp ^

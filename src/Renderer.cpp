@@ -2,6 +2,7 @@
 /********************************************************************************
 *    Purpose:                                                                   *
 *        Simple graphics interface that runs in varius different platforms.     *
+*        OpenGL code is in this file                                            *
 *    Author:                                                                    *
 *        Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
@@ -249,6 +250,14 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
 
     CHECK_GL_ERROR();
     return texture;
+}
+
+//-
+void rUpdateTexture(Texture texture, void* data)
+{
+    TextureFormat format = TextureFormatTable[texture.type];
+    glBindTexture(GL_TEXTURE_2D, texture.handle);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, texture.width, texture.height, format.format, format.type, data);
 }
 
 static bool IsCompressed(const char* path, int pathLen)
@@ -960,13 +969,13 @@ void rClearDepthStencil()
 void rBeginShadow()
 {
     glReadBuffer(GL_NONE);
-    // glCullFace(GL_FRONT);
+    glCullFace(GL_FRONT);
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 }
 
 void rEndShadow()
 {
-    // glCullFace(GL_BACK);
+    glCullFace(GL_BACK);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 

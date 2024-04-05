@@ -139,15 +139,21 @@ void Scene::SetMeshPosition(MeshId id,  Vector3f position)
     return m_Matrices[id].SetPosition(position);
 }
 
-MeshId Scene::AddMesh(PrefabID extScene, ushort sceneExtID, ushort meshIndex,
-               char bitmask, const Matrix4& transformation)
+MeshId Scene::AddMesh(PrefabID prefabId, ushort meshIndex, char bitmask, const Matrix4& transformation)
 {
-    MeshInstance instance = { sceneExtID, meshIndex };
+    MeshInstance instance = { prefabId, meshIndex };
     m_MeshInstances.Add(instance);
     m_Matrices.Add(transformation);
     m_Bitmasks.Add(bitmask);
     m_ScaleRotations.Add({ Matrix4::ExtractScale(transformation), Matrix4::ExtractRotation(transformation) });
     return m_MeshInstances.Size()-1;
+}
+
+void Scene::AddPrefab(PrefabID prefabId, const Matrix4& transformation)
+{
+    // todo: NOT DONE Scene::AddPrefab
+ 
+    // maybe return added root node index.
 }
 
 void Scene::RemoveMesh(MeshId id)

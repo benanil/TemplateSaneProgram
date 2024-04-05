@@ -71,11 +71,14 @@ void wGetMonitorSize(int* width, int* height);
 ////////                Keyboard             ////////
 
 // use enum KeyboardKey or asci char 'X'
+
 bool GetKeyDown(char c);
 
 bool GetKeyPressed(char c);
 
 bool GetKeyReleased(char c);
+
+bool AnyKeyDown();
 
 void SetKeyPressCallback(void(*callback)(wchar_t));
 
@@ -94,6 +97,7 @@ enum MouseButton_
 };
 typedef int MouseButton;
 
+bool AnyMouseKeyDown();
 bool GetMouseDown(MouseButton button);
 bool GetMouseReleased(MouseButton button);
 bool GetMousePressed(MouseButton button);

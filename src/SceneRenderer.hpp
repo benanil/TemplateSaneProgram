@@ -5,10 +5,10 @@ struct Scene;
 struct Prefab;
 struct LightInstance;
 struct AnimationController;
+struct Camera;
 
 namespace SceneRenderer
 {
-    const int MaxNumJoints = 128;
     const int MaxNumLights = 16;
 
     void Init();
@@ -28,6 +28,8 @@ namespace SceneRenderer
     void EndRendering();
 
     void PostProcessPass();
+
+    Camera* GetCamera();
 
 // Lights
     void BeginUpdateLights();

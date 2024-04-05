@@ -70,6 +70,7 @@ void UpdateRenderArea()
 }
 
 /****               Keyboard and Touch                ****/
+bool AnyKeyDown() { return PlatformCtx.FingerDown > 0; } // todo: maybe add phyisical buttons too
 bool GetKeyDown(char c)     { return false; }
 bool GetKeyPressed(char c)  { return false; }
 bool GetKeyReleased(char c) { return false; }
@@ -78,6 +79,7 @@ Touch GetTouch(int index) { return PlatformCtx.Fingers[index]; }
 
 int NumTouchPressed() { return PopCount32(PlatformCtx.FingerDown); }
 
+bool AnyMouseKeyDown()  { return PlatformCtx.FingerDown > 0; }
 bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.FingerDown & 0b11); }
 bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.FingerReleased & 0b11); }
 bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.FingerPressed & 0b11); }

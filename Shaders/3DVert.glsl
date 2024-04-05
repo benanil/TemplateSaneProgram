@@ -21,26 +21,25 @@ uniform mediump vec3 uSunDir;
 uniform int uHasNormalMap;
 uniform int uHasAnimation;
 
-mat4 JointMatrixFromIndex(int x)
-{
-    x *= 3;
-    int y = x / 600;
-    x = x % 600;
-    return transpose(mat4(
-       texelFetch(uAnimTex, ivec2(x + 0, y), 0),
-       texelFetch(uAnimTex, ivec2(x + 1, y), 0),
-       texelFetch(uAnimTex, ivec2(x + 2, y), 0),
-       vec4(0.0f, 0.0f, 0.0f, 1.0f)
-    ));
-}
-
 // https://developer.android.com/games/optimize/vertex-data-management
 void main()
 {
     highp mat4 model = uModel;
 
-    if (uHasAnimation > 0) {
-        model = model * JointMatrixFromIndex(gl_VertexID);
+    if (uHasAnimation > 0) 
+    {
+        mediump mat4 animMat = mat4(0.0);
+        animMat[3].w = 1.0;
+
+        for (int i = 0; i < 4; i++)
+        {
+            int matIdx = int(aJoints[i]) * 3; // 3 because our matrix is: RGBA16f x 3
+            animMat[0] += texelFetch(uAnimTex, ivec2(matIdx + 0, 0), 0) * aWeights[i];
+            animMat[1] += texelFetch(uAnimTex, ivec2(matIdx + 1, 0), 0) * aWeights[i];
+            animMat[2] += texelFetch(uAnimTex, ivec2(matIdx + 2, 0), 0) * aWeights[i]; 
+        }
+        
+        model = model * transpose(animMat);
     }
 
     vTBN[0] = normalize(vec3(model * vec4(aTangent.xyz, 0.0))); 
@@ -48,10 +47,9 @@ void main()
     vTBN[1] = cross(vTBN[0], vTBN[2]) * aTangent.w;
     
     vec4 outPos = model * vec4(aPos, 1.0);
-    mediump vec3 normal = vTBN[2];
     
     // float biasPosOffset = 0.5 + (1.0 - dot(normal, uSunDir)); // clamp(tan(acos(dot(normal, uSunDir)))*0.8, 0.0, 3.0);
-    vec3 normalBias = -uSunDir * 0.04; //normal * clamp(biasPosOffset, -0.5, 1.0);
+    vec3 normalBias = -uSunDir * 0.01; //normal * clamp(biasPosOffset, -0.5, 1.0);
  
     vLightSpaceFrag = uLightMatrix * (model * vec4(aPos + normalBias, 1.0));
     vLightSpaceFrag.xyz = vLightSpaceFrag.xyz * 0.5 + 0.5; // [-1,1] to [0, 1]

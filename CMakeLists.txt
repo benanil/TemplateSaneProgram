@@ -28,6 +28,7 @@ set(SOURCES
     src/Scene.cpp
     src/SceneRenderer.cpp
     src/Texture.cpp
+    src/CharacterController.cpp
     External/bitset.c
 )
 

@@ -27,7 +27,6 @@
 #pragma comment (lib, "user32.lib")
 #pragma comment (lib, "opengl32.lib")
 
-
 struct PlatformContextWin
 {
     // Callbacks
@@ -116,9 +115,11 @@ void wSetVSync(bool active)
 /*                          Keyboard and Mouse Input                            */
 /********************************************************************************/
 
-inline bool GetBit128(unsigned long bits[2], int idx)   { return !!(bits[idx > 63] & (1ull << (idx & 63ul))); }
+inline bool GetBit128(unsigned long bits[2], int idx)   { return !!(bits[idx > 63] & (1ull << (idx & 63))); }
 inline void SetBit128(unsigned long bits[2], int idx)   { bits[idx > 63] |= 1ull << (idx & 63); }
 inline void ResetBit128(unsigned long bits[2], int idx) { bits[idx > 63] &= ~(1ull << (idx & 63)); }
+
+bool AnyKeyDown() { return (PlatformCtx.DownKeys[0] + PlatformCtx.DownKeys[1]) > 0; }
 
 bool GetKeyDown(char c)     { return GetBit128(PlatformCtx.DownKeys, c); }
 
@@ -143,6 +144,7 @@ static void RecordLastKeys() {
     PlatformCtx.MouseLast = PlatformCtx.MouseDown;
 }
 
+bool AnyMouseKeyDown()                    { return PlatformCtx.MouseDown > 0; }
 bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.MouseDown     & button); }
 bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.MouseReleased & button); }
 bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.MousePressed  & button); }

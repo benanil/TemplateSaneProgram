@@ -3,6 +3,7 @@
 #include "../ASTL/Math/Matrix.hpp"
 #include "Platform.hpp"
 
+/*
 struct Camera
 {
 	Matrix4 projection;
@@ -171,4 +172,137 @@ struct Camera
 		return ray;
 	}
 #endif
+};
+*/
+struct Camera
+{
+	Matrix4 projection;
+	Matrix4 view;
+
+	// Matrix4 inverseProjection;
+	// Matrix4 inverseView;
+
+	float verticalFOV = 65.0f;
+	float nearClip = 0.1f;
+	float farClip = 500.0f;
+
+	Vector2i viewportSize, monitorSize;
+	Vector2f mouseOld;
+	float senstivity = 0.3f;
+	bool wasPressing = false;
+	FrustumPlanes frustumPlanes;
+	
+	Vector3f targetPos;
+	Vector2f angle; // between 0 and 1 but we will multiply by PI
+	Vector3f direction;
+
+	void Init(Vector2i xviewPortSize)
+	{
+		verticalFOV = 65.0f;
+		nearClip = 0.1f;
+		farClip = 500.0f;
+		senstivity = 0.3f;
+		angle = MakeVec2(0.0f, 0.0f);
+		viewportSize = xviewPortSize;
+		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
+		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
+
+		direction = Vector3f::Normalize(MakeVec3(cosf(angle.x * TwoPI), 0.0f, sinf(angle.x * TwoPI)));
+
+		RecalculateView();
+		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
+	}
+
+	void UpdateFrustumPlanes()
+	{
+		Matrix4 viewProjection = view * projection;
+		frustumPlanes = CreateFrustumPlanes(viewProjection);
+	}
+
+	void RecalculateProjection(int width, int height)
+	{
+		viewportSize.x = width; viewportSize.y = height;
+		projection = Matrix4::PerspectiveFovRH(verticalFOV * DegToRad, (float)width, (float)height, nearClip, farClip);
+		UpdateFrustumPlanes();
+		// inverseProjection = Matrix4::Inverse(projection);
+	}
+
+	void RecalculateView()
+	{
+		float x = angle.x * TwoPI;
+		float y = angle.y * PI;
+
+		Quaternion rot = QFromAxisAngle(MakeVec3(1.0f, 0.0f, 0.0f), -y);
+		rot = QMul(rot, QFromAxisAngle(MakeVec3(0.0f, 1.0f, 0.0f), -x));
+		
+		Matrix4 camera = {};
+		MatrixFromQuaternion(camera.GetPtr(), rot);
+		camera.SetPosition(targetPos + MakeVec3(0.0f, 3.8f, 0.0f)); // camera height from foot
+		camera = Matrix4::FromPosition({0.0f, 0.0f, 5.0f}) * camera; // camera distance 
+		view = Matrix4::Inverse(camera);
+
+		// Vector3f dir = { cosf(x - HalfPI), -angle.y, sinf(x - HalfPI) };
+		// dir.NormalizeSelf();
+		// 
+		// const float dist = 5.0f;
+		// Vector3f height = { 0.0f, 3.8f, 0.0f };
+		// view = Matrix4::LookAtRH(targetPos + (dir * dist) + height, -dir, Vector3f::Up());
+
+		// inverseView = Matrix4::Inverse(view);
+	}
+
+	void SetCursorPos(int x, int y)
+	{
+		SetMousePos((float)x, (float)y);
+		mouseOld = MakeVec2((float)x, (float)y);
+	}
+
+	// when you move the mouse out of window it will apear opposide side what I mean by that is:
+	// for example when your cursor goes to right like this |  ^->|   your mouse will apear at the left of the monitor |^    |
+	void InfiniteMouse(const Vector2f& point)
+	{
+#ifndef __ANDROID__
+		if (point.x > monitorSize.x - 2) SetCursorPos(3, (int)point.y);
+		if (point.y > monitorSize.y - 2) SetCursorPos((int)point.x, 3);
+
+		if (point.x < 2) SetCursorPos(monitorSize.x - 3, (int)point.y);
+		if (point.y < 2) SetCursorPos((int)point.x, monitorSize.y - 3);
+#endif
+	}
+
+	void Update()
+	{
+		bool pressing = GetMouseDown(MouseButton_Right);
+		float dt = (float)GetDeltaTime();
+		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f);
+
+		if (!pressing) { wasPressing = false; return; }
+
+		Vector2f mousePos;
+		GetMousePos(&mousePos.x, &mousePos.y);
+		Vector2f diff = mousePos - mouseOld;
+
+		// if platform is android left side is for movement, right side is for rotating camera
+#ifdef __ANDROID__
+		if (mousePos.x > (monitorSize.x / 2.0f))
+#endif
+		{
+			if (wasPressing && diff.x + diff.y < 130.0f)
+			{
+				angle.x += diff.x * dt * senstivity;
+				angle.y += diff.y * dt * senstivity;
+				angle.x = Fract(angle.x);
+				angle.y = Clamp(angle.y, -0.2f, 0.8f);
+			}
+
+			RecalculateView();
+		}
+
+		mouseOld = mousePos;
+		wasPressing = true;
+
+		InfiniteMouse(mousePos);
+		UpdateFrustumPlanes();
+	}
+
 };

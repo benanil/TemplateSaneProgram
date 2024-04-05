@@ -13,12 +13,12 @@
 		<RebuildCommand></RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand></CleanCommand>
-		<BuildWorkingDirectory></BuildWorkingDirectory>
+		<BuildWorkingDirectory>C:\Users\Administrator\source\repos\TemplateSaneProgram</BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
 		<RunCommand></RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
 		<DebugCommand>C:\Users\Administrator\Desktop\raddbg</DebugCommand>
-		<ExePathCommand></ExePathCommand>
+		<ExePathCommand>C:\Users\Administrator\source\repos\TemplateSaneProgram</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
 		<Configurations>

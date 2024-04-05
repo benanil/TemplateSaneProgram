@@ -1,7 +1,7 @@
 /*********************************************************************************
 *    Purpose:                                                                    *
 *         Saves or Loads given FBX or GLTF scene, as binary                      *
-*         Compresses Vertices using half precison and xyz10w2 format.            *
+*         Compresses Vertices for GPU using half precison and xyz10w2 format.    *
 *         Uses zstd to reduce size on disk                                       *
 *    Author:                                                                     *
 *        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil          *
@@ -667,7 +667,7 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 38;
+const int ABMMeshVersion = 41;
 
 bool IsABMLastVersion(const char* path)
 {
@@ -883,6 +883,9 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
         AFileWrite(&animation.numSamplers, sizeof(int), file);
         AFileWrite(&animation.numChannels, sizeof(int), file);
         AFileWrite(&animation.duration, sizeof(float), file);
+        AFileWrite(&animation.speed, sizeof(float), file);
+        WriteGLTFString(animation.name, file);
+
         AFileWrite(animation.channels, sizeof(AAnimChannel) * animation.numChannels, file);
         
         for (int j = 0; j < animation.numSamplers; j++)
@@ -1152,6 +1155,8 @@ int LoadGLTFBinary(const char* path, SceneBundle* gltf)
         AFileRead(&animation.numSamplers, sizeof(int), file);
         AFileRead(&animation.numChannels, sizeof(int), file);
         AFileRead(&animation.duration, sizeof(float), file);
+        AFileRead(&animation.speed, sizeof(float), file);
+        ReadGLTFString(animation.name, file, stringAllocator);
         animation.channels = new AAnimChannel[animation.numChannels];
         AFileRead(animation.channels, sizeof(AAnimChannel) * animation.numChannels, file);
         animation.samplers = new AAnimSampler[animation.numSamplers];
