@@ -77,12 +77,12 @@ bool GetKeyReleased(char c) { return false; }
 
 Touch GetTouch(int index) { return PlatformCtx.Fingers[index]; }
 
-int NumTouchPressed() { return PopCount32(PlatformCtx.FingerDown); }
+int NumTouchPressing() { return PopCount32(PlatformCtx.FingerDown); }
 
 bool AnyMouseKeyDown()  { return PlatformCtx.FingerDown > 0; }
-bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.FingerDown & 0b11); }
-bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.FingerReleased & 0b11); }
-bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.FingerPressed & 0b11); }
+bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.FingerDown & button); }
+bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.FingerReleased & button); }
+bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.FingerPressed & button); }
 
 void GetMousePos(float* x, float* y) { *x = PlatformCtx.Fingers[0].positionX; *y = PlatformCtx.Fingers[0].positionY; }
 void GetMouseWindowPos(float* x, float* y) { *x = PlatformCtx.Fingers[0].positionX; *y = PlatformCtx.Fingers[0].positionY; }

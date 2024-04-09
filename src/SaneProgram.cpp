@@ -26,12 +26,13 @@ void AXInit()
 // return 1 if success
 int AXStart()
 {
-    if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.12f))
+    // if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
         return 0;
     }
-   
+
     g_CurrentScene.Init();
     if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Paladin/Paladin.gltf", 1.0f))
     {
@@ -39,6 +40,7 @@ int AXStart()
         return 0;
     }
 
+    MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();
     Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
     characterController.Start(paladin);
@@ -75,7 +77,7 @@ void AXLoop()
 
     // animate and control the movement of character
     characterController.Update(deltaTime);
-    AnimationController* animController = &characterController.animationController;
+    AnimationController* animController = &characterController.mAnimController;
 
     using namespace SceneRenderer;
 

@@ -6,17 +6,25 @@
 
 struct CharacterController
 {
-    Vector3f animatedPos;
-    Vector3f startPos;
-    int m_rootNodeIdx;
-    Quaternion startRotation;
+    Quaternion mStartRotation;
+    Vector3f mStartPos;
+    int mRootNodeIdx;
     
-    Prefab* character;
-    AnimationController animationController;
+    Prefab* mCharacter;
+    AnimationController mAnimController;
 
-    Vector2f animTarget = { 0.0f, 0.0f };
-    float animTime = 0.0f;
-    float moveSpeed = 1.0f;
+    Vector2f mAnimTime;
+    float    mAnimSpeed;
+    
+    Vector2f   mCurrentMovement;
+    float      mMovementSpeed; // default -> 2.7f
+    float      mCurrentSpeed;
+    float      mSpeedSmoothVelocity;
+    Quaternion mRotation;
+    Vector3f   mPosition;
+	
+    Vector2f mTouchStart;
+    bool wasPressing;
 
 //------------------------------------------------------------------------
     void Start(Prefab* _character);

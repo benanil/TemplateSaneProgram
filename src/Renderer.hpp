@@ -1,6 +1,6 @@
 
 /************************************************************************** 
-*    Purpose: Render interface that works with OpenGL 4.2 and OpenGL ES2  *
+*    Purpose: Render interface that works with OpenGL 4.2 and OpenGL ES3  *
 *             Notice that each function has R prefix to indicate Renderer *
 *             I saw it in Doom source code I think makes sense.           *
 *    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com              *

@@ -136,16 +136,7 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
 {
     float16 ndl = max(dot(l, n), 0.2);
     float16 r = Reflection(l, n, v);
-    return albedo * ndl + (r * 0.1);
-}
-
-vec3 GetViewRay()
-{
-    vec2 uv = texCoord * 2.0 - 1.0;
-    vec4 target = uInvProj * vec4(uv, 1.0, 1.0);
-    target /= target.w;
-    vec3 rayDir = normalize(vec3(uInvView * target));
-    return rayDir;
+    return albedo * ndl + (r * 0.08);
 }
 
 vec3 WorldSpacePosFromDepthBuffer()
@@ -156,6 +147,13 @@ vec3 WorldSpacePosFromDepthBuffer()
     vsPos /= vsPos.w;
     vsPos = uInvView * vsPos;
     return vsPos.xyz ;
+}
+
+vec3 GetViewRay(vec3 viewPos, vec3 worldSpacePos)
+{
+    // calculate direction between WorldSpacePos and 3rd row of invView(viewPos)
+    vec3 dir = worldSpacePos - viewPos;
+    return dir * inversesqrt(dot(dir, dir));
 }
 
 half3 GammaCorrect(half3 x) {
@@ -203,10 +201,10 @@ lowp float GetAO(float shadow)
     #ifdef __ANDROID__
     {
         ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
-                   textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
-                   textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
-                   textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
-                   textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
+             textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
+             textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
+             textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
+             textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
     }
     #else
     {
@@ -222,10 +220,7 @@ lowp float GetAO(float shadow)
         ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4, 0)).r * 0.05;
     }
     #endif
-    // we want ao only if there is shadow 
-    lowp float invAO = 1.0 - ao;
-    invAO *= step(shadow, 0.50);
-    return 1.0 - invAO;
+    return ao;
 }
 
 void main()
@@ -240,7 +235,8 @@ void main()
     float16 roughness = shadMetRough.z * shadMetRough.z;
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
-    half3 viewRay = -GetViewRay();// -normalize(WorldSpacePosFromDepthBuffer()); 
+    
+    half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
     half3 sunColor = vec3(0.98f, 0.94, 0.91);
     half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay); 
 

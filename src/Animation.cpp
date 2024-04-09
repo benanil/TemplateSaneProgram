@@ -114,7 +114,7 @@ static void SampleAnimationPose(Pose* pose, AAnimation* animation, float normTim
 
 // x, y has to be between -1.0 and 1.0
 // normTime should be between 0 and 1
-void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, float x, float y, float normTime)
+void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, float x, float y, float xNorm, float yNorm)
 {
     ASSERT(prefab->numNodes < 250);
 
@@ -123,44 +123,56 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
     if (!hasAnimation)
         return;
 
-    y = MAX(y, 0.0f); // todo: fix negative animations
-    static float yBefore = 0.0f;
-    // WORKING on: take node transformations of anim0 and anim1 then compose
-    // step 0 sample animations to trs arrays,
-    // step 1 mix sampled trs of animations into another trs
-    // step 2 send mixed trs to nodes
-    const int numNodes = prefab->numNodes;
-    const float xBlend = Fract(x);
-    const float yBlend = Fract(y);
+    const bool yIsNegative = y < 0.0f;
 
-    const int xi = int(Floor(x)); 
-    const int yi = int(Floor(y));
-    
+    // step 0 sample animations to pose arrays,
+    // step 1 mix sampled pose of animations into another pose
+    // step 2 send mixed pose to nodes
     Pose animPose0[MaxBonePoses], animPose1[MaxBonePoses];
 
     AAnimation* animation0 = nullptr;
     AAnimation* animation1 = nullptr;
     
-    bool sampleYAnim = true; // (y > Epsilon) && AlmostEqual(y, 4.0f);
+    y = Abs(y); // todo: fix negative animations
+    const int numNodes = prefab->numNodes;
+    const float yBlend = Fract(y);
 
-    // if (sampleYAnim)
+    int yi = int(y);
+    // sample y anim
     {
-        ASSERT(yi >= 0 && y <= 3); // must be between 1 and 4
-        int index = animController->locomotionIndices[yi][a_middle];
+        ASSERT(yi <= 3); // must be between 1 and 4
+        
+        if (yIsNegative)
+            yi = -yi;
+        
+        int sign = Sign(yi);
+        int index = animController->GetAnim(a_middle, yi);
         animation0 = &prefab->animations[index];
         
-        SampleAnimationPose(animPose0, animation0, normTime, prefab->nodes, numNodes);
+        SampleAnimationPose(animPose0, animation0, yNorm, prefab->nodes, numNodes);
 
         if (yi != 3 && yBlend > 0.00001f) 
         {
-            index = animController->locomotionIndices[yi + 1][a_middle];
+            index = animController->GetAnim(a_middle, yi + sign);
             animation1 = &prefab->animations[index];
             
-            SampleAnimationPose(animPose1, animation1, normTime, prefab->nodes, numNodes);
+            SampleAnimationPose(animPose1, animation1, yNorm, prefab->nodes, numNodes);
             MergeAnims(animPose0, animPose1, EaseOut(yBlend), numNodes);
         }
     }
-    // todo: merge with x animation
+
+    if (!AlmostEqual(x, 0.0f))
+    {
+        // -2,-2 range to 0, 4 range to make array indexing
+        float xBlend = Abs(Fract(x));   
+        eAnimLocation xAnim = x < 0.0f ? a_left  : a_right;
+        {
+            int index = animController->GetAnim(xAnim, yi);
+            animation1 = &prefab->animations[index];
+            SampleAnimationPose(animPose1, animation1, xNorm, prefab->nodes, numNodes);
+        }
+        MergeAnims(animPose0, animPose1, EaseOut(xBlend), numNodes);
+    }
 
     InitNodes(prefab->nodes, animPose0, numNodes);
 
@@ -171,8 +183,7 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
     }
 
     Matrix4 nodeMatrices[MaxNumJoints];
-    Matrix3x4f16 outMatrices[MaxNumJoints];
-    
+
     ASkin& skin = prefab->skins[0];
     int rootNodeIdx = skin.skeleton != -1 ? skin.skeleton : skeletonNode; ASSERT(rootNodeIdx < MaxNumJoints);
     ANode* rootNode = prefab->GetNodePtr(rootNodeIdx);
@@ -180,20 +191,24 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
     Matrix4 rootMatrix = Matrix4::PositionRotationScale(rootNode->translation, rootNode->rotation, rootNode->scale);
     nodeMatrices[rootNodeIdx] = rootMatrix;
     RecurseNodeMatrices(rootNode, prefab->nodes, rootMatrix, nodeMatrices);
-    
-    Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
-    
-    for (int i = 0; i < skin.numJoints; i++)
+
+    // output matrices to GPU
     {
-        Matrix4 mat = invMatrices[i] * nodeMatrices[skin.joints[i]];
-        mat = Matrix4::Transpose(mat);
-        ConvertFloatToHalf(outMatrices[i].x, (float*)&mat.r[0], 4);
-        ConvertFloatToHalf(outMatrices[i].y, (float*)&mat.r[1], 4);
-        ConvertFloatToHalf(outMatrices[i].z, (float*)&mat.r[2], 4);
+        Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
+        Matrix3x4f16 outMatrices[MaxNumJoints];
+
+        for (int i = 0; i < skin.numJoints; i++)
+        {
+            Matrix4 mat = invMatrices[i] * nodeMatrices[skin.joints[i]];
+            mat = Matrix4::Transpose(mat);
+            ConvertFloatToHalf(outMatrices[i].x, (float*)&mat.r[0], 4);
+            ConvertFloatToHalf(outMatrices[i].y, (float*)&mat.r[1], 4);
+            ConvertFloatToHalf(outMatrices[i].z, (float*)&mat.r[2], 4);
+        }
+
+        // upload anim matrix texture to the GPU
+        rUpdateTexture(animController->matrixTex, outMatrices);
     }
-    
-    // upload anim matrix texture to the GPU
-    rUpdateTexture(animController->matrixTex, outMatrices);
 }
 
 void ClearAnimationController(AnimationController* animSystem)

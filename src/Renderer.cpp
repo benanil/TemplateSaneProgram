@@ -258,6 +258,7 @@ void rUpdateTexture(Texture texture, void* data)
     TextureFormat format = TextureFormatTable[texture.type];
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, texture.width, texture.height, format.format, format.type, data);
+    CHECK_GL_ERROR();
 }
 
 static bool IsCompressed(const char* path, int pathLen)

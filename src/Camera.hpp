@@ -183,25 +183,25 @@ struct Camera
 	// Matrix4 inverseView;
 
 	float verticalFOV = 65.0f;
-	float nearClip = 0.1f;
+	float nearClip = 0.07f;
 	float farClip = 500.0f;
 
 	Vector2i viewportSize, monitorSize;
 	Vector2f mouseOld;
-	float senstivity = 0.3f;
-	bool wasPressing = false;
+	float senstivity;
+	bool wasPressing;
 	FrustumPlanes frustumPlanes;
 	
 	Vector3f targetPos;
 	Vector2f angle; // between 0 and 1 but we will multiply by PI
 	Vector3f direction;
-
+	
 	void Init(Vector2i xviewPortSize)
 	{
 		verticalFOV = 65.0f;
 		nearClip = 0.1f;
 		farClip = 500.0f;
-		senstivity = 0.3f;
+		senstivity = 0.07f;
 		angle = MakeVec2(0.0f, 0.0f);
 		viewportSize = xviewPortSize;
 		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
@@ -239,16 +239,10 @@ struct Camera
 		MatrixFromQuaternion(camera.GetPtr(), rot);
 		camera.SetPosition(targetPos + MakeVec3(0.0f, 3.8f, 0.0f)); // camera height from foot
 		camera = Matrix4::FromPosition({0.0f, 0.0f, 5.0f}) * camera; // camera distance 
-		view = Matrix4::Inverse(camera);
+		camera = Matrix4::Inverse(camera);
+		view = camera;
 
-		// Vector3f dir = { cosf(x - HalfPI), -angle.y, sinf(x - HalfPI) };
-		// dir.NormalizeSelf();
-		// 
-		// const float dist = 5.0f;
-		// Vector3f height = { 0.0f, 3.8f, 0.0f };
-		// view = Matrix4::LookAtRH(targetPos + (dir * dist) + height, -dir, Vector3f::Up());
-
-		// inverseView = Matrix4::Inverse(view);
+		UpdateFrustumPlanes();
 	}
 
 	void SetCursorPos(int x, int y)
@@ -270,39 +264,86 @@ struct Camera
 #endif
 	}
 
+	void MouseLook(Vector2f dir, float dt)
+	{
+		if (wasPressing && dir.x + dir.y < 100.0f)
+		{
+			angle.x += dir.x * dt * senstivity;
+			angle.y += dir.y * dt * senstivity;
+			angle.x = Fract(angle.x);
+			angle.y = Clamp(angle.y, -0.2f, 0.8f);
+		}
+	}
+
+#ifndef __ANDROID__ /* NOT android */
 	void Update()
 	{
 		bool pressing = GetMouseDown(MouseButton_Right);
 		float dt = (float)GetDeltaTime();
-		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f);
 
-		if (!pressing) { wasPressing = false; return; }
+		if (!pressing)
+		{
+			RecalculateView();
+			wasPressing = false; 
+			return; 
+		}
 
 		Vector2f mousePos;
 		GetMousePos(&mousePos.x, &mousePos.y);
 		Vector2f diff = mousePos - mouseOld;
-
-		// if platform is android left side is for movement, right side is for rotating camera
-#ifdef __ANDROID__
-		if (mousePos.x > (monitorSize.x / 2.0f))
-#endif
-		{
-			if (wasPressing && diff.x + diff.y < 130.0f)
-			{
-				angle.x += diff.x * dt * senstivity;
-				angle.y += diff.y * dt * senstivity;
-				angle.x = Fract(angle.x);
-				angle.y = Clamp(angle.y, -0.2f, 0.8f);
-			}
-
-			RecalculateView();
-		}
+			
+		MouseLook(diff, dt);
 
 		mouseOld = mousePos;
 		wasPressing = true;
 
 		InfiniteMouse(mousePos);
-		UpdateFrustumPlanes();
+		RecalculateView();
+	}
+#else
+
+	Vector2f GetTouchDir(int index) {
+		Touch touch = GetTouch(index);
+		return { touch.positionX, touch.positionY };
 	}
 
+	// Android Update
+	void Update()
+	{
+		int numTouch = NumTouchPressing();
+		float dt = (float)GetDeltaTime();
+
+		if (numTouch == 0) {
+			RecalculateView();
+			wasPressing = false;
+			return;
+		}
+
+		Vector2f touch0 = GetTouchDir(0);
+		Vector2f dir;
+		// left side is for movement, right side is for rotating camera
+		// if num touch is 1 and its right side of the screen
+		if (numTouch == 1 && touch0.x < (monitorSize.x / 2.0f))
+		{
+			RecalculateView();
+			return; // this touch used by movement
+		}
+		else // multi touch
+		{
+			Vector2f touch1 = GetTouchDir(1);
+			
+			// we want right touch to be used for looking
+			if (touch1.x > touch0.x)
+				Swap(touch0, touch1);
+		}
+		
+		dir = touch0 - mouseOld;
+		MouseLook(dir, dt);
+		
+		wasPressing = true; 
+		mouseOld = touch0;
+		
+		RecalculateView();
+	}
+#endif
 };

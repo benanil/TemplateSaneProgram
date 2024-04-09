@@ -38,7 +38,6 @@ in vec2 texCoord;
 
 uniform sampler2D uDepthMap;
 uniform sampler2D uNormalTex;
-uniform mat4 uView;
 
 const float PI = 3.141592653589793238;
 const float FarPlane = 1000.0f;
@@ -52,20 +51,10 @@ float EaseOut(float x) {
     return (x * x);
 }
 
-vec3 ConvertToViewNormal(vec3 normal) {
-    return vec3(uView * vec4(normal, 0.0));
-}
-
 void main()
 {
-    vec3 baseNormal = texture(uNormalTex, texCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
+    lowp vec3 baseNormal = texture(uNormalTex, texCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
     float baseDepth = texture(uDepthMap, texCoord).r;
-
-    // optional scaling for normals that parallel to view,
-    // we might want to sample less range for parallel normals (walls that we look sideways)
-    vec2 sampleScale = vec2(1.0) - abs(ConvertToViewNormal(baseNormal).rg);
-    sampleScale.x = mix(0.2, 1.0, sampleScale.x);
-    sampleScale.y = mix(0.2, 1.0, sampleScale.y);
 
     vec2 screenSize = vec2(textureSize(uNormalTex, 0));
     vec2 texelSize = vec2(1.0) / screenSize;
@@ -87,11 +76,11 @@ void main()
         vec2 sampleCoord = texCoord + offset;
 
         float depth = texture(uDepthMap, sampleCoord).r;
-        vec3 normal = texture(uNormalTex, sampleCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
+        lowp vec3 normal = texture(uNormalTex, sampleCoord).rgb * vec3(2.0) - vec3(1.0); // < convert to [-1,1] range
 
         // calculate square distance, because distance function uses sqrt
-        vec3 diff = baseNormal - normal;
-        float normalDiffSqr = dot(diff, diff);
+        lowp vec3 diff = baseNormal - normal;
+        lowp float normalDiffSqr = dot(diff, diff);
         float depthDiff  = abs(depth - baseDepth);
         float rangeCheck = depthDiff < 0.00005 ? 1.0 : 0.0;
         occlusion += normalDiffSqr * rangeCheck;

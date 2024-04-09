@@ -87,13 +87,9 @@ void SetKeyPressCallback(void(*callback)(wchar_t));
 
 enum MouseButton_
 {
-    MouseButton_Left   = 1,
-    MouseButton_Right  = 2,
-    MouseButton_Middle = 4,
-
-    MouseButton_Touch0 = 1,
-    MouseButton_Touch1 = 2,
-    MouseButton_Touch2 = 4
+    MouseButton_Left   = 1, /* same -> */ MouseButton_Touch0 = 1,
+    MouseButton_Right  = 2, /* same -> */ MouseButton_Touch1 = 2,
+    MouseButton_Middle = 4, /* same -> */ MouseButton_Touch2 = 4
 };
 typedef int MouseButton;
 
@@ -107,19 +103,30 @@ void GetMouseWindowPos(float* x, float* y);
 void SetMouseMoveCallback(void(*callback)(float, float));
 float GetMouseWheelDelta();
 
-#ifndef __ANDROID__
-void SetMousePos(float x, float y);
-void SetMouseWindowPos(float x, float y);
-#else
 struct Touch
 {
     float positionX;
     float positionY;
 };
 
+#ifdef __ANDROID__
 Touch GetTouch(int index);
+int NumTouchPressing();
+#else
+// with android these two functions belove are inlined at the end of this file
+void SetMousePos(float x, float y);
+void SetMouseWindowPos(float x, float y);
 
-int NumTouchPressed();
+inline Touch GetTouch(int index) 
+{
+    Touch touch;
+    GetMousePos(&touch.positionX, &touch.positionY);
+    return touch; 
+}
+
+inline int NumTouchPressing() { 
+    return (int)GetMouseDown(0) + (int)GetMouseDown(1); 
+}
 #endif
 ////////                TIME                 ////////
 

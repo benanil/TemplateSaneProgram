@@ -463,11 +463,11 @@ void RenderShadowOfPrefab(Scene* scene, PrefabID prefabID, AnimationController* 
     DirectionalLight sunLight = scene->m_SunLight;
     // todo: fix this
     // render shadows only once if not dynamic
-    if (prefab->firstTimeRender == 1 && IsAndroid())
+    // if (prefab->firstTimeRender == 1 && IsAndroid())
         RenderShadows(prefab, sunLight, animSystem);
     
-    if (!IsAndroid()) 
-        RenderShadows(prefab, sunLight, animSystem); // realtime shadows
+    // if (!IsAndroid()) 
+    //     RenderShadows(prefab, sunLight, animSystem); // realtime shadows
     
     prefab->firstTimeRender = 0;
 }
@@ -676,8 +676,6 @@ static void SSAOPass()
     {
         rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
         rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
-        rSetShaderValue(m_Camera.view.GetPtr(), sView, GraphicType_Matrix4);
-    
         rRenderFullScreen();
     }
     // Upsample SSAO

@@ -29,7 +29,7 @@ void main()
     if (uHasAnimation > 0) 
     {
         mediump mat4 animMat = mat4(0.0);
-        animMat[3].w = 1.0;
+        animMat[3].w = 1.0; // last row is [0.0, 0.0, 0.0, 1.0]
 
         for (int i = 0; i < 4; i++)
         {
@@ -42,8 +42,9 @@ void main()
         model = model * transpose(animMat);
     }
 
-    vTBN[0] = normalize(vec3(model * vec4(aTangent.xyz, 0.0))); 
-    vTBN[2] = normalize(vec3(model * vec4(aNormal, 0.0)));
+    lowp mat3 normalMatrix = mat3(model);
+    vTBN[0] = normalize(normalMatrix * aTangent.xyz); 
+    vTBN[2] = normalize(normalMatrix * aNormal);
     vTBN[1] = cross(vTBN[0], vTBN[2]) * aTangent.w;
     
     vec4 outPos = model * vec4(aPos, 1.0);
