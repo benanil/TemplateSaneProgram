@@ -15,7 +15,7 @@ static int FindAnimIndex(Prefab* prefab, const char* name)
             return i;
     }
     ASSERT(0);
-    return -1;
+    return 0;
 }
 
 static Vector2i monitorSize;

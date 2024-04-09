@@ -42,6 +42,14 @@ copy Meshes, Shaders and Textures folders to TemplateSaneProgram/Android/app/src
 and open TemplateSaneProgram/Android folder with android studio hit build and run.
 this might be automated in the feature
 
+#Other Info
+Blender Mixamo Character Import Settings: 
+    Rotation quaternion:  w:1.0, xyz: 0.0
+    Scale.xyz          :  0.140, 0.140, 0.140 
+    Transform.+yUp     :  uncheck
+    
+    Blender Multi Animation: https://shorturl.at/ajszQ
+
 # Used Libraries
 for fbx scenes [ufbx](https://github.com/ufbx/ufbx)<br>
 importing and resizing textures [stb libraries](https://github.com/nothings/stb)<br>

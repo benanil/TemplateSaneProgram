@@ -7,7 +7,7 @@
 #if defined(__ANDROID__)
     #define AX_GAME_BUILD 1
 #else
-    #define AX_GAME_BUILD 1 /* make zero for editor build */
+    #define AX_GAME_BUILD 0 /* make zero for editor build */
 #endif
 
 #include "../ASTL/Array.hpp"
