@@ -1,9 +1,9 @@
+
 // stb_dxt.h - v1.12 - DXT1/DXT5 compressor - public domain
 // original by fabian "ryg" giesen - ported to C by stb
 // use '#define STB_DXT_IMPLEMENTATION' before including to create the implementation
 //
 // USAGE:
-//   call stb_compress_dxt_block() for every block (you must pad)
 //     source should be a 4x4 block of RGBA data in row-major order;
 //     Alpha channel is not stored if you specify alpha=0 (but you
 //     must supply some constant alpha in the alpha channel).
@@ -55,7 +55,7 @@ extern "C" {
 #define STB_DXT_DITHER    1   // use dithering. was always dubious, now deprecated. does nothing!
 #define STB_DXT_HIGHQUAL  2   // high quality mode, does two refinement steps instead of 1. ~30-40% slower.
 
-STBDDEF void stb_compress_dxt_block(unsigned char *dest, const unsigned char *src_rgba_four_bytes_per_pixel, int alpha, int mode);
+// STBDDEF void stb_compress_dxt_block(unsigned char *dest, const unsigned char *src_rgba_four_bytes_per_pixel, int alpha, int mode);
 STBDDEF void stb_compress_bc4_block(unsigned char *dest, const unsigned char *src_r_one_byte_per_pixel);
 STBDDEF void stb_compress_bc5_block(unsigned char *dest, const unsigned char *src_rg_two_byte_per_pixel);
 
@@ -596,23 +596,23 @@ static void stb__CompressAlphaBlock(unsigned char *dest,unsigned char *src, int 
    }
 }
 
-void stb_compress_dxt_block(unsigned char *dest, const unsigned char *src, int alpha, int mode)
-{
-   unsigned char data[16][4];
-   if (alpha) {
-      int i;
-      stb__CompressAlphaBlock(dest,(unsigned char*) src+3, 4);
-      dest += 8;
-      // make a new copy of the data in which alpha is opaque,
-      // because code uses a fast test for color constancy
-      memcpy(data, src, 4*16);
-      for (i=0; i < 16; ++i)
-         data[i][3] = 255;
-      src = &data[0][0];
-   }
-
-   stb__CompressColorBlock(dest,(unsigned char*) src,mode);
-}
+// void stb_compress_dxt_block(unsigned char *dest, const unsigned char *src, int alpha, int mode)
+// {
+//    unsigned char data[16][4];
+//    if (alpha) {
+//       int i;
+//       stb__CompressAlphaBlock(dest,(unsigned char*) src+3, 4);
+//       dest += 8;
+//       // make a new copy of the data in which alpha is opaque,
+//       // because code uses a fast test for color constancy
+//       memcpy(data, src, 4*16);
+//       for (i=0; i < 16; ++i)
+//          data[i][3] = 255;
+//       src = &data[0][0];
+//    }
+// 
+//    stb__CompressColorBlock(dest,(unsigned char*) src,mode);
+// }
 
 void stb_compress_bc4_block(unsigned char *dest, const unsigned char *src)
 {

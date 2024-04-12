@@ -165,7 +165,7 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
     {
         // -2,-2 range to 0, 4 range to make array indexing
         float xBlend = Abs(Fract(x));   
-        eAnimLocation xAnim = x < 0.0f ? a_left  : a_right;
+        eAnimLocation xAnim = x < 0.0f ? a_left : a_right;
         {
             int index = animController->GetAnim(xAnim, yi);
             animation1 = &prefab->animations[index];

@@ -18,6 +18,7 @@ mono_crash.*
 	
 build/
 obj/
+Android/.idea
 **/cmake-build-debug
 **/CMakeCache.txt
 **/cmake_install.cmake
@@ -373,3 +374,4 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+SaneProgram.exe

@@ -19,6 +19,7 @@
 *        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
+
 #include <thread>
 #include <bitset>
 
@@ -34,9 +35,11 @@
 
 #if !AX_GAME_BUILD
 #define STB_DXT_IMPLEMENTATION
+#define STB_IMAGE_RESIZE2_IMPLEMENTATION
 #include "../External/ProcessDxtc.hpp"
 #include "../External/stb_dxt.h"
 #include "../External/astc-encoder/astcenccli_internal.h"
+#include "../External/stb_image_resize2.h"
 #endif
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -102,16 +105,17 @@ static void MakeNormalTextureFromRGBA(unsigned char* texture, int numPixels)
 	}	
 }
 
-static void ConvertRGBToRGBA(const unsigned char* RESTRICT rgb, unsigned char* rgba, int srcNumComp, int numPixels)
+template<int channelsBefore>
+static void MakeRGBA(const unsigned char* RESTRICT from, unsigned char* rgba, int numPixels)
 {
 	for (int i = 0; i < numPixels; i++)
 	{
-		rgba[0] = rgb[0];
-		rgba[1] = rgb[1];
-		rgba[2] = rgb[2];
-		rgba[3] = 255;
-
-		rgb  += 3;
+		MemsetZero(rgba, 4 * sizeof(char));
+		for (int p = 0; p < channelsBefore; p++)
+		{
+			rgba[p] = from[p];
+		}
+		from += channelsBefore;
 		rgba += 4;
 	}
 }
@@ -153,6 +157,104 @@ static void CompressBC5(const unsigned char* RESTRICT src, unsigned char* bc5, i
 			bc5 += 16; // 16 byte per block
 		}
 	}
+}
+
+uint64_t ASTCCompress(unsigned char* buffer, unsigned char* image, int dim_x, int dim_y)
+{
+	astcenc_profile profile = ASTCENC_PRF_LDR;
+
+	// This has to come first, as the block size is in the file header
+	astc_compressed_image image_comp{};
+	astcenc_config config{};
+
+	float        quality = ASTCENC_PRE_MEDIUM;
+	unsigned int flags   = 0;
+	unsigned int block_x = 4, block_y = 4, block_z = 1;
+	astcenc_error error = astcenc_config_init(profile, block_x, block_y, block_z,
+                                               quality, flags, &config);
+	if (error) {
+		return 1;
+	}
+
+	/** The  pre-encode swizzle. */
+	astcenc_swizzle swz_encode = { ASTCENC_SWZ_R, ASTCENC_SWZ_G, ASTCENC_SWZ_B, ASTCENC_SWZ_A };
+
+	astcenc_error    codec_status;
+	astcenc_context* codec_context;
+
+	int threadCount = 1;
+	codec_status = astcenc_context_alloc(&config, threadCount, &codec_context);
+	if (codec_status != ASTCENC_SUCCESS)
+	{
+		print_error("ERROR: Codec context alloc failed: %s\n", astcenc_get_error_string(codec_status));
+		ASSERT(0);
+		return 1;
+	}
+
+	int dim_z = 1;
+	astcenc_image *uncomp = new astcenc_image;
+	{
+		uncomp->dim_x = dim_x;
+		uncomp->dim_y = dim_y;
+		uncomp->dim_z = dim_z;
+
+		void** data = new void*[dim_z];
+		uncomp->data = data;
+		uncomp->data_type = ASTCENC_TYPE_U8;
+		data[0] = image; // new uint8_t[dim_x * dim_y * 4];
+	}
+
+	// Compress an image
+	// if (operation & ASTCENC_STAGE_COMPRESS)
+	unsigned int blocks_x = (uncomp->dim_x + config.block_x - 1) / config.block_x;
+	unsigned int blocks_y = (uncomp->dim_y + config.block_y - 1) / config.block_y;
+	unsigned int blocks_z = (uncomp->dim_z + config.block_z - 1) / config.block_z;
+	size_t buffer_size = blocks_x * blocks_y * blocks_z * 16;
+	int numMips = MAX((int)Log2(uncomp->dim_x) >> 1, 1) - 1;
+	
+	unsigned char* compressBuffer = new unsigned char[(uncomp->dim_x * uncomp->dim_y * 4) >> 1];
+	uint64_t compressedSize = 0;
+
+	do {
+		error = astcenc_compress_image(codec_context, uncomp, &swz_encode, buffer, buffer_size, 0);
+		
+		astcenc_compress_reset(codec_context);
+
+		if (error != ASTCENC_SUCCESS)
+		{
+			print_error("ERROR: Codec compress failed: %s\n", astcenc_get_error_string(error));
+			ASSERT(0);
+			return 1;
+		}
+		
+		int dim_x = uncomp->dim_x;
+		int dim_y = uncomp->dim_y;
+
+		compressedSize += buffer_size;
+		buffer += buffer_size;
+
+		if (numMips-- <= 0)
+			break;
+
+		stbir_resize(*uncomp->data, dim_x, dim_y, dim_x * 4, 
+			         compressBuffer, dim_x >> 1, dim_y >> 1, (dim_x >> 1) * 4, 
+			         STBIR_RGBA, STBIR_TYPE_UINT8, STBIR_EDGE_CLAMP, STBIR_FILTER_MITCHELL);
+		
+		unsigned char* temp = (unsigned char*)*uncomp->data;
+		*uncomp->data = compressBuffer;
+		compressBuffer = temp;
+
+		uncomp->dim_x >>= 1;
+		uncomp->dim_y >>= 1;
+		buffer_size = uncomp->dim_x * uncomp->dim_y;
+	} while (true);
+
+
+	delete[] uncomp->data; 
+	astcenc_context_free(codec_context);
+
+	delete[] compressBuffer;
+	return compressedSize;
 }
 
 #endif // __ANDROID__
@@ -257,24 +359,34 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
 			if (info.width == 0)
 				continue;
 
-			if (isMobile)
-			{
-				uint64_t numBytes = astcenc_main(imagePath, currentCompression);
-				ASSERT(numBytes != 1);
-				currentCompression += numBytes;
-				continue;
-			}
-			
 			// note: that stb image using new and delete instead of malloc free (I overloaded)
 			ScopedPtr<unsigned char> stbImage = stbi_load(imagePath, &info.width, &info.height, &info.numComp, 0);
-			
-			if (stbImage.ptr == nullptr)
-			{
+
+			if (stbImage.ptr == nullptr) {
 				stbImage.ptr = new unsigned char[info.width * info.height * info.numComp];
 			}
 
 			int imageSize = info.width * info.height;
 			textureLoadBuffer.Reserve(imageSize * 4);
+
+			if (isMobile)
+			{
+				if (info.numComp == 3) MakeRGBA<3>(stbImage.ptr, textureLoadBuffer.Data(), imageSize);
+				if (info.numComp == 2) MakeRGBA<2>(stbImage.ptr, textureLoadBuffer.Data(), imageSize);
+				if (info.numComp == 1) MakeRGBA<1>(stbImage.ptr, textureLoadBuffer.Data(), imageSize);
+
+				if (info.numComp != 4)
+				{
+					stbi_image_free(stbImage.ptr);
+					stbImage.ptr = textureLoadBuffer.TakeOwnership();
+					textureLoadBuffer.Resize(imageSize * 4);// reallocates the empty buffer
+				}
+
+				uint64_t numBytes = ASTCCompress(currentCompression, stbImage.ptr, info.width, info.height);
+				ASSERT(numBytes != 1);
+				currentCompression += numBytes;
+				continue;
+			}
 
 			if (isNormalMap[i])
 			{
@@ -301,7 +413,7 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
 			}
 			else if (info.numComp == 3)
 			{
-				ConvertRGBToRGBA(stbImage.ptr, textureLoadBuffer.Data(), info.numComp, imageSize);
+				MakeRGBA<3>(stbImage.ptr, textureLoadBuffer.Data(), imageSize);
 				stbi_image_free(stbImage.ptr);
 				stbImage.ptr = textureLoadBuffer.TakeOwnership();
 				textureLoadBuffer.Resize(imageSize * 4);// reallocates the empty buffer
