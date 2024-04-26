@@ -29,6 +29,7 @@ void CharacterController::Start(Prefab* _character)
     MemsetZero(&mAnimController, sizeof(AnimationController));
     CreateAnimationController(_character, &mAnimController);
     
+    mPosition.y = -0.065f; // make foots touch the ground
     mMovementSpeed = 2.7f;
     mAnimSpeed = 1.0f;
     {
@@ -183,7 +184,6 @@ void CharacterController::Update(float deltaTime)
     // handle character position
     {   
         Vector3f forward = MakeVec3(sinf(x), 0.0f, cosf(x));
-        
         Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
         
         mPosition += progress * mAnimSpeed * 1.5f;

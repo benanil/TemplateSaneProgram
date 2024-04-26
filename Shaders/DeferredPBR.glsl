@@ -136,6 +136,11 @@ lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp fl
 }
 #endif
 
+float easeInCirc(float x)
+{
+    return 1.0 - sqrt(1.0 - (x * x));
+}
+
 // get shadow and ao
 mediump float GetShadow(mediump float shadow, highp vec3 surfPos)
 {
@@ -165,11 +170,12 @@ mediump float GetShadow(mediump float shadow, highp vec3 surfPos)
     // fake player shadow, works like point light but darkens instead of lighting
     highp vec3 playerPos = uPlayerPos + vec3(0.0, 0.3, 0.0);
     highp vec3 surfDir = playerPos - surfPos;
-    surfDir *= 2.8; // scale down the shadow by 3.4x
+    surfDir *= 4.14159265; // scale down the shadow by 3.14x
     float16 len = inversesqrt(dot(surfDir, surfDir));
-    float16 playerShadow = 1.0-min(len, 1.0);
-    // playerShadow = playerShadow;
-    return playerShadow * shadow;
+    float16 playerShadow = 1.0 - min(len, 1.0);
+    playerShadow = easeInCirc(playerShadow);
+
+    return shadow * playerShadow;
 }
 
 float sdBox(vec2 p, vec2 b)

@@ -136,6 +136,7 @@ namespace SceneRenderer
 static inline int GetFrameBufferWidth(int w, int h)
 {
     #ifdef __ANDROID__
+    // make width and height same, to improve cache utilization and less processing
     return h; // https://www.youtube.com/watch?v=feb-Hl_Cl3g  28:11
     #else
     return w;
