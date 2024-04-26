@@ -18,6 +18,7 @@ mono_crash.*
 	
 build/
 obj/
+Android/app/src/main/assets/
 Android/.idea
 **/cmake-build-debug
 **/CMakeCache.txt
