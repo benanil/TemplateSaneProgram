@@ -117,9 +117,8 @@ static void SampleAnimationPose(Pose* pose, AAnimation* animation, float normTim
 void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, float x, float y, float xNorm, float yNorm)
 {
     ASSERT(prefab->numNodes < 250);
-
     const bool hasAnimation = prefab->numSkins > 0 && animController != nullptr;
-    
+
     if (!hasAnimation)
         return;
 

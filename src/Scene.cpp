@@ -220,7 +220,7 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
     Prefab* scene = &m_LoadedPrefabs[*sceneID];
     MemsetZero(scene, sizeof(Prefab));
     
-    scene->firstTimeRender = true;
+    scene->firstTimeRender = 3;
     int parsed = 1;
     char* path = scene->path;
     int pathLen = StringLength(inPath);
@@ -315,9 +315,9 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
 
 void Scene::Update()
 {
-    float time = (float)(3.15 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11)); 
-    m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
-    // m_SunLight.dir = MakeVec3(0.1f, 0.8f, 0.05f);
+    // float time = (float)(3.15 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11));
+    // m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
+    m_SunLight.dir = Vector3f::NormalizeEst(MakeVec3(-0.20f, Abs(Cos(0.182f)) + 0.1f, Sin(0.182f)));
 }
 
 Prefab* Scene::GetPrefab(PrefabID scene)

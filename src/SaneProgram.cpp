@@ -17,7 +17,7 @@ CharacterController characterController={};
 void AXInit()
 {
     wSetWindowName("Engine");
-    wSetWindowSize(1920, 1080);
+    // wSetWindowSize(1920, 1080);
 
     wSetWindowPosition(0, 0);
     wSetVSync(true);
@@ -26,6 +26,8 @@ void AXInit()
 // return 1 if success
 int AXStart()
 {
+    g_CurrentScene.Init();
+
     if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
@@ -33,7 +35,6 @@ int AXStart()
         return 0;
     }
 
-    g_CurrentScene.Init();
     if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Paladin/Paladin.gltf", 1.0f))
     {
         AX_ERROR("gltf scene load failed2");
@@ -68,12 +69,13 @@ int AXStart()
 
 // static double t;
 // do rendering and main loop here
-void AXLoop()
+void AXLoop(bool shouldRender)
 {
     Scene* currentScene = &g_CurrentScene;
     currentScene->Update();
     
     float deltaTime = (float)GetDeltaTime();
+    deltaTime = MIN(deltaTime, 0.2f);
 
     // animate and control the movement of character
     characterController.Update(deltaTime);
@@ -81,10 +83,14 @@ void AXLoop()
 
     using namespace SceneRenderer;
 
+    if (!shouldRender)
+        return;
+
     BeginShadowRendering(currentScene);
     {
         RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
-        RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
+        // don't render shadow of character, we will fake it.
+        // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
     }
     EndShadowRendering();
 

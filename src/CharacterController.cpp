@@ -95,6 +95,7 @@ void CharacterController::Update(float deltaTime)
 #else
     // Joystick
     //------------------------------------------------------------------------
+    wGetMonitorSize(&monitorSize.x, &monitorSize.y);
     int numTouch = NumTouchPressing();
     Touch touch0 = GetTouch(0);
     Touch touch1 = GetTouch(1);
@@ -181,7 +182,7 @@ void CharacterController::Update(float deltaTime)
     x += -inputAngle / 2.0f;
     // handle character position
     {   
-        Vector3f forward = MakeVec3(SinR(x), 0.0f, CosR(x));
+        Vector3f forward = MakeVec3(sinf(x), 0.0f, cosf(x));
         
         Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
         
@@ -191,6 +192,7 @@ void CharacterController::Update(float deltaTime)
         // set animated pos for the renderer
         SmallMemCpy(posPtr, &mPosition.x, sizeof(Vector3f));
     }
+    SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
 }
 
 void CharacterController::Destroy()

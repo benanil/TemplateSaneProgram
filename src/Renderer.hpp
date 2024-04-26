@@ -13,7 +13,7 @@
 #include "../ASTL/Math/Vector.hpp"
 
 #ifdef __ANDROID__  
-#define AX_SHADER_VERSION_PRECISION() "#version 310 es\n"              \
+#define AX_SHADER_VERSION_PRECISION() "#version 320 es\n"              \
                                       "precision highp float;\n"       \
                                       "precision mediump sampler2D;\n" \
                                       "precision mediump int;\n"       \

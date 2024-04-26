@@ -1,5 +1,6 @@
 package com.anilgames.game;
 
+import android.os.Bundle;
 import android.view.View;
 
 import com.google.androidgamesdk.GameActivity;
@@ -8,7 +9,6 @@ public class MainActivity extends GameActivity {
     static {
         System.loadLibrary("game");
     }
-
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
@@ -16,6 +16,12 @@ public class MainActivity extends GameActivity {
         if (hasFocus) {
             hideSystemUi();
         }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        getSupportActionBar().hide(); // hide tab bar
+        super.onCreate(savedInstanceState);
     }
 
     private void hideSystemUi() {

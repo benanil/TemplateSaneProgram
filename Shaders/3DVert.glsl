@@ -6,7 +6,6 @@ layout(location = 3) in mediump vec2  aTexCoords;
 layout(location = 4) in lowp    uvec4 aJoints; // lowp int ranges between 0-255 
 layout(location = 5) in lowp    vec4  aWeights;
 
-out highp   vec3 vFragPos;
 out mediump vec2 vTexCoords;
 out highp   vec4 vLightSpaceFrag;
 out lowp    mat3 vTBN;
@@ -56,6 +55,5 @@ void main()
     vLightSpaceFrag.xyz = vLightSpaceFrag.xyz * 0.5 + 0.5; // [-1,1] to [0, 1]
 
     vTexCoords  = aTexCoords; 
-    vFragPos    = outPos.xyz / outPos.w;
     gl_Position = uViewProj * outPos;
 } 

@@ -201,7 +201,7 @@ struct Camera
 		verticalFOV = 65.0f;
 		nearClip = 0.1f;
 		farClip = 500.0f;
-		senstivity = 0.07f;
+		senstivity = 0.1f;
 		angle = MakeVec2(0.0f, 0.0f);
 		viewportSize = xviewPortSize;
 		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
@@ -321,6 +321,7 @@ struct Camera
 
 		Vector2f touch0 = GetTouchDir(0);
 		Vector2f dir;
+		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 		// left side is for movement, right side is for rotating camera
 		// if num touch is 1 and its right side of the screen
 		if (numTouch == 1 && touch0.x < (monitorSize.x / 2.0f))

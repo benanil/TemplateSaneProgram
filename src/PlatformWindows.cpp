@@ -353,6 +353,11 @@ static HWND WindowCreate(HINSTANCE instance)
     ATOM atom = RegisterClassEx(&wc);
     ASSERT(atom && "Failed to register window class");
 
+    if (PlatformCtx.WindowWidth == 0 || PlatformCtx.WindowHeight == 0)
+    {
+        wGetMonitorSize(&PlatformCtx.WindowWidth, &PlatformCtx.WindowHeight);
+    }
+
     // window properties - width, height and style
     int width = PlatformCtx.WindowWidth;
     int height = PlatformCtx.WindowHeight;
@@ -455,7 +460,7 @@ double TimeSinceStartup()
 // forom SaneProgram.cpp
 extern void AXInit();
 extern int  AXStart();
-extern void AXLoop();
+extern void AXLoop(bool shouldRender);
 extern void AXExit();
 // forom Renderer.cpp
 extern void rDestroyRenderer();
@@ -519,7 +524,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         // wSetWindowName(fps);
 
         // Do OpenGL rendering here
-        AXLoop();
+        AXLoop(true); // should render true
         wglSwapIntervalEXT(PlatformCtx.VSyncActive); // vsync
         SwapBuffers(dc);
 
@@ -527,7 +532,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         PlatformCtx.MouseWheelDelta = 0.0f;
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // | GL_STENCIL_BUFFER_BIT
     }
     end_infinite_loop:
     {

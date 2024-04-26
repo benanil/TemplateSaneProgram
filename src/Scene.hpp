@@ -7,7 +7,7 @@
 #if defined(__ANDROID__)
     #define AX_GAME_BUILD 1
 #else
-    #define AX_GAME_BUILD 1 /* make zero for editor build */
+    #define AX_GAME_BUILD 0 /* make zero for editor build */
 #endif
 
 #include "../ASTL/Array.hpp"
@@ -22,7 +22,7 @@ struct Prefab : public SceneBundle
     Texture* gpuTextures;
     GPUMesh bigMesh; // contains all of the vertices and indices of an prefab
     char path[128]; // relative path
-    bool firstTimeRender;
+    int firstTimeRender; // starts with 4 and decreases until its 0 we draw first time and set this to-1
 
     Texture GetGPUTexture(int index)
     {

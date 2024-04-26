@@ -3,7 +3,7 @@
 *    Purpose: Touch Input, Surface Creation, Main Loop              *
 *    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com        *
 ********************************************************************/
-#if defined(__ANDROID__) 
+#if defined(__ANDROID__)
 
 #include "Platform.hpp"
 #include "Renderer.hpp"
@@ -18,37 +18,47 @@
 #include <game-activity/GameActivity.cpp>
 #include <game-text-input/gametextinput.cpp>
 
+#define USE_SWAPPY
+#ifdef USE_SWAPPY
+    #include <swappyGL.h>
+    #define ASwapBuffers(display, surface) SwappyGL_swap(display, surface)
+#else
+    #define ASwapBuffers(display, surface) eglSwapBuffers(display, surface)
+#endif
+
 constexpr int NumTouch = 4;
 
 struct PlatformContextAndroid
 {
     // Callbacks
-    void(*WindowResizeCallback)(int  , int)   = nullptr;
-    void(*MouseMoveCallback)   (float, float) = nullptr;
-    void(*KeyPressCallback)    (wchar_t)      = nullptr;
-    void(*FocusChangedCallback)(bool)         = nullptr;
-    
-    EGLDisplay Display = EGL_NO_DISPLAY;
-    EGLSurface Surface = EGL_NO_SURFACE;
-    EGLContext Context = EGL_NO_CONTEXT;
-    
+    void(*WindowResizeCallback)(int  , int) ;
+    void(*MouseMoveCallback)   (float, float);
+    void(*KeyPressCallback)    (wchar_t);
+    void(*FocusChangedCallback)(bool);
+
+    EGLDisplay Display;
+    EGLSurface Surface;
+    EGLContext Context;
+    EGLConfig Config;
+
     // Window
-    int WindowWidth  = 0;
-    int WindowHeight = 0;
+    int WindowWidth;
+    int WindowHeight;
 
     uint64 StartTime;
     double DeltaTime;
 
-    bool VSyncActive = true;
+    bool VSyncActive;
+    bool RendererInitialized;
+    bool ShouldRender;
 
-    Touch Fingers[NumTouch]{};
-    
+    Touch Fingers[NumTouch];
+
     // bitmasks for finger states(touch)
-    int FingerDown = 0;
-    int FingerReleased = 0;
-    int FingerPressed = 0;
-
-} PlatformCtx{};
+    int FingerDown;
+    int FingerReleased;
+    int FingerPressed;
+} PlatformCtx={};
 
 void wSetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback;}
@@ -70,7 +80,7 @@ void UpdateRenderArea()
 }
 
 /****               Keyboard and Touch                ****/
-bool AnyKeyDown() { return PlatformCtx.FingerDown > 0; } // todo: maybe add phyisical buttons too
+bool AnyKeyDown() { return PlatformCtx.FingerDown > 0; } // todo: maybe add physical buttons too
 bool GetKeyDown(char c)     { return false; }
 bool GetKeyPressed(char c)  { return false; }
 bool GetKeyReleased(char c) { return false; }
@@ -112,7 +122,7 @@ double GetDeltaTime()
 extern void AXInit();
 
 extern int  AXStart();
-extern void AXLoop();
+extern void AXLoop(bool shouldRender);
 extern void AXExit();
 
 
@@ -122,10 +132,31 @@ extern "C" {
 
 android_app* g_android_app = nullptr;
 
+static void CreateSurface()
+{    // create the proper window surface
+    EGLint format;
+    eglGetConfigAttrib(PlatformCtx.Display, PlatformCtx.Config, EGL_NATIVE_VISUAL_ID, &format);
+    PlatformCtx.Surface = eglCreateWindowSurface(PlatformCtx.Display, PlatformCtx.Config, g_android_app->window, nullptr);
+}
+
+static void DestroySurface()
+{
+    eglMakeCurrent(PlatformCtx.Display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroySurface(PlatformCtx.Display, PlatformCtx.Surface);
+    PlatformCtx.Surface = EGL_NO_SURFACE;
+}
+
+static void SetContext()
+{
+    EGLBoolean madeCurrent = eglMakeCurrent(PlatformCtx.Display, PlatformCtx.Surface, PlatformCtx.Surface, PlatformCtx.Context);
+    if (madeCurrent == false) AX_ERROR("make current failed!");
+}
+
 static void InitWindow()
 {
     // The default display is probably what you want on Android
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    PlatformCtx.Display = display;
     EGLint majorVersion = 0, minorVersion = 0;
     eglInitialize(display, &majorVersion, &minorVersion);
 
@@ -142,55 +173,41 @@ static void InitWindow()
     EGLint numConfigs;
     eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
     // get the list of configurations
-    EGLConfig supportedConfigs[32]{};
+    EGLConfig supportedConfigs[32]={};
     eglChooseConfig(display, attribs, supportedConfigs, numConfigs, &numConfigs);
 
-    // Find a config we like.
-    // Could likely just grab the first if we don't care about anything else in the config.
-    // Otherwise hook in your own heuristic
+    // Find a config we like. Could likely just grab the first if we don't care about anything else in the config.
     EGLConfig config = nullptr;
-    for (int i = 0; i < numConfigs; i++)
     {
-        EGLint red, green, blue, depth;
+        for (int i = 0; i < numConfigs; i++)
+        {
+            EGLint red, green, blue, depth;
 
-        config = supportedConfigs[i];
-        if (eglGetConfigAttrib(display, config, EGL_RED_SIZE, &red)
-            && eglGetConfigAttrib(display, config, EGL_GREEN_SIZE, &green)
-            && eglGetConfigAttrib(display, config, EGL_BLUE_SIZE, &blue)
-            && eglGetConfigAttrib(display, config, EGL_DEPTH_SIZE, &depth))
-        if (red == 8 && green == 8 && blue == 8 && depth == 24)
-        break;
+            config = supportedConfigs[i];
+            if (eglGetConfigAttrib(display, config, EGL_RED_SIZE, &red)
+                && eglGetConfigAttrib(display, config, EGL_GREEN_SIZE, &green)
+                && eglGetConfigAttrib(display, config, EGL_BLUE_SIZE, &blue)
+                && eglGetConfigAttrib(display, config, EGL_DEPTH_SIZE, &depth))
+                if (red == 8 && green == 8 && blue == 8 && depth == 24)
+                    break;
+        }
+        PlatformCtx.Config = config;
+        AX_LOG("Found %i configs\n", numConfigs);
     }
-    AX_LOG("Found %i configs\n", numConfigs);
-
-    // create the proper window surface
-    EGLint format;
-    eglGetConfigAttrib(display, config, EGL_NATIVE_VISUAL_ID, &format);
-    EGLSurface surface = eglCreateWindowSurface(display, config, g_android_app->window, nullptr);
-
     // Create a GLES 3 context
     EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
-    EGLContext context = eglCreateContext(display, config, nullptr, contextAttribs);
+    PlatformCtx.Context = eglCreateContext(display, config, nullptr, contextAttribs);
 
-    // get some window metrics
-    EGLBoolean madeCurrent = eglMakeCurrent(display, surface, surface, context);
-    if (madeCurrent == false) AX_ERROR("make current failed!");
-
-    PlatformCtx.Display = display;
-    PlatformCtx.Surface = surface;
-    PlatformCtx.Context = context;
-
-    UpdateRenderArea();
+    CreateSurface();
+    SetContext();
 }
 
 static void TerminateWindow()
 {
-    eglMakeCurrent(PlatformCtx.Display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    DestroySurface();
     eglDestroyContext(PlatformCtx.Display, PlatformCtx.Context);
-    eglDestroySurface(PlatformCtx.Display, PlatformCtx.Surface);
     eglTerminate(PlatformCtx.Display);
     PlatformCtx.Display = EGL_NO_DISPLAY;
-    PlatformCtx.Surface = EGL_NO_SURFACE;
     PlatformCtx.Context = EGL_NO_CONTEXT;
 }
 
@@ -200,11 +217,26 @@ void HandleCMD(android_app *pApp, int32_t cmd)
         case APP_CMD_INIT_WINDOW:
             pApp->userData = (void*)(~0ull);
             g_android_app = pApp;
-            AXInit();
-            InitWindow();
-            rInitRenderer();
-            if (AXStart() == 0)
-                return; // user defined startup failed
+            if (!PlatformCtx.RendererInitialized)
+            {
+                PlatformCtx.RendererInitialized = true;
+                InitWindow();
+                rInitRenderer();
+
+                if (AXStart() == 0)
+                    return; // user defined startup failed
+            }
+            else
+            {
+                CreateSurface();
+                SetContext();
+                UpdateRenderArea();
+            }
+#ifdef USE_SWAPPY
+            if (pApp->window != NULL)
+                SwappyGL_setWindow(pApp->window);
+#endif
+            PlatformCtx.ShouldRender = true;
             break;
         case APP_CMD_GAINED_FOCUS:
         case APP_CMD_LOST_FOCUS:
@@ -215,10 +247,9 @@ void HandleCMD(android_app *pApp, int32_t cmd)
             UpdateRenderArea();
             break;
         case APP_CMD_TERM_WINDOW:
-            rDestroyRenderer();
-            pApp->userData = 0;
-            g_android_app  = nullptr;
-        break;
+            DestroySurface();
+            PlatformCtx.ShouldRender = false;
+            break;
         default:
             break;
     }
@@ -242,22 +273,35 @@ void android_main(android_app *pApp)
     // Set input event filters (set it to NULL if the app wants to process all inputs).
     // Note that for key inputs, this example uses the default default_key_filter() implemented in android_native_app_glue.c.
     android_app_set_motion_event_filter(pApp, motion_event_filter_func);
-    
+
     // This sets up a typical game/event loop. It will run until the app is destroyed.
     int events;
     android_poll_source *pSource;
+    JNIEnv* mAppJniEnv = nullptr;
+    pApp->activity->vm->AttachCurrentThread(&mAppJniEnv, NULL);
 
+    // use swappy to avoid tearing and lag. https://developer.android.com/games/sdk/frame-pacing
+#ifdef USE_SWAPPY
+    bool swappyFine = SwappyGL_init(mAppJniEnv, pApp->activity->javaGameActivity);
+    ASSERT(swappyFine);
+    // SwappyGL_setSwapIntervalNS(1000000000L / PreferredFrameRateInHz);
+#endif
     uint64 currentTime    = PerformanceCounter();
     uint64 prevTime       = currentTime;
     PlatformCtx.StartTime = currentTime;
+    AXInit();
 
-    do 
+    do
     {
         // Process all pending events before running game logic.
-        if (ALooper_pollAll(0, nullptr, &events, (void **) &pSource) >= 0) 
+        while (ALooper_pollAll(0, nullptr, &events, (void **) &pSource) >= 0)
         {
             if (pSource) {
                 pSource->process(pApp, pSource);
+            }
+
+            if (pApp->destroyRequested) {
+                goto end_loop;
             }
         }
 
@@ -269,28 +313,36 @@ void android_main(android_app *pApp)
             currentTime = PerformanceCounter();
             PlatformCtx.DeltaTime = (double)(currentTime - prevTime) / NS_PER_SECOND;
             prevTime = currentTime;
-            AXLoop();
-            
-            EGLBoolean swapResult = eglSwapBuffers(PlatformCtx.Display, PlatformCtx.Surface);
-            ASSERT(swapResult);
 
-            glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // | GL_STENCIL_BUFFER_BIT
-            
+            AXLoop(PlatformCtx.ShouldRender);
+
+            if (PlatformCtx.ShouldRender)
+            {
+                bool swapped = false;
+                swapped = ASwapBuffers(PlatformCtx.Display, PlatformCtx.Surface);
+                ASSERT(swapped);
+
+                glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // | GL_STENCIL_BUFFER_BIT
+            }
+
             PlatformCtx.FingerReleased = 0;
             PlatformCtx.FingerPressed = 0;
         }
     } while (!pApp->destroyRequested);
 
-    AXExit();
-    TerminateWindow();
+    end_loop:
+    {
+        AXExit();
+        TerminateWindow();
+    };
 }
 
 static void HandleInput()
 {
     // handle all queued inputs
     android_input_buffer* inputBuffer = android_app_swap_input_buffers(g_android_app);
-    if (!inputBuffer) 
+    if (!inputBuffer)
         return; // no inputs yet.
 
     // handle motion events (motionEventsCounts can be 0).

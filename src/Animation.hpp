@@ -26,7 +26,7 @@ struct AnimationController
     //  #  #  #  <- DiagonalWalk, ForwardWalk, DiagonalWalk
     //  #  #  #  <- StrafeLeft  , Idle       , StrafeRight 
     int locomotionIndices[4][3];
-    int locomotionIndicesInv[4][3];
+    int locomotionIndicesInv[3][3];
 
     void SetAnim(int x, int y, int index)
     {

@@ -34,7 +34,7 @@ add_library(game SHARED
         ../../../../../External/zstddeclib.c # facebook zstd decompressor
         ../../../../../External/bitset.c)
 
-include_directories(${../../../../../})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${../../../../../})
 
 if(ANDROID_ABI STREQUAL armeabi-v7a)
     set_target_properties(${game} PROPERTIES COMPILE_FLAGS -mfpu=neon -ANDROID_ARM_NEON=ON -ANDROID_ABI=armeabi-v7a)
@@ -50,16 +50,25 @@ add_definitions(-DRELEASE)
 
 # Searches for a package provided by the game activity dependency
 find_package(game-activity REQUIRED CONFIG)
+find_package(games-frame-pacing REQUIRED CONFIG)
+
+# Retrieve module passes.
+get_target_property(game-activity-include game-activity::game-activity INTERFACE_INCLUDE_DIRECTORIES)
+
+target_compile_options(game
+        PRIVATE
+        -fno-rtti -fno-stack-protector -fno-exceptions)
 
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(game
         # The game activity
         game-activity::game-activity
+        games-frame-pacing::swappy_static
 
         # EGL and other dependent libraries required for drawing
         # and interacting with Android system
         EGL
         GLESv3
-        jnigraphics
+        # jnigraphics
         android
         log)

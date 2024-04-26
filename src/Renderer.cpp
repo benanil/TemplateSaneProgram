@@ -68,6 +68,7 @@ namespace
 {
     GLuint m_EmptyVAO;
     Shader m_DefaultFragShader;
+    Shader m_TextureCopyShader;
 }
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -145,9 +146,17 @@ const char* GetGLErrorString(GLenum error)
     return "UNKNOWN_GL_ERROR";
 }
 
-void rCopyTexture(Texture a, Texture b)
+void rCopyTexture(Texture dst, Texture src)
 {
     // note: todo??
+    glBindTexture(GL_TEXTURE_2D, dst.handle);
+    glCopyTexSubImage2D(src.handle, 
+                        0, // mip
+                        0, // xoffset
+                        0, // yoffset
+                        0, // x
+                        0, // y
+                        dst.width, dst.height);
     CHECK_GL_ERROR();
 }
 
@@ -897,7 +906,7 @@ void rDrawAllLines(float* viewProj)
     numLines = 0;
 }
 
-static void CreateDefaultScreenShader()
+static void CreateDefaultShaders()
 {
     const char* fragmentShaderSource =
     AX_SHADER_VERSION_PRECISION()
@@ -929,7 +938,7 @@ void rInitRenderer()
 
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f); 
     CreateDefaultTexture();
-    CreateDefaultScreenShader();
+    CreateDefaultShaders();
     SetupLineRenderer();
 
     g_TextureLoadBuffer = new unsigned char[g_TextureLoadBufferSize];
@@ -999,6 +1008,7 @@ void rRenderFullScreen(Shader fullScreenShader, unsigned int texture)
 void rRenderFullScreen(unsigned int texture)
 {
     rRenderFullScreen(m_DefaultFragShader, texture);
+    CHECK_GL_ERROR();
 }
 
 void rRenderFullScreen()

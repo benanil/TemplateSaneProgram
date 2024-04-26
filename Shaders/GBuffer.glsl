@@ -7,7 +7,6 @@ layout(location = 0) out lowp vec3 oFragColor; // TextureType_RGB8
 layout(location = 1) out lowp vec3 oNormal;    // TextureType_RGB8
 layout(location = 2) out lowp vec3 oShadowMetallicRoughness; // TextureType_RGB565
 
-in highp   vec3 vFragPos;
 in mediump vec2 vTexCoords;
 in highp   vec4 vLightSpaceFrag;
 in lowp    mat3 vTBN;

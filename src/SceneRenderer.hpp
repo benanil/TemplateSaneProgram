@@ -16,6 +16,7 @@ namespace SceneRenderer
 // Shadow
     void BeginShadowRendering(Scene* scene);
 
+    // first draw statics then draw dynamics
     void RenderShadowOfPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem);
 
     void EndShadowRendering();
@@ -28,6 +29,9 @@ namespace SceneRenderer
     void EndRendering();
 
     void PostProcessPass();
+
+    // to make fake shadow
+    void SetCharacterPos(float x, float y, float z);
 
     Camera* GetCamera();
 

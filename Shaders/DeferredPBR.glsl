@@ -41,7 +41,9 @@ uniform mediump sampler2D uNormalTex;
 uniform highp   sampler2D uDepthMap;
 uniform lowp    sampler2D uAmbientOclussionTex; // < ambient occlusion
 
+uniform highp   vec3 uPlayerPos;
 uniform mediump vec3 uSunDir;
+uniform mediump float uDeltaTime;
 
 uniform highp mat4 uInvView;
 uniform highp mat4 uInvProj;
@@ -57,70 +59,9 @@ mediump vec4 toLinear(mediump vec4 sRGB)
 
 float sqr(float x) { return x*x; }
 
+// I've made custom lighting shader below,
+// if you want you can use google filament's mobile pbr renderer:
 // https://google.github.io/filament/Filament.html
-float16 D_GGX(float16 roughness, float16 NoH, const half3 n, const half3 h)
-{
-    #if defined(__ANDROID__)
-    half3 NxH = cross(n, h);
-    float16 oneMinusNoHSquared = dot(NxH, NxH);
-    #else
-    float16 oneMinusNoHSquared = 1.0 - NoH * NoH;
-    #endif
-    float16 a = NoH * roughness;
-    float16 k = roughness / (oneMinusNoHSquared + a * a);
-    float16 d = k * k * (1.0 / 3.1415926535);
-    return saturateMediump(d);
-}
-
-// visibility
-float16 V_SmithGGXCorrelatedFast(float16 NoV, float16 NoL, float16 roughness) {
-    return 0.5 / mix(2.0 * NoL * NoV, NoL + NoV, roughness);
-}
-
-float16 V_Neubelt(float16 NoV, float16 NoL) {
-    // Neubelt and Pettineo 2013, "Crafting a Next-gen Material Pipeline for The Order: 1886"
-    return saturateMediump(1.0 / (4.0 * (NoL + NoV - NoL * NoV)));
-}
-
-float16 F_Schlick(float16 u, float16 f0) {
-    float16 x = 1.0 - u;
-    float16 f = x * x * x * x * x;
-    return f + f0 * (1.0 - f);
-}
-
-float16 F_Schlick2(float16 u, float16 f0, float16 f90) {
-    // float f90 = 0.5 + 2.0 * roughness * LoH * LoH;
-    float16 x = 1.0 - u;
-    return f0 + (f90 - f0) * (x * x * x * x * x);
-}
-
-half3 StandardBRDF(half3 color, half3 l, half3 v, half3 n, float16 roughness, float16 metallic, float16 shadow)
-{
-    half3 h = normalize(v + l);
-
-    float16 NoV = abs(dot(n, v)) + 1e-5;
-    float16 NoL = clamp(dot(n, l), 0.0, 1.0);
-    float16 NoH = clamp(dot(n, h), 0.0, 1.0);
-    float16 LoH = clamp(dot(l, h), 0.0, 1.0);
-    float16 D = D_GGX(roughness, NoH, n, h);
-    
-    float16 lum = dot(color, vec3(0.3, 0.59, 0.11));
-    float16 f0 = mix(0.0075, lum, metallic * 0.15);
-    float16 shadow4 = shadow * shadow;
-    shadow4 *= shadow4;
-    float16 F = F_Schlick(LoH, f0); // F_Schlick2(LoH, 0.4, f90);
-    float16 V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);// V_Neubelt(NoV, NoL); //
-    float16 lightIntensity = 1.0;
-    // // specular BRDF
-    float16 Fr = (D * V) * F * shadow4 * 0.20;
-    // diffuse BRDF
-    color *= lightIntensity;
-    float16 darkness = max(NoL * shadow4, 0.05);
-    half3 ambient = color * (1.0-darkness) * 0.05;
-    half3 Fd = (color / 3.1415926535) * darkness;
-
-    return  (Fd + Fr) + ambient;
-}
 
 float16 Reflection(half3 l, half3 n, half3 v)
 {
@@ -195,32 +136,46 @@ lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp fl
 }
 #endif
 
-lowp float GetAO(float shadow)
+// get shadow and ao
+mediump float GetShadow(mediump float shadow, highp vec3 surfPos)
 {
-    lowp float ao = 0.0;
-    #ifdef __ANDROID__
-    {
-        ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
-             textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
-             textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
-             textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
-             textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
-    }
-    #else
-    {
-        // 9x gaussian blur
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-4, 0)).r * 0.05;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-3, 0)).r * 0.09;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r * 0.12;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r * 0.15;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+0, 0)).r * 0.16;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+1, 0)).r * 0.15;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+2, 0)).r * 0.12;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+3, 0)).r * 0.09;
-        ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4, 0)).r * 0.05;
-    }
-    #endif
-    return ao;
+    // lowp float ao = 0.0;
+    // #ifdef __ANDROID__
+    // {
+    //     ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
+    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
+    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
+    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
+    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
+    // }
+    // #else
+    // {
+    //     // 9x gaussian blur
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-4, 0)).r * 0.05;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-3, 0)).r * 0.09;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r * 0.12;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r * 0.15;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+0, 0)).r * 0.16;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+1, 0)).r * 0.15;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+2, 0)).r * 0.12;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+3, 0)).r * 0.09;
+    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4, 0)).r * 0.05;
+    // }
+    // #endif
+    // fake player shadow, works like point light but darkens instead of lighting
+    highp vec3 playerPos = uPlayerPos + vec3(0.0, 0.3, 0.0);
+    highp vec3 surfDir = playerPos - surfPos;
+    surfDir *= 2.8; // scale down the shadow by 3.4x
+    float16 len = inversesqrt(dot(surfDir, surfDir));
+    float16 playerShadow = 1.0-min(len, 1.0);
+    // playerShadow = playerShadow;
+    return playerShadow * shadow;
+}
+
+float sdBox(vec2 p, vec2 b)
+{
+    vec2 d = abs(p) - b;
+    return min(max(d.x,d.y),0.0) + length(max(d,0.0));
 }
 
 void main()
@@ -237,8 +192,8 @@ void main()
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
-    half3 sunColor = vec3(0.98f, 0.94, 0.91);
-    half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay); 
+    half3 sunColor = vec3(0.982f, 0.972, 0.966);
+    half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay);
 
     for (int i = 0; i < uNumPointLights; i++)
     {
@@ -285,5 +240,9 @@ void main()
         }
     }
 
-    oFragColor = CustomToneMapping(lighting).xyzz * shadow * Vignette(texCoord) * GetAO(shadow);
+    oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetShadow(shadow, pos);
+
+    // two line below shows fps on left bottom side of the screen to left upper side of the window,
+    // float px = 1.0 / float(textureSize(uNormalTex, 0).x);
+    // oFragColor.g += (1.0 - smoothstep(0.0, px, sdBox(texCoord-vec2(0.1,0.0), vec2(0.005, (1.0 / uDeltaTime) / 60.0 ))));
 }

@@ -22,6 +22,7 @@ namespace SceneRenderer
 {
     Camera      m_Camera;
     Texture     m_ShadowTexture;
+    
     Texture     m_SkyTexture;
     Matrix4     m_LightMatrix;
     FrameBuffer m_ShadowFrameBuffer;
@@ -58,7 +59,7 @@ namespace SceneRenderer
         lModel , lHasAnimation, lSunDirG, lViewProj, lAnimTex;
 
     // Deferred uniform locations
-    int lSunDir, lAlbedoTex, lShadowMetallicRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
+    int lSunDir, lPlayerPos, lAlbedoTex, lShadowMetallicRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
 
     // SSAO uniform locations
     int sDepthMap, sNormalTex, sView;
@@ -89,11 +90,20 @@ namespace SceneRenderer
     AMaterial m_defaultMaterial;
 
     bool m_ShadowFollowCamera = false;
+    int m_RedrawShadows = false; // maybe: set this after we rotate sun
+
+    Vector3f m_CharacterPos;
 
     Camera* GetCamera()
     {
         return &m_Camera;
     }
+    
+    void SetCharacterPos(float x, float y, float z)
+    {
+        m_CharacterPos.x = x; m_CharacterPos.y = y; m_CharacterPos.z = z;
+    }
+
 }
 
 namespace ShadowSettings
@@ -122,8 +132,19 @@ inline Vector3f ColorMix(Vector3f col1, Vector3f col2, float p)
 
 namespace SceneRenderer 
 {
+
+static inline int GetFrameBufferWidth(int w, int h)
+{
+    #ifdef __ANDROID__
+    return h; // https://www.youtube.com/watch?v=feb-Hl_Cl3g  28:11
+    #else
+    return w;
+    #endif
+}
+
 static void CreateMainFrameBuffer(MainFrameBuffer& frameBuffer, int width, int height, bool half)
 {
+    width = GetFrameBufferWidth(width, height);
     frameBuffer.Buffer = rCreateFrameBuffer();
     frameBuffer.width  = width;
     frameBuffer.height = height;
@@ -162,6 +183,7 @@ static void DeleteSSAOFrameBuffer()
 
 static void CreateSSAOFrameBuffer(int width, int height)
 {
+    width = GetFrameBufferWidth(width, height);
     m_SSAOFrameBuffer = rCreateFrameBuffer();
     m_SSAOHalfTexture = rCreateTexture(width / 2, height / 2, nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
     m_SSAOTexture     = rCreateTexture(width    , height    , nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
@@ -169,6 +191,7 @@ static void CreateSSAOFrameBuffer(int width, int height)
 
 static void CreateFrameBuffers(int width, int height)
 {
+    width = GetFrameBufferWidth(width, height);
     CreateMainFrameBuffer(m_MainFrameBuffer, width, height, false);
     CreateMainFrameBuffer(m_MainFrameBufferHalf, width / 2, height / 2, true); // last arg ishalf true
     CreateSSAOFrameBuffer(width, height);
@@ -183,12 +206,14 @@ static void DeleteFrameBuffers()
 
 static void WindowResizeCallback(int width, int height)
 {
+    int smallerWidth = GetFrameBufferWidth(width, height);
     width = MAX(width, 16);
     height = MAX(height, 16);
-    rSetViewportSize(width, height);
+    rSetViewportSize(smallerWidth, height);
     m_Camera.RecalculateProjection(width, height);
     DeleteFrameBuffers();
     CreateFrameBuffers(width, height);
+    m_RedrawShadows = 2;
 }
 
 static void CreateSkyTexture()
@@ -238,6 +263,7 @@ static void GetUniformLocations()
     dDepthTex  = rGetUniformLocation("uDepthTex");
 
     rBindShader(m_DeferredPBRShader);
+    lPlayerPos                  = rGetUniformLocation("uPlayerPos");
     lSunDir                     = rGetUniformLocation("uSunDir");
     lAlbedoTex                  = rGetUniformLocation("uAlbedoTex");
     lShadowMetallicRoughnessTex = rGetUniformLocation("uShadowMetallicRoughnessTex");
@@ -319,6 +345,8 @@ static void SetupShadowRendering()
     rBindFrameBuffer(m_ShadowFrameBuffer);
     rFrameBufferAttachDepth(m_ShadowTexture);
     rFrameBufferCheck();
+
+    m_RedrawShadows = 2;
 }
 
 void BeginUpdateLights()
@@ -442,6 +470,8 @@ static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight, AnimationC
 
 void BeginShadowRendering(Scene* scene)
 {
+    if (m_RedrawShadows != 0) return;
+    
     DirectionalLight sunLight = scene->m_SunLight;
     rBindShader(m_ShadowShader);
     rBindFrameBuffer(m_ShadowFrameBuffer);
@@ -452,6 +482,7 @@ void BeginShadowRendering(Scene* scene)
     Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 50.0f + offset, -sunLight.dir, Vector3f::Up());
     Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
     m_LightMatrix = view * ortho;
+
     rSetShaderValue(m_LightMatrix.GetPtr(), lShadowLightMatrix, GraphicType_Matrix4);
 
     rBeginShadow();
@@ -459,27 +490,28 @@ void BeginShadowRendering(Scene* scene)
 
 void RenderShadowOfPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSystem)
 {
-    Prefab* prefab = scene->GetPrefab(prefabID);
-    DirectionalLight sunLight = scene->m_SunLight;
-    // todo: fix this
-    // render shadows only once if not dynamic
-    // if (prefab->firstTimeRender == 1 && IsAndroid())
+    if (m_RedrawShadows == 0)// || prefab->firstTimeRender == 0)
+    {
+        Prefab* prefab = scene->GetPrefab(prefabID);
+        DirectionalLight sunLight = scene->m_SunLight;
+    
         RenderShadows(prefab, sunLight, animSystem);
-    
-    // if (!IsAndroid()) 
-    //     RenderShadows(prefab, sunLight, animSystem); // realtime shadows
-    
-    prefab->firstTimeRender = 0;
+    }
 }
 
 void EndShadowRendering()
 {
-    rEndShadow();
-    rUnbindFrameBuffer();
+    if (m_RedrawShadows == 0)// || prefab->firstTimeRender == 0)
+    {
+        rEndShadow();
+        rUnbindFrameBuffer();
+        Vector2i windowSize;
+        wGetWindowSize(&windowSize.x, &windowSize.y);
+        rSetViewportSize(windowSize.x, windowSize.y);
+    }
 
-    Vector2i windowSize;
-    wGetWindowSize(&windowSize.x, &windowSize.y);
-    rSetViewportSize(windowSize.x, windowSize.y);
+    m_RedrawShadows -= 1;
+    m_RedrawShadows = MAX(m_RedrawShadows, -1);
 }
 
 static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& primitive)
@@ -524,7 +556,6 @@ static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix
         return;
     }
 
-    rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
     AMesh mesh = prefab->meshes[node.index];
 
     for (int j = 0; j < mesh.numPrimitives; ++j)
@@ -547,6 +578,7 @@ static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix
 
         if (shouldDraw) {
             // SetMaterial(&material);
+            rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
             RenderPrimitive(material, prefab, primitive);
         }
 
@@ -586,7 +618,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
     {
         rSetTexture(animSystem->matrixTex, 4, lAnimTex);
     }
-
+        
     for (int i = 0; i < numNodes; i++)
     {
         ANode& node = hasScene ? prefab->nodes[defaultScene.nodes[i]] : prefab->nodes[i];
@@ -651,9 +683,9 @@ void RenderAllSceneContent(Scene* scene)
     // }
 }
 
-static void SSAOPass()
+static void DownscaleMainFrameBuffer()
 {
-    // Downsample main frame buffer
+    // Downscale main frame buffer
     rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
     rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
     {
@@ -665,10 +697,10 @@ static void SSAOPass()
         rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
         rRenderFullScreen();
     }
+}
 
-    rSetDepthTest(false);
-    rSetDepthWrite(false);
-
+static void SSAOPass()
+{
     // SSAO pass
     rBindFrameBuffer(m_SSAOFrameBuffer);
     rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
@@ -692,14 +724,20 @@ static void LightingPass()
 {
     DirectionalLight sunLight = g_CurrentScene.m_SunLight;
 
+    Vector2i windowSize;
+    wGetMonitorSize(&windowSize.x, &windowSize.y);
+
     rUnbindFrameBuffer(); // < draw to backbuffer after this line
     rBindShader(m_DeferredPBRShader);
-    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
+    rSetViewportSize(windowSize.x, windowSize.y);
     {
         Matrix4 invView = Matrix4::Inverse(m_Camera.view);
         Matrix4 invProj = Matrix4::Inverse(m_Camera.projection);
 
-        rSetShaderValue(&sunLight.dir.x, lSunDir, GraphicType_Vector3f);
+        rSetShaderValue((float)GetDeltaTime(), rGetUniformLocation("uDeltaTime"));
+        
+        rSetShaderValue(&sunLight.dir.x  , lSunDir, GraphicType_Vector3f);
+        rSetShaderValue(&m_CharacterPos.x, lPlayerPos, GraphicType_Vector3f);
 
         rSetShaderValue(invView.GetPtr(), lInvView, GraphicType_Matrix4);
         rSetShaderValue(invProj.GetPtr(), lInvProj, GraphicType_Matrix4);
@@ -715,8 +753,8 @@ static void LightingPass()
         rRenderFullScreen();
     }
 
-    rBindFrameBuffer(m_MainFrameBuffer.Buffer);
-    rFrameBufferInvalidate(3); // color, normal, ShadowMetallicRoughness
+    // rBindFrameBuffer(m_MainFrameBuffer.Buffer);
+    // rFrameBufferInvalidate(3); // color, normal, ShadowMetallicRoughness
 
     rSetDepthTest(true);
     rSetDepthWrite(true);
@@ -724,7 +762,12 @@ static void LightingPass()
 
 void EndRendering()
 {
-    SSAOPass();
+    // DownscaleMainFrameBuffer();
+    // screen space passes, no need depth
+    rSetDepthTest(false);
+    rSetDepthWrite(false);
+
+    //SSAOPass();
 
     LightingPass();
 }
