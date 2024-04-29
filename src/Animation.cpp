@@ -1,8 +1,8 @@
 
-#include "Animation.hpp"
-#include "Scene.hpp"
-#include "SceneRenderer.hpp"
-#include "Platform.hpp"
+#include "include/Animation.hpp"
+#include "include/Scene.hpp"
+#include "include/SceneRenderer.hpp"
+#include "include/Platform.hpp"
 
 struct Matrix3x4f16
 {

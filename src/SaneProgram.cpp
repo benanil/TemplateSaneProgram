@@ -1,13 +1,13 @@
 
-#include "Renderer.hpp"
-#include "Animation.hpp"
-#include "Platform.hpp"
+#include "include/Renderer.hpp"
+#include "include/Animation.hpp"
+#include "include/Platform.hpp"
 
-#include "Scene.hpp"
-#include "SceneRenderer.hpp"
-#include "CharacterController.hpp"
-#include "Camera.hpp"
-
+#include "include/Scene.hpp"
+#include "include/SceneRenderer.hpp"
+#include "include/CharacterController.hpp"
+#include "include/Camera.hpp"
+#include "include/TextRenderer.hpp"
 
 static PrefabID GLTFPrefab = 0;
 static PrefabID AnimatedPrefab = 0;
@@ -40,6 +40,9 @@ int AXStart()
         AX_ERROR("gltf scene load failed2");
         return 0;
     }
+
+    TextRendererInitialize();
+    LoadFontAtlas("Fonts/Sedan-Regular.ttf");
 
     MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();
@@ -101,6 +104,23 @@ void AXLoop(bool shouldRender)
     }
     EndRendering();
 
+    // static int totalFPS = 0;
+    // static int numFrame = 0;
+    // 
+    // double dt = GetDeltaTime();
+    // int fps = (int)(1.0 / dt);
+    // 
+    // numFrame++;
+    // totalFPS += fps;
+    // totalFPS = MAX(totalFPS, 1);
+    // numFrame = MAX(numFrame, 1);
+    // 
+    // int realFPS = totalFPS / numFrame;
+    // 
+    // char fpsTxt[16] = {};
+    // int numDigits = IntToString(realFPS, fps);
+    const char* text = "Cratoria: Dubrovnik-Sponza";
+    DrawText(text, StringLength(text), 100.0f, 950.0f, 100.0f, 100.0f);
 
     // RenderScene(&FBXScene);
     // todo material system
@@ -111,5 +131,6 @@ void AXExit()
     g_CurrentScene.Destroy();
     characterController.Destroy();
     DestroyAnimationSystem();
+    DestroyTextRenderer();
     SceneRenderer::Destroy();
 }

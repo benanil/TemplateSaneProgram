@@ -202,7 +202,7 @@ struct Camera
 		nearClip = 0.1f;
 		farClip = 500.0f;
 		senstivity = 0.1f;
-		angle = MakeVec2(0.0f, 0.0f);
+		angle = MakeVec2(3.12f, 0.0f);
 		viewportSize = xviewPortSize;
 		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
 		wGetMonitorSize(&monitorSize.x, &monitorSize.y);

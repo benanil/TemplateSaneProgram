@@ -1,15 +1,12 @@
 
-#include "SceneRenderer.hpp"
+#include "include/SceneRenderer.hpp"
 
-#include "Scene.hpp"
-#include "Animation.hpp"
-#include "AssetManager.hpp"
-#include "Renderer.hpp"
-#include "Platform.hpp"
-#include "Camera.hpp"
-
-#include <bitset>
-#include "../ASTL/Bitset.hpp"
+#include "include/Scene.hpp"
+#include "include/Animation.hpp"
+#include "include/AssetManager.hpp"
+#include "include/Renderer.hpp"
+#include "include/Platform.hpp"
+#include "include/Camera.hpp"
 
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
@@ -42,7 +39,7 @@ namespace SceneRenderer
     };
 
     MainFrameBuffer m_MainFrameBuffer;
-    MainFrameBuffer m_MainFrameBufferHalf;
+    // MainFrameBuffer m_MainFrameBufferHalf;
     Shader m_MainFrameBufferCopyShader;
     
     Shader      m_SSAOShader; 
@@ -133,19 +130,30 @@ inline Vector3f ColorMix(Vector3f col1, Vector3f col2, float p)
 namespace SceneRenderer 
 {
 
-static inline int GetFrameBufferWidth(int w, int h)
-{
-    #ifdef __ANDROID__
-    // make width and height same, to improve cache utilization and less processing
-    return h; // https://www.youtube.com/watch?v=feb-Hl_Cl3g  28:11
-    #else
-    return w;
-    #endif
+#ifdef __ANDROID__
+// make width and height smaller, to improve cache utilization and less processing
+// return h; // https://www.youtube.com/watch?v=feb-Hl_Cl3g  28:11
+inline int GetRBWidth(int w, int h) {
+    return w / 2;
 }
+
+inline int GetRBHeight(int w, int h) {
+    return h - (h / 4);
+}
+#else
+inline int GetRBWidth(int w, int h) {
+    return w;
+}
+
+inline int GetRBHeight(int w, int h) {
+    return h;
+}
+#endif
 
 static void CreateMainFrameBuffer(MainFrameBuffer& frameBuffer, int width, int height, bool half)
 {
-    width = GetFrameBufferWidth(width, height);
+    width  = GetRBWidth(width, height);
+    height = GetRBHeight(width, height);
     frameBuffer.Buffer = rCreateFrameBuffer();
     frameBuffer.width  = width;
     frameBuffer.height = height;
@@ -184,7 +192,8 @@ static void DeleteSSAOFrameBuffer()
 
 static void CreateSSAOFrameBuffer(int width, int height)
 {
-    width = GetFrameBufferWidth(width, height);
+    width  = GetRBWidth(width, height);
+    height = GetRBHeight(width, height);
     m_SSAOFrameBuffer = rCreateFrameBuffer();
     m_SSAOHalfTexture = rCreateTexture(width / 2, height / 2, nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
     m_SSAOTexture     = rCreateTexture(width    , height    , nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
@@ -192,25 +201,25 @@ static void CreateSSAOFrameBuffer(int width, int height)
 
 static void CreateFrameBuffers(int width, int height)
 {
-    width = GetFrameBufferWidth(width, height);
     CreateMainFrameBuffer(m_MainFrameBuffer, width, height, false);
-    CreateMainFrameBuffer(m_MainFrameBufferHalf, width / 2, height / 2, true); // last arg ishalf true
+    // CreateMainFrameBuffer(m_MainFrameBufferHalf, width / 2, height / 2, true); // last arg ishalf true
     CreateSSAOFrameBuffer(width, height);
 }
 
 static void DeleteFrameBuffers()
 {
     DeleteMainFrameBuffer(m_MainFrameBuffer);
-    DeleteMainFrameBuffer(m_MainFrameBufferHalf);
+    // DeleteMainFrameBuffer(m_MainFrameBufferHalf);
     DeleteSSAOFrameBuffer();
 }
 
 static void WindowResizeCallback(int width, int height)
 {
-    int smallerWidth = GetFrameBufferWidth(width, height);
+    int smallerWidth  = GetRBWidth(width, height);
+    int smallerHeight = GetRBHeight(width, height);
     width = MAX(width, 16);
     height = MAX(height, 16);
-    rSetViewportSize(smallerWidth, height);
+    rSetViewportSize(smallerWidth, smallerHeight);
     m_Camera.RecalculateProjection(width, height);
     DeleteFrameBuffers();
     CreateFrameBuffers(width, height);
@@ -451,17 +460,17 @@ static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight, AnimationC
 
     bool hasScene = prefab->numScenes > 0;
 
+    rBindMesh(prefab->bigMesh);
     if (!hasScene)
     {
         Matrix4 model = Matrix4::CreateScale(prefab->scale);
         rSetShaderValue(model.GetPtr(), lShadowModel, GraphicType_Matrix4);
-        rRenderMesh(prefab->bigMesh); // render all scene with one draw call
+        rRenderMeshIndexed(prefab->bigMesh); // render all scene with one draw call
     }
     else
     {
         AScene defaultScene = prefab->scenes[prefab->defaultSceneIndex];
         int numNodes = defaultScene.numNodes;
-        rBindMesh(prefab->bigMesh);
         for (int i = 0; i < numNodes; i++)
         {
             RenderShadowOfNode(&prefab->nodes[defaultScene.nodes[i]], prefab, Matrix4::Identity());
@@ -687,38 +696,38 @@ void RenderAllSceneContent(Scene* scene)
 static void DownscaleMainFrameBuffer()
 {
     // Downscale main frame buffer
-    rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
-    rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
-    {
-        rClearDepth();
-        rBindShader(m_MainFrameBufferCopyShader);
-
-        rSetTexture(m_MainFrameBuffer.ColorTexture , 0, dColorTex);
-        rSetTexture(m_MainFrameBuffer.NormalTexture, 1, dNormalTex);
-        rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
-        rRenderFullScreen();
-    }
+    // rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
+    // rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
+    // {
+    //     rClearDepth();
+    //     rBindShader(m_MainFrameBufferCopyShader);
+    // 
+    //     rSetTexture(m_MainFrameBuffer.ColorTexture , 0, dColorTex);
+    //     rSetTexture(m_MainFrameBuffer.NormalTexture, 1, dNormalTex);
+    //     rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
+    //     rRenderFullScreen();
+    // }
 }
 
 static void SSAOPass()
 {
-    // SSAO pass
-    rBindFrameBuffer(m_SSAOFrameBuffer);
-    rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
-    rBindShader(m_SSAOShader);
-    {
-        rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
-        rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
-        rRenderFullScreen();
-    }
-    // Upsample SSAO
-    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
-    rFrameBufferAttachColor(m_SSAOTexture, 0);
-    rBindShader(m_RedUpsampleShader);
-    {
-        rSetTexture(m_SSAOHalfTexture, 0, rGetUniformLocation("halfTex"));
-        rRenderFullScreen();
-    }
+    // // SSAO pass
+    // rBindFrameBuffer(m_SSAOFrameBuffer);
+    // rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
+    // rBindShader(m_SSAOShader);
+    // {
+    //     rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
+    //     rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
+    //     rRenderFullScreen();
+    // }
+    // // Upsample SSAO
+    // rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
+    // rFrameBufferAttachColor(m_SSAOTexture, 0);
+    // rBindShader(m_RedUpsampleShader);
+    // {
+    //     rSetTexture(m_SSAOHalfTexture, 0, rGetUniformLocation("halfTex"));
+    //     rRenderFullScreen();
+    // }
 }
 
 static void LightingPass()

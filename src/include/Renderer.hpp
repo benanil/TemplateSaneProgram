@@ -115,7 +115,7 @@ struct alignas(16) ASkinedVertex
 /*                                 Mesh                                     */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-// only uint32 indices accepted
+// only uint32 indices accepted, indexbuffer can be null if you want only vertex rendering
 GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
 void rDeleteMesh(GPUMesh mesh);
@@ -124,7 +124,11 @@ void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined)
 
 void rBindMesh(GPUMesh mesh);
 
+void rRenderMeshIndexed(GPUMesh mesh);
+
 void rRenderMesh(GPUMesh mesh);
+
+void rRenderMeshNoVertex(int numIndex);
 
 int GraphicsTypeToSize(GraphicType type);
 
@@ -134,7 +138,9 @@ int GraphicsTypeToSize(GraphicType type);
 
 enum rBlendFunc_  { 
     rBlendFunc_Zero, 
-    rBlendFunc_One 
+    rBlendFunc_One,
+    rBlendFunc_Alpha,
+    rBlendFunc_OneMinusAlpha
 };
 typedef int rBlendFunc;
 
@@ -166,6 +172,8 @@ void rDrawLine(Vector3f start, Vector3f end, uint color);
 void rDrawAllLines(float* viewProj);
 
 void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst);
+
+void rSetClockWise(bool val);
 
 void rSetDepthTest(bool val);
 
@@ -206,6 +214,8 @@ enum DepthType_ {
 };
 typedef int DepthType;
 
+void rUnpackAlignment(int n);
+
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags);
 
@@ -221,6 +231,8 @@ void rUpdateTexture(Texture texture, void* data);
 void rDeleteTexture(Texture texture);
 
 void rSetTexture(Texture texture, int index, unsigned int loc);
+
+void rSetTexture(unsigned int textureHandle, int index, unsigned int loc);
 
 void rCopyTexture(Texture dst, Texture src);
 

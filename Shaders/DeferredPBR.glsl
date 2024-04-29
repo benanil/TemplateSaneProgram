@@ -6,15 +6,9 @@
     #define saturateMediump(x) x
 #endif
 
-#ifdef __ANDROID__
-    #define float16 mediump float
-    #define half2   mediump vec2
-    #define half3   mediump vec3
-#else
-    #define float16 float
-    #define half2   vec2
-    #define half3   vec3
-#endif
+#define float16 mediump float
+#define half2   mediump vec2
+#define half3   mediump vec3
 
 layout(location = 0) out vec4 oFragColor; // TextureType_RGB8
 
@@ -136,46 +130,29 @@ lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp fl
 }
 #endif
 
-float easeInCirc(float x)
+float16 EaseInCirc(float16 x)
 {
     return 1.0 - sqrt(1.0 - (x * x));
 }
 
 // get shadow and ao
-mediump float GetShadow(mediump float shadow, highp vec3 surfPos)
+float GetShadow(float shadow, vec3 surfPos)
 {
     // lowp float ao = 0.0;
     // #ifdef __ANDROID__
-    // {
-    //     ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
-    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
-    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
-    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
-    //          textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
-    // }
-    // #else
-    // {
-    //     // 9x gaussian blur
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-4, 0)).r * 0.05;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-3, 0)).r * 0.09;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r * 0.12;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r * 0.15;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+0, 0)).r * 0.16;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+1, 0)).r * 0.15;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+2, 0)).r * 0.12;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+3, 0)).r * 0.09;
-    //     ao += textureOffset(uAmbientOclussionTex, texCoord, ivec2(+4, 0)).r * 0.05;
-    // }
+    // ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
+    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
+    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
+    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
+    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
     // #endif
     // fake player shadow, works like point light but darkens instead of lighting
-    highp vec3 playerPos = uPlayerPos + vec3(0.0, 0.3, 0.0);
-    highp vec3 surfDir = playerPos - surfPos;
-    surfDir *= 4.14159265; // scale down the shadow by 3.14x
-    float16 len = inversesqrt(dot(surfDir, surfDir));
-    float16 playerShadow = 1.0 - min(len, 1.0);
-    playerShadow = easeInCirc(playerShadow);
-
-    return shadow * playerShadow;
+    vec3 playerPos = uPlayerPos + vec3(0.0, 0.3, 0.0);
+    vec3 surfDir = playerPos - surfPos;
+    surfDir *= 4.0; // scale down the shadow by 4.0x
+    float len = inversesqrt(dot(surfDir, surfDir));
+    float playerShadow = 1.0 - min(len, 1.0);
+    return shadow * EaseInCirc(playerShadow);
 }
 
 float sdBox(vec2 p, vec2 b)

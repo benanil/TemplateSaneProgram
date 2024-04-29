@@ -20,7 +20,7 @@
 #include "../ASTL/Common.hpp"
 #include "../ASTL/Algorithms.hpp"
 #include "../External/glad.hpp"
-#include "Platform.hpp"
+#include "include/Platform.hpp"
 // #include "../External/VMem.h"
 
 #pragma comment (lib, "gdi32.lib")
@@ -519,7 +519,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check
             goto end_infinite_loop;
 
-        // char fps[9]{};
+        // char fps[10]={};
         // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
         // wSetWindowName(fps);
 

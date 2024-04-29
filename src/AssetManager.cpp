@@ -7,9 +7,9 @@
 *        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil          *
 *********************************************************************************/
 
-#include "AssetManager.hpp"
-#include "Platform.hpp"
-#include "Renderer.hpp"
+#include "include/AssetManager.hpp"
+#include "include/Platform.hpp"
+#include "include/Renderer.hpp"
 
 #if !AX_GAME_BUILD
 	#include "../External/ufbx.h"

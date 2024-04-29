@@ -5,8 +5,8 @@
 ********************************************************************/
 #if defined(__ANDROID__)
 
-#include "Platform.hpp"
-#include "Renderer.hpp"
+#include "include/Platform.hpp"
+#include "include/Renderer.hpp"
 #include "../ASTL/Memory.hpp"
 #include "../ASTL/Algorithms.hpp" // IntToString
 

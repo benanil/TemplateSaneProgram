@@ -23,7 +23,8 @@
 #include <thread>
 #include <bitset>
 
-#include "AssetManager.hpp"
+#include "include/AssetManager.hpp"
+
 #include "../ASTL/String.hpp"
 #include "../ASTL/Math/Math.hpp"
 #include "../ASTL/Array.hpp"

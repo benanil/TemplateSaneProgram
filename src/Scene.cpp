@@ -1,7 +1,7 @@
 
 #include <math.h> // sinf cosf
 
-#include "Scene.hpp"
+#include "include/Scene.hpp"
 
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/Containers.hpp"
@@ -9,8 +9,8 @@
 #include "../ASTL/HashSet.hpp"
 #include "../ASTL/Random.hpp"
 
-#include "AssetManager.hpp"
-#include "Platform.hpp"
+#include "include/AssetManager.hpp"
+#include "include/Platform.hpp"
 
 Scene g_CurrentScene{};
 const int SceneVersion = 0;

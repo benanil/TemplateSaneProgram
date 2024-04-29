@@ -56,8 +56,8 @@ inline void* stbi_realloc(void* p, size_t newsz)
 
 #include "../External/stb_image.h"
 
-#include "Renderer.hpp"
-#include "Platform.hpp"
+#include "include/Renderer.hpp"
+#include "include/Platform.hpp"
 
 GLuint g_DefaultTexture;
 
@@ -180,6 +180,11 @@ Texture rCreateDepthTexture(int width, int height, DepthType depthType)
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
     CHECK_GL_ERROR();
     return texture;
+}
+
+void rUnpackAlignment(int n)
+{
+    glPixelStorei(GL_UNPACK_ALIGNMENT, n);
 }
 
 // type is either 0 or 1 if compressed. 1 means has alpha
@@ -449,16 +454,23 @@ inline unsigned int GLTFWrapToOGLWrap(int wrap) {
 GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
 {
     GPUMesh mesh;
-    glGenBuffers(1, &mesh.vertexHandle);
-    glGenBuffers(1, &mesh.indexHandle);
+    mesh.indexHandle = -1;
+    // generate vertex buffer
+    {
+        glGenBuffers(1, &mesh.vertexHandle);
+        glBindBuffer(GL_ARRAY_BUFFER, mesh.vertexHandle);
+        glBufferData(GL_ARRAY_BUFFER, (uint64)layoutDesc->stride * numVertex, vertexBuffer, GL_STATIC_DRAW);
+        CHECK_GL_ERROR();
+    }
 
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.vertexHandle);
-    glBufferData(GL_ARRAY_BUFFER, (uint64)layoutDesc->stride * numVertex, vertexBuffer, GL_STATIC_DRAW);
-    CHECK_GL_ERROR();
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GraphicsTypeToSize(indexType), indexBuffer, GL_STATIC_DRAW);
-    CHECK_GL_ERROR();
+    // generate indexBuffer
+    if (indexBuffer != nullptr)
+    {
+        glGenBuffers(1, &mesh.indexHandle);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GraphicsTypeToSize(indexType), indexBuffer, GL_STATIC_DRAW);
+        CHECK_GL_ERROR();
+    }
     
     mesh.numIndex = numIndex; 
     mesh.numVertex = numVertex; 
@@ -466,6 +478,7 @@ GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int nu
     
     ASSERT(layoutDesc && layoutDesc->numLayout && layoutDesc->layout && layoutDesc->stride);
 
+    // Generate vertex attribute
     glGenVertexArrays(1, &mesh.vertexLayoutHandle);
     glBindVertexArray(mesh.vertexLayoutHandle);
 
@@ -521,7 +534,7 @@ void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined)
 void rBindMesh(GPUMesh mesh)
 {
     glBindVertexArray(mesh.vertexLayoutHandle);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
+    if (mesh.indexHandle != -1) glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
     CHECK_GL_ERROR();
 }
 
@@ -531,10 +544,21 @@ void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset)
     CHECK_GL_ERROR();
 }
 
+void rRenderMeshIndexed(GPUMesh mesh)
+{
+    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
+    CHECK_GL_ERROR();
+}
+
 void rRenderMesh(GPUMesh mesh)
 {
-    rBindMesh(mesh);
-    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
+    glDrawArrays(GL_TRIANGLES, 0, mesh.numVertex);
+    CHECK_GL_ERROR();
+}
+
+void rRenderMeshNoVertex(int numIndex)
+{ 
+    glDrawArrays(GL_TRIANGLES, 0, numIndex);
     CHECK_GL_ERROR();
 }
 
@@ -633,6 +657,10 @@ void rSetShaderValue(const void* value, int location, GraphicType type)
         case GraphicType_Vector3f:    glUniform3fv(location, 1, (const float*)value); break;
         case GraphicType_Vector4f:    glUniform4fv(location, 1, (const float*)value); break;
      
+        case GraphicType_Vector2i:    glUniform2iv(location, 1, (const int*)value); break;
+        case GraphicType_Vector3i:    glUniform3iv(location, 1, (const int*)value); break;
+        case GraphicType_Vector4i:    glUniform4iv(location, 1, (const int*)value); break;
+
         case GraphicType_Matrix2: glUniformMatrix2fv(location, 1, GL_FALSE, (const float*)value); break;
         case GraphicType_Matrix3: glUniformMatrix3fv(location, 1, GL_FALSE, (const float*)value); break;
         case GraphicType_Matrix4: glUniformMatrix4fv(location, 1, GL_FALSE, (const float*)value); break;
@@ -921,6 +949,11 @@ static void CreateDefaultShaders()
     m_DefaultFragShader = rCreateFullScreenShader(fragmentShaderSource);
 }
 
+void rSetClockWise(bool val)
+{
+    glFrontFace(val ? GL_CW : GL_CCW);
+}
+
 void rInitRenderer()
 {
     glEnable(GL_CULL_FACE);
@@ -963,7 +996,13 @@ void rSetBlending(bool val)
 
 void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst)
 {
-    glBlendFunc((int)src, (int)dst);
+    int map[] = {
+        GL_ZERO, 
+        GL_ONE,
+        GL_SRC_ALPHA,
+        GL_ONE_MINUS_SRC_ALPHA
+    };
+    glBlendFunc(map[src], map[dst]);
 }
 
 void rClearDepth()
@@ -1030,6 +1069,13 @@ void rSetTexture(Texture texture, int index, unsigned int location)
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glUniform1i(location, index);
     CHECK_GL_ERROR();
+}
+
+void rSetTexture(unsigned int textureHandle, int index, unsigned int loc)
+{
+    Texture texture;
+    texture.handle = textureHandle;
+    rSetTexture(texture, index, loc);
 }
 
 void rSetViewportSize(int width, int height)

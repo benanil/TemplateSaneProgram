@@ -1,8 +1,8 @@
 
-#include "CharacterController.hpp"
-#include "Platform.hpp"
-#include "SceneRenderer.hpp"
-#include "Camera.hpp"
+#include "include/CharacterController.hpp"
+#include "include/Platform.hpp"
+#include "include/SceneRenderer.hpp"
+#include "include/Camera.hpp"
 
 #include "../ASTL/String.hpp" // StringEqual
 
