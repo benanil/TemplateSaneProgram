@@ -24,6 +24,8 @@
 #include <bitset>
 
 #include "include/AssetManager.hpp"
+#include "include/Scene.hpp"
+#include "include/Renderer.hpp"
 
 #include "../ASTL/String.hpp"
 #include "../ASTL/Math/Math.hpp"

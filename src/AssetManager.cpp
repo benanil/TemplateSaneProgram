@@ -10,6 +10,7 @@
 #include "include/AssetManager.hpp"
 #include "include/Platform.hpp"
 #include "include/Renderer.hpp"
+#include "include/Scene.hpp"
 
 #if !AX_GAME_BUILD
 	#include "../External/ufbx.h"

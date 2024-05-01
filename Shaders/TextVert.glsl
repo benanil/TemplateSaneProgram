@@ -58,8 +58,8 @@ void main()
     const float cellHeight = 1.0 / CellSize;
 
     lowp uint character = texelFetch(charTex, ivec2(quadID, 0), 0).r;
-    float u = float(character % 12) / CellSize;
-    float v = float(character / 12) / CellSize;
+    float u = float(character % 12u) / CellSize;
+    float v = float(character / 12u) / CellSize;
     
     const float CharSize = 48.0;
     float us = size.x / CharSize;

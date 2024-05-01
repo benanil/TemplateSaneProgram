@@ -42,6 +42,7 @@ int AXStart()
     }
 
     TextRendererInitialize();
+    // very good font that has lots of icons: http://www.quivira-font.com/
     LoadFontAtlas("Fonts/Quivira.otf");
 
     MemsetZero(&characterController, sizeof(CharacterController));
@@ -104,35 +105,21 @@ void AXLoop(bool shouldRender)
     }
     EndRendering();
 
-    // static int totalFPS = 0;
-    // static int numFrame = 0;
-    // 
-    // double dt = GetDeltaTime();
-    // int fps = (int)(1.0 / dt);
-    // 
-    // numFrame++;
-    // totalFPS += fps;
-    // totalFPS = MAX(totalFPS, 1);
-    // numFrame = MAX(numFrame, 1);
-    // 
-    // int realFPS = totalFPS / numFrame;
-    // 
-    // char fpsTxt[16] = {};
-    // int numDigits = IntToString(realFPS, fps);
+    static int fps = 60;
+    static char fpsTxt[16] = {'6', '0'};
 
+    if (int(TimeSinceStartup()) & 1)
+    {
+        double dt = GetDeltaTime();
+        fps = (int)(1.0 / dt);
+        IntToString(fpsTxt, fps);
+    }
+
+    DrawText(fpsTxt, 85.0f, 85.0f, 1.0, 0);
     
-    DrawText("Türkçe Test: Anılcan Gülkaya. İstanbul'da Güneşin doğuşu sonrası yağmur. ~üöçğşı", 
-             100.0f, 800.0f, // x,y pos
-             1.0f, 0); // scale, atlas
-    
-    DrawText("European Test: Piß wäćêñ. ~äñåñâáæêłćøÄẞÑÅÂÁÆÊŁĆØ źžż àăą óńęțî",
+    DrawText("Anılcan Gülkaya", 
              100.0f, 950.0f, // x,y pos
              1.0f, 0); // scale, atlas
-    
-    DrawText("Icon Test: " IC_STAR IC_HEART IC_CHECK_MARK IC_LEFT_TRIANGLE IC_PAUSE IC_SQUARE 
-                           IC_CIRCLE IC_RESTART IC_HOUR_GLASS IC_UP_TRIANGLE IC_DOWN_TRIANGLE IC_LEFT_TRIANGLE IC_RIGHT_TRIANGLE,
-                            100.0f, 750.0f, // x,y pos
-                            1.0f, 0); // scale
 
     // RenderScene(&FBXScene);
     // todo material system

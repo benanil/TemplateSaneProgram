@@ -1,33 +1,60 @@
-
-layout(location = 0) out lowp vec4 Result;
+out vec4 Result;
 
 // fwidth() is not supported by default on OpenGL ES. Enable it.
 #if defined(GL_OES_standard_derivatives)
   #extension GL_OES_standard_derivatives : enable
 #endif
 
-#define fixed lowp float
-
 uniform lowp sampler2D atlas;
 in mediump vec2 texCoord;
 
-fixed EaseOut(fixed x) { 
-    fixed r = 1.0f - x;
-    return 1.0f - (r * r); 
+float saturate(float x)
+{
+    return clamp(x, 0.0, 1.0);
 }
 
-fixed contour(fixed dist, fixed edge, fixed width) {
-  return clamp(smoothstep(edge - width, edge + width, dist), 0.0, 1.0);
+float contour(float dist, float edge, float width) {
+    return saturate(smoothstep(edge - width, edge + width, dist));
 }
-
+// #define OUTLINE
+// #define SHADOW
 void main() 
 {
-    fixed s = texture(atlas, texCoord).r;
+    float dist  = texture(atlas, texCoord).r;
+    float width = fwidth(dist);
     
-    fixed width = fwidth(s);
-    const fixed outerEdge = 0.282;
-    s = contour(s, outerEdge, width);
-    // s = EaseOut(s);
-    lowp vec3 rgb = vec3(s) * 0.9;
-    Result = vec4(rgb, s);
+    vec4 textColor = vec4(1.0);
+    float outerEdge = 0.5;
+
+    float alpha = contour(dist, outerEdge, width);
+    vec4 result = vec4(textColor.rgb, textColor.a * alpha);
+
+    #if defined(OUTLINE)
+        // https://github.com/suikki/sdf_text_sample/blob/master/assets/shaders/text_sdf_effects.f.glsl
+        const float outlineEdgeWidth = 0.25;
+        const vec4 outlineColor = vec4(0.1, 0.1, 0.45, 1.0);
+
+        outerEdge = outerEdge - outlineEdgeWidth;
+        float outlineOuterAlpha = clamp(smoothstep(outerEdge - width, outerEdge + width, dist), 0.0, 1.0);
+        float outlineAlpha = outlineOuterAlpha - alpha;
+        result.rgb = mix(outlineColor.rgb, result.rgb, alpha);
+        result.a = max(result.a, outlineColor.a * outlineOuterAlpha);
+    #endif
+
+    #if defined(SHADOW)
+        const float ShadowDist = 2.2;
+        const float CharSize = 12.0 * 48.0; // CharSize * CellSize
+        const float glowMin = 0.2;
+        const float glowMax = 0.6;
+
+        // https://github.com/mattdesl/gl-sprite-text/blob/master/demo/sdf/frag.glsl
+        vec2 texelSize = vec2(1.0) / vec2(CharSize);
+        float dist2 = texture(atlas, texCoord - texelSize * ShadowDist).r;
+
+        vec4 glowColor = vec4(0.1, 0.1, 0.1, 1.0);
+        vec4 glow = glowColor * smoothstep(glowMin, glowMax, dist2);
+        result = mix(glow, result, alpha);
+    #endif
+
+    Result = result;
 }

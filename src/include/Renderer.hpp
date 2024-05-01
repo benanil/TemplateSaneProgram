@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "../ASTL/Additional/GLTFParser.hpp"
-#include "../ASTL/Common.hpp"
-#include "../ASTL/Math/Vector.hpp"
+#include "../../ASTL/Additional/GLTFParser.hpp"
+#include "../../ASTL/Common.hpp"
+#include "../../ASTL/Math/Vector.hpp"
 
 #ifdef __ANDROID__  
 #define AX_SHADER_VERSION_PRECISION() "#version 320 es\n"              \

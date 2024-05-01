@@ -1,14 +1,22 @@
-/************************************************************************
-*    Purpose: Importing Fonts, Creating font atlases and rendering Text *
-*    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com            *
-************************************************************************/
+/*********************************************************************************
+*  Purpose: Importing Fonts, Creating font atlases and rendering Text            *
+*  Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com                       *
+*  Note:                                                                         *
+*  if you want icons, font must have Unicode Block 'Miscellaneous Technical'     *
+*  I've analysed the european countries languages and alphabets                  *
+*  to support most used letters in European languages.                           *
+*  English, German, Brazilian, Portuguese, Finnish, Swedish fully supported      *
+*  for letters that are not supported in other nations I've used transliteration *
+*  to get closest character. for now 12*12 = 144 character supported             *
+*  each character is maximum 48x48px                                             *
+*********************************************************************************/
 
-// if you want icons font must support Unicode Block 'Miscellaneous Technical'
+#include "include/AssetManager.hpp" // for AX_GAME_BUILD macro
 
-#define STB_TRUETYPE_IMPLEMENTATION  
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../External/stb_truetype.h"
-#include "../External/stb_image_write.h"
+#if AX_GAME_BUILD == 0 // we don't need to create sdf fonts at runtime when playing game
+    #define STB_TRUETYPE_IMPLEMENTATION  
+    #include "../External/stb_truetype.h"
+#endif
 
 #include "../ASTL/String.hpp"
 #include "../ASTL/IO.hpp"
@@ -18,6 +26,18 @@
 #include "include/Renderer.hpp"
 #include "include/Platform.hpp"
 
+// Atlas Settings
+static const int CellCount  = 12;
+static const int CellSize   = 48;
+static const int AtlasWidth = CellCount * CellSize;
+static const int MaxCharacters = 512;
+static const int AtlasVersion = 1;
+
+// SDF Settings
+static const int SDFPadding = 3;
+static const unsigned char OnedgeValue = 128;
+static const float PixelDistScale = 18.0f;
+
 struct FontChar
 {
     short width, height;
@@ -25,21 +45,13 @@ struct FontChar
     float advence;
 };
 
-static const int CellCount  = 12;
-static const int CharSize   = 48;
-static const int AtlasWidth = CellCount * CharSize;
-static const int MaxCharacters = 512;
-
 struct FontAtlas
 {
     FontChar characters[CellCount*CellCount];
-    stbtt_fontinfo info;
     unsigned int textureHandle;
-    
-    const FontChar& GetCharacter(unsigned int c) const
-    {
-        return characters[c];
-    }
+    unsigned int cellCount;
+    unsigned int charSize;
+    int ascent, descent, lineGap;
 };
 
 namespace 
@@ -67,11 +79,11 @@ void TextRendererInitialize()
     mCharTexture  = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_R8UI, TexFlags_RawData);
     
     rBindShader(fontShader);
-    posTexLoc   = rGetUniformLocation("posTex");
-    sizeTexLoc  = rGetUniformLocation("sizeTex");
-    charTexLoc  = rGetUniformLocation("charTex");
-    atlasLoc    = rGetUniformLocation("atlas");
-    uScrSizeLoc = rGetUniformLocation("uScrSize");
+    posTexLoc    = rGetUniformLocation("posTex");
+    sizeTexLoc   = rGetUniformLocation("sizeTex");
+    charTexLoc   = rGetUniformLocation("charTex");
+    atlasLoc     = rGetUniformLocation("atlas");
+    uScrSizeLoc  = rGetUniformLocation("uScrSize");
     mInitialized = true;
 }
 
@@ -97,8 +109,8 @@ static void WriteGlyphToAtlass(int i,
                                unsigned char* sdf)
 {
     const int atlasWidth = AtlasWidth;
-    int xStart = (i * CharSize) % atlasWidth;
-    int yStart = (i / CellCount) * CharSize;
+    int xStart = (i * CellSize) % atlasWidth;
+    int yStart = (i / CellCount) * CellSize;
     
     for (int yi = yStart, y = 0; yi < yStart + character->height; yi++, y++)
     {
@@ -109,39 +121,103 @@ static void WriteGlyphToAtlass(int i,
     }
 }
 
+static void SaveFontAtlasBin(char* path, int pathLen,
+                             FontAtlas* atlas,
+                             unsigned char (&image)[AtlasWidth][AtlasWidth])
+{
+    // .bft = Binary Font Type
+    ChangeExtension(path, pathLen, "bft");
+    AFile file = AFileOpen(path, AOpenFlag_Write);
+    AFileWrite(&AtlasVersion, sizeof(int), file);
+    AFileWrite(&atlas->cellCount, sizeof(int), file);
+    AFileWrite(&atlas->charSize, sizeof(int), file);
+    AFileWrite(&atlas->ascent, sizeof(int), file);
+    AFileWrite(&atlas->descent, sizeof(int), file);
+    AFileWrite(&atlas->lineGap, sizeof(int), file);
+    AFileWrite(&atlas->characters, CellCount * CellCount * sizeof(FontChar), file);
+    AFileWrite(image, AtlasWidth * AtlasWidth, file);
+    AFileClose(file);
+}
+
+static void LoadFontAtlasBin(const char* path,
+                             FontAtlas* atlas,
+                             unsigned char (&image)[AtlasWidth][AtlasWidth])
+{
+    int version;
+    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFileRead(&version, sizeof(int), file);
+    AFileRead(&atlas->cellCount, sizeof(int), file);
+    AFileRead(&atlas->charSize, sizeof(int), file);
+    AFileRead(&atlas->ascent, sizeof(int), file);
+    AFileRead(&atlas->descent, sizeof(int), file);
+    AFileRead(&atlas->lineGap, sizeof(int), file);
+    AFileRead(&atlas->characters, CellCount * CellCount * sizeof(FontChar), file);
+    AFileRead(image, AtlasWidth * AtlasWidth, file);
+    AFileClose(file);
+}
+
+static bool BFTLastVersion(const char* path)
+{
+    int version;
+    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFileRead(&version, sizeof(int), file);
+    AFileClose(file);
+    return version == AtlasVersion;
+}
+
 FontAtlasHandle LoadFontAtlas(const char* file)
 {
-    ASSERT(mCurrentFontAtlas < 4);
+    ASSERT(mCurrentFontAtlas < 4); // max 4 atlas for now
+    // 12 is sqrt(128)
+    unsigned char image[AtlasWidth][AtlasWidth] = {0};
+
+    FontAtlas* currentAtlas;
+    // check file is exist
+    char path[256] = {};
+    int pathLen = StringLength(file);
+    {
+        SmallMemCpy(path, file, pathLen);
+        ChangeExtension(path, pathLen, "bft");
+        if (FileExist(path) && BFTLastVersion(path))
+        {
+            currentAtlas = &mFontAtlases[mCurrentFontAtlas++];
+            LoadFontAtlasBin(path, currentAtlas, image);
+            currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
+            return mCurrentFontAtlas - 1;
+        }
+    }
+#if AX_GAME_BUILD == 0
+    // .otf or .ttf there are two types of font file
+    bool wasOTF = FileHasExtension(file, pathLen, ".otf"); 
+    ChangeExtension(path, pathLen, wasOTF ? "otf" : "ttf");
+
     ScopedPtr<unsigned char> data = (unsigned char*)ReadAllFile(file);
     if (data.ptr == nullptr) {
         return InvalidFontHandle;
     }
     
-    FontAtlas* currentAtlas = &mFontAtlases[mCurrentFontAtlas++];
-    stbtt_fontinfo* info = &currentAtlas->info;
-
-    int res = stbtt_InitFont(info, data.ptr, 0);
+    stbtt_fontinfo info = {};
+    int res = stbtt_InitFont(&info, data.ptr, 0);
     ASSERT(res != 0);
+    
+    currentAtlas = &mFontAtlases[mCurrentFontAtlas++];
+    currentAtlas->cellCount = CellCount;
+    currentAtlas->charSize  = CellSize;
+    stbtt_GetFontVMetrics(&info, &currentAtlas->ascent, &currentAtlas->descent, &currentAtlas->lineGap);
 
     // These functions compute a discretized SDF field for a single character, suitable for storing
     // in a single-channel texture, sampling with bilinear filtering, and testing against
-    int padding = 0;
-    unsigned char onedge_value = 128;
-    float pixel_dist_scale = 64.0f;
-    float scale = stbtt_ScaleForPixelHeight(info, (float)CharSize);
+    float scale = stbtt_ScaleForPixelHeight(&info, (float)CellSize);
     rUnpackAlignment(1);
-
-    // 12 is sqrt(128)
-    unsigned char atlas[AtlasWidth][AtlasWidth] = {0};
     
     const auto addUnicodeGlyphFn = [&](int unicode, int i)
     {
         FontChar& character = currentAtlas->characters[i];
-        int glyph = stbtt_FindGlyphIndex(info, unicode);
+        int glyph = stbtt_FindGlyphIndex(&info, unicode);
         int xoff, yoff, width, height;
-        uint8* sdf = stbtt_GetGlyphSDF(info, scale, 
+        uint8* sdf = stbtt_GetGlyphSDF(&info, scale, 
                                        glyph,
-                                       padding, onedge_value, pixel_dist_scale,
+                                       SDFPadding, OnedgeValue, PixelDistScale,
                                        &width, &height,
                                        &xoff, &yoff);
         ASSERT(sdf != nullptr);
@@ -149,9 +225,9 @@ FontAtlasHandle LoadFontAtlas(const char* file)
         character.yoff = (short)yoff, character.height = (short)height;
 
         int advance, leftSideBearing;
-        stbtt_GetGlyphHMetrics(info, glyph, &advance, &leftSideBearing);
+        stbtt_GetGlyphHMetrics(&info, glyph, &advance, &leftSideBearing);
         character.advence = advance * scale;
-        WriteGlyphToAtlass(i, &character, atlas, sdf);
+        WriteGlyphToAtlass(i, &character, image, sdf);
         free(sdf); 
     };
 
@@ -160,6 +236,7 @@ FontAtlasHandle LoadFontAtlas(const char* file)
         addUnicodeGlyphFn(i, i);
     }
 
+    // unicode data taken from here: https://www.compart.com/en/unicode/
     // Turkish and European characters.
     const int europeanChars[] = {
         /* ü */0x0FC, /* ö */ 0x0F6, /* ç */ 0x0E7, /* ğ */ 0x11F,  /* ş */ 0x15F, 
@@ -180,7 +257,6 @@ FontAtlasHandle LoadFontAtlas(const char* file)
         addUnicodeGlyphFn(europeanChars[i], i);
     }
     
-    // we can add 17 more characters for filling 128 char restriction
     const int aditionalCharacters[] = { 
         0x23F3, // hourglass flowing sand
         0x23F4, 0x23F5, 0x23F6, 0x23F7, // <, >, ^, v,
@@ -190,15 +266,19 @@ FontAtlasHandle LoadFontAtlas(const char* file)
     };
 
     constexpr int aditionalCharCount = ArraySize(aditionalCharacters);
+    // we can add 17 more characters for filling 144 char restriction
     static_assert(aditionalCharCount + 127 < 144); // if you want more you have to make bigger atlas than 12x12
 
-    for (int i = 127; i < 127 + aditionalCharCount; i++) // iterate trough first and last characters of ascii
+    for (int i = 127; i < 127 + aditionalCharCount; i++)
     {
         addUnicodeGlyphFn(aditionalCharacters[i-127], i);
     }
 
-    stbi_write_png("font_test.png", AtlasWidth, AtlasWidth, 1, atlas, AtlasWidth);
-    currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, atlas, TextureType_R8, TexFlags_None).handle;
+    SaveFontAtlasBin(path, pathLen, currentAtlas, image);
+    currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
+#else
+    AX_UNREACHABLE();
+#endif
     return mCurrentFontAtlas-1;
 }
 
@@ -245,18 +325,18 @@ struct UTF8Table
 // https://en.wikipedia.org/wiki/Slovak_orthography
 inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
 {
-    if (unicode <= 256)
+    if (unicode < 256)
     {
         static constexpr UTF8Table table{};
         return table.map[unicode];
     }
-
+    
     switch (unicode) {
-        case 0x011Fu: return 3;   // ğ
-        case 0x015Fu: return 4;   // ş
-        case 0x0131u: return 5;   // ı
-        case 0x0142u: return 14;  // ł 
-        case 0x0107u: return 15;  // ć 
+        case 0x011Fu: return 3;  // ğ
+        case 0x015Fu: return 4;  // ş
+        case 0x0131u: return 5;  // ı
+        case 0x0142u: return 14; // ł 
+        case 0x0107u: return 15; // ć 
         case 0x011Eu: return 20; // Ğ 
         case 0x015Eu: return 21; // Ş 
         case 0x1E9Eu: return 23; // ẞ 
@@ -293,8 +373,16 @@ inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
 // todo: allow different scales 
 void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle)
 {
-    int txtLen  = UTF8StrLen(text);
-    int txtSize = StringLength(text);
+    int txtLen = 0, txtSize = 0;
+    {
+        const char* s = text;
+        while (*s) 
+        {
+            if ((*s & 0xC0) != 0x80) txtLen++;
+            txtSize++;
+            s++;
+        }
+    }
 
     ASSERT(txtLen < MaxCharacters);
     ASSERT(mInitialized == true);
@@ -303,8 +391,7 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
     Vector2f size;
 
     FontAtlas* fontAtlas = &mFontAtlases[atlasHandle];
-    stbtt_fontinfo* info = &fontAtlas->info;
-    float spaceWidth = (float)fontAtlas->GetCharacter('0').width;
+    float spaceWidth = (float)fontAtlas->characters['0'].width;
 
     Vector2f positions[MaxCharacters];
     Vector2h sizes[MaxCharacters];
@@ -326,23 +413,24 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
         text += TextCharFromUtf8(&unicode, text, textEnd);
         chr = UnicodeToAtlasIndex(unicode);
 
-        const FontChar& character = fontAtlas->GetCharacter(chr);
+        const FontChar& character = fontAtlas->characters[chr];
         
-        /* set size */ {
+        {
             size.x = float(character.width) * scale;
             size.y = float(character.height) * scale;
             sizes[numChars].x = ConvertFloatToHalf(size.x);
             sizes[numChars].y = ConvertFloatToHalf(size.y);
         }
-        /* set position */ {
+        {
             pos.x = xPos + (float(character.xoff) * scale);
             pos.y = yPos + (float(character.yoff) * scale);
             positions[numChars] = pos;
         }
-        /* set tile */ {
+        {
             charData[numChars] = chr;
         }
 
+        // xPos += (padding-1) * scale;
         xPos += character.advence * scale;
         numChars++;
     }

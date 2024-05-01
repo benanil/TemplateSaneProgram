@@ -1,23 +1,6 @@
 
 #pragma once
-
-typedef int FontAtlasHandle;
-
-enum {
-    InvalidFontHandle = -1   
-};
-
-
-FontAtlasHandle LoadFontAtlas(const char* file);
-
-// text is an utf8 string
-void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle);
-
-void TextRendererInitialize();
-
-void DestroyTextRenderer();
-
-// usefull icons. Usage:  DrawText(IC_ALARM": 12:00pm, "IC_CIRCLE) // c string concatanation
+// usefull icons. Usage:  DrawText(IC_ALARM ": 12:00pm, " IC_CIRCLE) // c string concatanation
 #define IC_LEFT_TRIANGLE "\xE2\x8F\xB4"
 #define IC_RIGHT_TRIANGLE "\xE2\x8F\xB5"
 #define IC_UP_TRIANGLE "\xE2\x8F\xB6"
@@ -31,4 +14,22 @@ void DestroyTextRenderer();
 #define IC_CHECK_MARK "\xE2\x9C\x94"
 #define IC_HEART "\xE2\x9D\xA4"
 #define IC_STAR "\xE2\x98\x85"
+
+
+typedef int FontAtlasHandle;
+
+enum {
+    InvalidFontHandle = -1   
+};
+
+FontAtlasHandle LoadFontAtlas(const char* file);
+
+// text is an utf8 string
+void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle = 0);
+
+void TextRendererInitialize();
+
+void DestroyTextRenderer();
+
+
 

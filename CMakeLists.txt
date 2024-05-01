@@ -24,6 +24,7 @@ set(SOURCES
     src/AssetManager.cpp
     src/SaneProgram.cpp
     src/Renderer.cpp
+    src/TextRenderer.cpp
     src/PlatformWindows.cpp
     src/Scene.cpp
     src/SceneRenderer.cpp

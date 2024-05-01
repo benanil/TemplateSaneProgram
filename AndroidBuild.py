@@ -67,7 +67,7 @@ def copy_files(source_folder, destination_folder, extension=None):
     
     print("Files copied successfully.")
 
-
+#------------------------------------------------------------------------
 def AndroidMoveShaders():
     print("Moving shader files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
@@ -79,6 +79,16 @@ def AndroidMoveShaders():
     ensure_directory_exists(assetsPath)
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".glsl")
+
+
+def AndroidMoveFontFiles():
+    print("Moving Font files to Android path..")
+    workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
+    sourcePath = os.path.join(workspacePath, "Fonts")
+    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Fonts")
+    ensure_directory_exists(destPath)
+    copy_files(sourcePath, destPath, ".bft")
+
 
 def AndroidMoveMeshes():
     print("Moving mesh and astc files to Android path..")
