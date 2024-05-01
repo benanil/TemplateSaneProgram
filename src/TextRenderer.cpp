@@ -1,4 +1,9 @@
+/************************************************************************
+*    Purpose: Importing Fonts, Creating font atlases and rendering Text *
+*    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com            *
+************************************************************************/
 
+// if you want icons font must support Unicode Block 'Miscellaneous Technical'
 
 #define STB_TRUETYPE_IMPLEMENTATION  
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -87,9 +92,9 @@ void DestroyTextRenderer()
 }
 
 static void WriteGlyphToAtlass(int i, 
-                        FontChar* character,
-                        unsigned char (&atlas)[AtlasWidth][AtlasWidth],
-                        unsigned char* sdf)
+                               FontChar* character,
+                               unsigned char (&atlas)[AtlasWidth][AtlasWidth],
+                               unsigned char* sdf)
 {
     const int atlasWidth = AtlasWidth;
     int xStart = (i * CharSize) % atlasWidth;
@@ -120,7 +125,6 @@ FontAtlasHandle LoadFontAtlas(const char* file)
 
     // These functions compute a discretized SDF field for a single character, suitable for storing
     // in a single-channel texture, sampling with bilinear filtering, and testing against
-    
     int padding = 0;
     unsigned char onedge_value = 128;
     float pixel_dist_scale = 64.0f;
@@ -129,28 +133,6 @@ FontAtlasHandle LoadFontAtlas(const char* file)
 
     // 12 is sqrt(128)
     unsigned char atlas[AtlasWidth][AtlasWidth] = {0};
-
-    for (int i = '!'; i <= '~'; i++) // ascii characters
-    {
-        FontChar& character = currentAtlas->characters[i];
-        int xoff, yoff, width, height;
-        uint8* sdf = stbtt_GetCodepointSDF(info, 
-                                           scale, 
-                                           i, 
-                                           padding, 
-                                           onedge_value, 
-                                           pixel_dist_scale, 
-                                           &width, &height, &xoff, &yoff);
-        ASSERT(sdf != nullptr);
-        character.xoff = (short)xoff, character.width  = (short)width;
-        character.yoff = (short)yoff, character.height = (short)height;
-
-        int advance, leftSideBearing;
-        stbtt_GetCodepointHMetrics(info, i, &advance, &leftSideBearing);
-        character.advence = advance * scale;
-        WriteGlyphToAtlass(i, &character, atlas, sdf);
-        free(sdf); //STBTT_free(image);
-    }
     
     const auto addUnicodeGlyphFn = [&](int unicode, int i)
     {
@@ -173,7 +155,12 @@ FontAtlasHandle LoadFontAtlas(const char* file)
         free(sdf); 
     };
 
-    // Turkisih and European characters.
+    for (int i = '!'; i <= '~'; i++) // ascii characters
+    {
+        addUnicodeGlyphFn(i, i);
+    }
+
+    // Turkish and European characters.
     const int europeanChars[] = {
         /* ü */0x0FC, /* ö */ 0x0F6, /* ç */ 0x0E7, /* ğ */ 0x11F,  /* ş */ 0x15F, 
         /* ı */0x131, /* ä */ 0x0E4, /* ß */ 0x0DF, /* ñ */ 0x0F1,  /* å */ 0x0E5, 
@@ -188,7 +175,7 @@ FontAtlasHandle LoadFontAtlas(const char* file)
     constexpr int europeanGlyphCount = ArraySize(europeanChars);
     static_assert(europeanGlyphCount <= 33);
 
-    for (int i = 0; i < europeanGlyphCount; i++) // iterate trough first and last characters of ascii
+    for (int i = 0; i < europeanGlyphCount; i++)
     {
         addUnicodeGlyphFn(europeanChars[i], i);
     }
@@ -270,7 +257,6 @@ inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
         case 0x0131u: return 5;   // ı
         case 0x0142u: return 14;  // ł 
         case 0x0107u: return 15;  // ć 
-        // upper case
         case 0x011Eu: return 20; // Ğ 
         case 0x015Eu: return 21; // Ş 
         case 0x1E9Eu: return 23; // ẞ 
@@ -305,7 +291,7 @@ inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
 
 
 // todo: allow different scales 
-void DrawText(const char* text, float xPos, float yPos, float scale)
+void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle)
 {
     int txtLen  = UTF8StrLen(text);
     int txtSize = StringLength(text);
@@ -316,7 +302,7 @@ void DrawText(const char* text, float xPos, float yPos, float scale)
     Vector2f pos  = { xPos , yPos };
     Vector2f size;
 
-    FontAtlas* fontAtlas = &mFontAtlases[0];
+    FontAtlas* fontAtlas = &mFontAtlases[atlasHandle];
     stbtt_fontinfo* info = &fontAtlas->info;
     float spaceWidth = (float)fontAtlas->GetCharacter('0').width;
 
@@ -326,7 +312,6 @@ void DrawText(const char* text, float xPos, float yPos, float scale)
     int numChars = 0; // textLen without spaces, or undefined characters
     
     const char* textEnd = text + txtSize;
-
     // fill per quad data
     while (text < textEnd)
     {
@@ -342,6 +327,7 @@ void DrawText(const char* text, float xPos, float yPos, float scale)
         chr = UnicodeToAtlasIndex(unicode);
 
         const FontChar& character = fontAtlas->GetCharacter(chr);
+        
         /* set size */ {
             size.x = float(character.width) * scale;
             size.y = float(character.height) * scale;
@@ -357,8 +343,6 @@ void DrawText(const char* text, float xPos, float yPos, float scale)
             charData[numChars] = chr;
         }
 
-        // int kern = stbtt_GetCodepointKernAdvance(&mFontAtlases[0].info, chr, text[i + 1]);
-        // xPos += kern * scale;
         xPos += character.advence * scale;
         numChars++;
     }

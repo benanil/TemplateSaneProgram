@@ -11,7 +11,7 @@ enum {
 FontAtlasHandle LoadFontAtlas(const char* file);
 
 // text is an utf8 string
-void DrawText(const char* text, float xPos, float yPos, float scale);
+void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle);
 
 void TextRendererInitialize();
 

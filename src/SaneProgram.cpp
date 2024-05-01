@@ -123,16 +123,16 @@ void AXLoop(bool shouldRender)
     
     DrawText("Türkçe Test: Anılcan Gülkaya. İstanbul'da Güneşin doğuşu sonrası yağmur. ~üöçğşı", 
              100.0f, 800.0f, // x,y pos
-             1.0f); // scale
+             1.0f, 0); // scale, atlas
     
     DrawText("European Test: Piß wäćêñ. ~äñåñâáæêłćøÄẞÑÅÂÁÆÊŁĆØ źžż àăą óńęțî",
              100.0f, 950.0f, // x,y pos
-             1.0f); // scale
+             1.0f, 0); // scale, atlas
     
     DrawText("Icon Test: " IC_STAR IC_HEART IC_CHECK_MARK IC_LEFT_TRIANGLE IC_PAUSE IC_SQUARE 
                            IC_CIRCLE IC_RESTART IC_HOUR_GLASS IC_UP_TRIANGLE IC_DOWN_TRIANGLE IC_LEFT_TRIANGLE IC_RIGHT_TRIANGLE,
                             100.0f, 750.0f, // x,y pos
-                            1.0f); // scale
+                            1.0f, 0); // scale
 
     // RenderScene(&FBXScene);
     // todo material system
