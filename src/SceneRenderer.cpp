@@ -19,14 +19,18 @@ namespace SceneRenderer
 {
     Camera      m_Camera;
     Texture     m_ShadowTexture;
-    
-    Texture     m_SkyTexture;
+    Matrix4     m_ViewProjection;
     Matrix4     m_LightMatrix;
+
+    Texture     m_SkyTexture;
     FrameBuffer m_ShadowFrameBuffer;
     Shader      m_ShadowShader;
     
     Shader      m_GBufferShader;
     Shader      m_GBufferShaderAlpha;
+    Shader      m_SkyboxShader;
+    Shader      m_DepthCopyShader;
+    GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
 
     struct MainFrameBuffer
     {
@@ -117,14 +121,6 @@ namespace ShadowSettings
     {
         return Matrix4::OrthoRH(-OrthoSize, OrthoSize, -OrthoSize, OrthoSize, NearPlane, FarPlane);
     }
-}
-
-inline Vector3f ColorMix(Vector3f col1, Vector3f col2, float p)
-{
-    p = 1.0f - p;
-    float t = 1.0f - (p * p);
-    Vector3f res = Vector3f::Lerp(col1 * col1, col2 * col2, t);
-    return MakeVec3(Sqrt(res.x), Sqrt(res.y), Sqrt(res.z));
 }
 
 namespace SceneRenderer 
@@ -226,24 +222,6 @@ static void WindowResizeCallback(int width, int height)
     m_RedrawShadows = 2;
 }
 
-static void CreateSkyTexture()
-{
-    uint pixels[64 * 4];
-    uint* currentPixel = pixels;
-
-    Vector3f startColor = MakeVec3(0.92f, 0.91f, 0.985f);
-    Vector3f endColor = MakeVec3(247.0f, 173.0f, 50.0f) / MakeVec3(255.0f);
-
-    for (int i = 0; i < 64; i++)
-    {
-        Vector3f target = ColorMix(startColor, endColor, (float)(i) / 64.0f);
-        uint color = PackColorRGBU32(&target.x);
-        MemSet32(currentPixel, color, 4);
-        currentPixel += 4;
-    }
-    m_SkyTexture = rCreateTexture(4, 64, pixels, TextureType_RGBA8, TexFlags_None);
-}
-
 static void GetUniformLocations()
 { 
     char lightText[32] = {};
@@ -328,6 +306,11 @@ static void CreateShaders()
     m_GBufferShaderAlpha = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text);
 
     GetUniformLocations();
+    m_DepthCopyShader = rCreateFullScreenShader(
+                            AX_SHADER_VERSION_PRECISION()
+                            "in vec2 texCoord; uniform sampler2D DepthTex;"
+                            "void main() { gl_FragDepth = texture(DepthTex, texCoord).r; }"
+                        );
 }
 
 static void DeleteShaders()
@@ -378,9 +361,38 @@ void UpdateLight(int index, LightInstance* instance)
 
 void EndUpdateLights() { }
 
+static void PrepareSkybox()
+{
+    const Vector3f vertices[] = {
+        {-0.5f, -0.5f, -0.5f},
+        { 0.5f, -0.5f, -0.5f},
+        { 0.5f,  0.5f, -0.5f},
+        {-0.5f,  0.5f, -0.5f},
+        {-0.5f,  0.5f, 0.5f},
+        { 0.5f,  0.5f, 0.5f},
+        { 0.5f, -0.5f, 0.5f},
+        {-0.5f, -0.5f, 0.5f}
+    };
+
+    const ushort triangles[] = {
+        0, 2, 1, 0, 3, 2, // face front 
+        2, 3, 4, 2, 4, 5, // face top
+        1, 2, 5, 1, 5, 6, // face right
+        0, 7, 4, 0, 4, 3, // face left
+        5, 4, 7, 5, 7, 6 // face back
+        // 0, 6, 7, 0, 1, 6  // face bottom
+    };
+    
+    const InputLayout layout = { 3, GraphicType_Float };
+    const InputLayoutDesc desc = { 1, sizeof(Vector3f), &layout };
+
+    m_BoxMesh = rCreateMesh(vertices, triangles, ArraySize(vertices), ArraySize(triangles), GraphicType_UnsignedShort, &desc);
+    m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");
+}
+
 void Init()
 {
-    CreateSkyTexture();
+    PrepareSkybox();
     CreateShaders();
 
     Vector2i windowStartSize;
@@ -408,15 +420,11 @@ void BeginRendering()
     rBindFrameBuffer(m_MainFrameBuffer.Buffer);
     rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
     rClearDepth();
-
-    // looks like a skybox
-    {
-        rSetDepthTest(false);
-        rRenderFullScreen(m_SkyTexture.handle);
-        rSetDepthTest(true);
-    }
+    rClearColor(0.2f, 0.2f, 0.2f, 1.0);
 
     m_Camera.Update();
+    m_ViewProjection = m_Camera.view * m_Camera.projection;
+
     rBindShader(m_GBufferShader);
 
     // shadow uniforms
@@ -552,7 +560,7 @@ static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& pri
     rRenderMeshIndexOffset(prefab->bigMesh, primitive.numIndices, offset);
 }
 
-static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix4 viewProjection, bool recurse)
+static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, bool recurse)
 {
     Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale) * parentMat;
 
@@ -561,7 +569,7 @@ static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix
     {
         for (int i = 0; i < node.numChildren && recurse; i++)
         {
-            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, viewProjection, recurse);
+            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, recurse);
         }
         return;
     }
@@ -594,7 +602,7 @@ static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, Matrix
 
         for (int i = 0; i < node.numChildren && recurse; i++)
         {
-            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, viewProjection, recurse);
+            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, recurse);
         }
     }
 }
@@ -611,8 +619,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
 
     rBindMesh(prefab->bigMesh);
 
-    Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
-    rSetShaderValue(viewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
+    rSetShaderValue(m_ViewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
     rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
 
     int numNodes  = prefab->numNodes;
@@ -633,7 +640,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
     {
         ANode& node = hasScene ? prefab->nodes[defaultScene.nodes[i]] : prefab->nodes[i];
         bool shouldRecurse = hasScene;
-        RenderNodeRec(node, prefab, Matrix4::Identity(), viewProjection, shouldRecurse);
+        RenderNodeRec(node, prefab, Matrix4::Identity(), shouldRecurse);
     }
 
     // Render alpha masked meshes after opaque meshes, to make sure performance is good. (early z)
@@ -642,7 +649,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         rBindShader(m_GBufferShaderAlpha);
         // shadow uniforms
         rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
-        rSetShaderValue(viewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
+        rSetShaderValue(m_ViewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
 
         rSetTexture(m_ShadowTexture, 3, lShadowMap);
 
@@ -660,7 +667,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         }
         m_DelayedAlphaCutoffs.Resize(0);
     }
-    rDrawAllLines(viewProjection.GetPtr());
+    rDrawAllLines(m_ViewProjection.GetPtr());
 }
 
 static bool MeshInstanceIndexCompare(MeshInstance* a, MeshInstance* b)
@@ -734,12 +741,7 @@ static void LightingPass()
 {
     DirectionalLight sunLight = g_CurrentScene.m_SunLight;
 
-    Vector2i windowSize;
-    wGetMonitorSize(&windowSize.x, &windowSize.y);
-
-    rUnbindFrameBuffer(); // < draw to backbuffer after this line
     rBindShader(m_DeferredPBRShader);
-    rSetViewportSize(windowSize.x, windowSize.y);
     {
         Matrix4 invView = Matrix4::Inverse(m_Camera.view);
         Matrix4 invProj = Matrix4::Inverse(m_Camera.projection);
@@ -765,21 +767,47 @@ static void LightingPass()
 
     // rBindFrameBuffer(m_MainFrameBuffer.Buffer);
     // rFrameBufferInvalidate(3); // color, normal, ShadowMetallicRoughness
+}
 
-    rSetDepthTest(true);
-    rSetDepthWrite(true);
+static void DrawSkybox()
+{
+    rSetClockWise(true);
+        rBindShader(m_SkyboxShader);
+        rSetShaderValue(m_ViewProjection.GetPtr(), 0, GraphicType_Matrix4);
+        rBindMesh(m_BoxMesh);
+        rRenderMeshIndexed(m_BoxMesh);
+    rSetClockWise(false);
 }
 
 void EndRendering()
 {
+    Vector2i windowSize;
+    wGetMonitorSize(&windowSize.x, &windowSize.y);
+    rSetViewportSize(windowSize.x, windowSize.y);
+
+    rUnbindFrameBuffer(); // < draw to backbuffer after this line
+
+    // copy depth buffer to back buffer
+    rRenderFullScreen(m_DepthCopyShader, m_MainFrameBuffer.DepthTexture.handle);
+
     // DownscaleMainFrameBuffer();
+    //SSAOPass();
+    
     // screen space passes, no need depth
     rSetDepthTest(false);
     rSetDepthWrite(false);
+    
+    {
+        LightingPass();
+    }
 
-    //SSAOPass();
+    rSetDepthTest(true);
 
-    LightingPass();
+    {
+        DrawSkybox();
+    }
+
+    rSetDepthWrite(true);
 }
 
 void Destroy()

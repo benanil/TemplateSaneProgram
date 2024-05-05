@@ -17,7 +17,6 @@ const int SceneVersion = 0;
 
 void Scene::Init()
 {
-    m_MatrixNeedsUpdate = bitset_create();
 }
 
 void Scene::Destroy()
@@ -51,7 +50,6 @@ void Scene::Destroy()
         FreeSceneBundle((SceneBundle*)prefab);
     }
     m_LoadedPrefabs.Clear();
-    if (m_MatrixNeedsUpdate) bitset_free(m_MatrixNeedsUpdate);
 }
 
 void Scene::Save(const char* path)

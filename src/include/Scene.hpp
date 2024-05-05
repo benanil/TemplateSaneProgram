@@ -2,7 +2,6 @@
 
 #include "../../ASTL/Array.hpp"
 #include "../../ASTL/Math/Matrix.hpp"
-#include "../../External/bitset.h"
 #include "Renderer.hpp"
 
 //------------------------------------------------------------------------
@@ -79,7 +78,6 @@ struct Scene
     // one of these[meshId] gives the data
     Array<Matrix4>       m_Matrices; // matrices are seperate because we can use with instancing
     Array<ScaleRotation> m_ScaleRotations;
-    bitset_t*            m_MatrixNeedsUpdate;
 
     // Meshes
     Array<uint8_t>       m_Bitmasks; // indicates to entity mask. user can use this as wood, enemy, stone, metal etc.

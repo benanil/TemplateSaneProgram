@@ -22,14 +22,16 @@ struct CharacterController
     float      mSpeedSmoothVelocity;
     Quaternion mRotation;
     Vector3f   mPosition;
-	
+
     Vector2f mTouchStart;
     bool wasPressing;
 
 //------------------------------------------------------------------------
     void Start(Prefab* _character);
 
-    void Update(float deltaTime);
+    void Update(float deltaTime, bool isSponza);
+
+    void ColissionDetection(Vector3f oldPos);
     
     void Destroy();
 };

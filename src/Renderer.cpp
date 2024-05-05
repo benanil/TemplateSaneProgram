@@ -451,7 +451,7 @@ inline unsigned int GLTFWrapToOGLWrap(int wrap) {
     return values[wrap];
 }
 
-GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
+GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc)
 {
     GPUMesh mesh;
     mesh.indexHandle = -1;

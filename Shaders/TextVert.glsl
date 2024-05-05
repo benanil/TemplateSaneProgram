@@ -33,7 +33,7 @@ void main()
     float uScrHeight = float(uScrSize.y);
 
     vec2 vertices[6];
-    vertices[0] = vec2(pos.x         , uScrHeight - (pos.y         ));            
+    vertices[0] = vec2(pos.x         , uScrHeight - (pos.y         ));
     vertices[1] = vec2(pos.x         , uScrHeight - (pos.y + size.y));
     vertices[2] = vec2(pos.x + size.x, uScrHeight - (pos.y         ));
     vertices[4] = vec2(pos.x + size.x, uScrHeight - (pos.y + size.y));

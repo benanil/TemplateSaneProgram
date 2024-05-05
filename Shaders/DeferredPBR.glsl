@@ -224,8 +224,4 @@ void main()
     }
 
     oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetShadow(shadow, pos);
-
-    // two line below shows fps on left bottom side of the screen to left upper side of the window,
-    // float px = 1.0 / float(textureSize(uNormalTex, 0).x);
-    // oFragColor.g += (1.0 - smoothstep(0.0, px, sdBox(texCoord-vec2(0.1,0.0), vec2(0.005, (1.0 / uDeltaTime) / 60.0 ))));
 }

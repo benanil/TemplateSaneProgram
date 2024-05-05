@@ -32,8 +32,7 @@ add_library(game SHARED
         ../../../../../src/Texture.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp
         ../../../../../ASTL/Additional/GLTFParser.cpp
-        ../../../../../External/zstddeclib.c # facebook zstd decompressor
-        ../../../../../External/bitset.c)
+        ../../../../../External/zstddeclib.c) # facebook zstd decompressor
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${../../../../../})
 

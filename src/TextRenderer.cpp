@@ -383,7 +383,8 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
             s++;
         }
     }
-
+    
+    ASSERT(atlasHandle < mCurrentFontAtlas); // you have to initialize at least one font
     ASSERT(txtLen < MaxCharacters);
     ASSERT(mInitialized == true);
 

@@ -9,6 +9,8 @@
 #include "include/Camera.hpp"
 #include "include/TextRenderer.hpp"
 
+#include <stdio.h>
+
 static PrefabID GLTFPrefab = 0;
 static PrefabID AnimatedPrefab = 0;
 
@@ -17,7 +19,6 @@ CharacterController characterController={};
 void AXInit()
 {
     wSetWindowName("Engine");
-    // wSetWindowSize(1920, 1080);
 
     wSetWindowPosition(0, 0);
     wSetVSync(true);
@@ -82,7 +83,8 @@ void AXLoop(bool shouldRender)
     deltaTime = MIN(deltaTime, 0.2f);
 
     // animate and control the movement of character
-    characterController.Update(deltaTime);
+    const bool isSponza = true;
+    characterController.Update(deltaTime, isSponza);
     AnimationController* animController = &characterController.mAnimController;
 
     using namespace SceneRenderer;
@@ -108,7 +110,8 @@ void AXLoop(bool shouldRender)
     static int fps = 60;
     static char fpsTxt[16] = {'6', '0'};
 
-    if (int(TimeSinceStartup()) & 1)
+    double timeSinceStart = TimeSinceStartup();
+    if (timeSinceStart - (float)int(timeSinceStart) < 0.1)
     {
         double dt = GetDeltaTime();
         fps = (int)(1.0 / dt);
@@ -117,7 +120,7 @@ void AXLoop(bool shouldRender)
 
     DrawText(fpsTxt, 85.0f, 85.0f, 1.0, 0);
     
-    DrawText("Anılcan Gülkaya", 
+    DrawText("Cratoria: Dubrovnik-Sponza",
              100.0f, 950.0f, // x,y pos
              1.0f, 0); // scale, atlas
 

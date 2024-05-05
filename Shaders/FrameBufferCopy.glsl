@@ -4,7 +4,7 @@ layout(location = 1) out vec3 oNormal;
 uniform sampler2D ColorTex;
 uniform sampler2D NormalTex;
 uniform sampler2D DepthTex;
-in vec2 texCoord;         
+in vec2 texCoord;
 
 float checkerboard(in vec2 uv)
 {
@@ -14,8 +14,8 @@ float checkerboard(in vec2 uv)
 
 void main() {
 
-    // oFragColor   = texture(ColorTex , texCoord).rgb;
-    oNormal      = texture(NormalTex, texCoord).rgb;
+    // oFragColor = texture(ColorTex , texCoord).rgb;
+    oNormal = texture(NormalTex, texCoord).rgb;
     
     float d1 = textureOffset(DepthTex, texCoord, ivec2(0, 0)).r;
     float d2 = textureOffset(DepthTex, texCoord, ivec2(0, 1)).r;

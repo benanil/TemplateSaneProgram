@@ -3,6 +3,7 @@
 #include "include/Platform.hpp"
 #include "include/SceneRenderer.hpp"
 #include "include/Camera.hpp"
+#include "include/TextRenderer.hpp"
 
 #include "../ASTL/String.hpp" // StringEqual
 
@@ -84,7 +85,34 @@ void CharacterController::Start(Prefab* _character)
     mAnimController.SetAnim(a_right , -1, a_diagonal_right);
 }
 
-void CharacterController::Update(float deltaTime)
+void CharacterController::ColissionDetection(Vector3f oldPos)
+{
+    const Vector2f boundingMin = { -27.8f, -11.5f };
+    const Vector2f boundingMax = {  25.5f,  10.5f };
+    
+    mPosition.x = Clamp(mPosition.x, boundingMin.x, boundingMax.x);
+    mPosition.z = Clamp(mPosition.z, boundingMin.y, boundingMax.y);
+
+    // column is banner parts of sponza ||
+    // Right Columns: 18.0, 0.0, -5.0
+    //               -20.0, 0.0, -5.0
+    // Left Columns:  18.0, 0.0, 3.8
+    //               -20.0, 0.0, 3.8
+    bool xBetweenColumns = mPosition.x < 19.0f && mPosition.x > -21.0;
+    
+    bool zIsLeft  = Abs(mPosition.z - -5.0f) < 1.0f;
+    bool zIsRight = Abs(mPosition.z -  3.8f) < 1.0f;
+    
+    bool characterInBanners = xBetweenColumns & (zIsLeft || zIsRight);
+    if (characterInBanners)
+    {
+        float xDiff = (oldPos.z - mPosition.z) * 0.5f;
+        // set z position to old position and add opposite direction movement
+        mPosition.z = oldPos.z + xDiff;
+    }
+}
+
+void CharacterController::Update(float deltaTime, bool isSponza)
 {
     Vector2f targetMovement = {0.0f, 0.0f};
     bool isRunning = false;
@@ -185,10 +213,13 @@ void CharacterController::Update(float deltaTime)
     {   
         Vector3f forward = MakeVec3(sinf(x), 0.0f, cosf(x));
         Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
-        
+        Vector3f oldPos = mPosition;
+
         mPosition += progress * mAnimSpeed * 1.5f;
         // animatedPos.y = 8.15f;
         camera->targetPos = mPosition;
+        if (isSponza)
+            ColissionDetection(oldPos);
         // set animated pos for the renderer
         SmallMemCpy(posPtr, &mPosition.x, sizeof(Vector3f));
     }

@@ -67,7 +67,7 @@ Blender Mixamo Character Import Settings:
 
 # Used Libraries
 for fbx scenes [ufbx](https://github.com/ufbx/ufbx)<br>
-importing and resizing textures [stb libraries](https://github.com/nothings/stb)<br>
+importing, resizing, saving textures + importing font  [stb libraries](https://github.com/nothings/stb)<br>
 astc texture format codec for android textures [astc-encoder](https://github.com/ARM-software/astc-encoder)<br>
 fast compression library by facebook [zstandard](https://github.com/facebook/zstd)<br>
 for dxt texture compression [etcpak](https://github.com/wolfpld/etcpak)<br>

@@ -28,7 +28,6 @@ REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
 REM External/ProcessDxtc.cpp ^
 REM External/ufbx.c ^
-REM External/bitset.c ^
 REM -o SaneProgram.exe ^
 REM -lopengl32 -lgdi32  SaneProgram.res
 
@@ -41,7 +40,6 @@ REM  ASTL/Additional/OBJParser.cpp ^
 REM  External/ProcessDxtc.cpp ^
 REM  External/zstddeclib.c ^
 REM  External/ufbx.c ^
-REM  External/bitset.c ^
 REM  src/PlatformWindows.cpp ^
 REM  src/AssetManager.cpp ^
 REM  src/Animation.cpp ^

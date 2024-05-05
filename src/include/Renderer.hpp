@@ -116,7 +116,7 @@ struct alignas(16) ASkinedVertex
 /*//////////////////////////////////////////////////////////////////////////*/
 
 // only uint32 indices accepted, indexbuffer can be null if you want only vertex rendering
-GPUMesh rCreateMesh(void* vertexBuffer, void* indexBuffer, int numVertex, int numIndex, int vertexSize, GraphicType indexType, const InputLayoutDesc* layoutDesc);
+GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
 void rDeleteMesh(GPUMesh mesh);
 

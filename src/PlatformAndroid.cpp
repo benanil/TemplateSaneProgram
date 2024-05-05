@@ -20,7 +20,7 @@
 
 #define USE_SWAPPY
 #ifdef USE_SWAPPY
-    #include <swappyGL.h>
+    #include "../External/swappyGL.h"
     #define ASwapBuffers(display, surface) SwappyGL_swap(display, surface)
 #else
     #define ASwapBuffers(display, surface) eglSwapBuffers(display, surface)
