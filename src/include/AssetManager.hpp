@@ -11,6 +11,7 @@
     #define AX_GAME_BUILD 1 /* make zero for editor build */
 #endif
 
+
 #include "../../ASTL/Additional/GLTFParser.hpp"
 
 int LoadFBX(const char* path, SceneBundle* fbxScene, float scale);

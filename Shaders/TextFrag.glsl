@@ -8,14 +8,14 @@ out vec4 Result;
 uniform lowp sampler2D atlas;
 in mediump vec2 texCoord;
 
-float saturate(float x)
-{
+float saturate(float x) {
     return clamp(x, 0.0, 1.0);
 }
 
 float contour(float dist, float edge, float width) {
     return saturate(smoothstep(edge - width, edge + width, dist));
 }
+
 // #define OUTLINE
 // #define SHADOW
 void main() 
@@ -58,3 +58,19 @@ void main()
 
     Result = result;
 }
+
+
+    int findPairs(vector<int>& nums, int k) 
+    {
+        unordered_set<int> set;
+        for (int i = 0; i < nums.size(); i++)
+            set.insert(i);
+
+        int numPairs = 0;
+        for (int i = 0; i < nums.size(); i++)
+        {
+            if (set.contains(k - nums[i]) || set.contains(nums[i] - k))
+                numPairs++;
+        }
+        return numPairs;
+    }

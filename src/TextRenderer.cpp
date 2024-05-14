@@ -1,6 +1,6 @@
 /*********************************************************************************
 *  Purpose: Importing Fonts, Creating font atlases and rendering Text            *
-*  Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com                       *
+*  Author : Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com                       *
 *  Note:                                                                         *
 *  if you want icons, font must have Unicode Block 'Miscellaneous Technical'     *
 *  I've analysed the european countries languages and alphabets                  *

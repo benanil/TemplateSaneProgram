@@ -16,9 +16,10 @@
     #define AX_WARN(format, ...)   __android_log_print(ANDROID_LOG_WARN, "AX-WARN", "%s -line:%i " format, GetFileName(__FILE__), __LINE__, ##__VA_ARGS__)
 #else
     void FatalError(const char* format, ...); // defined in PlatformBla.cpp
+    void DebugLog(const char* format, ...); 
 
-    #define AX_LOG(format, ...)  
-    #define AX_WARN(format, ...) 
+    #define AX_LOG(format, ...)  DebugLog("axInfo: %s -line:%i " format, GetFileName(__FILE__), __LINE__, __VA_ARGS__)
+    #define AX_WARN(format, ...) DebugLog("axWarn: %s -line:%i " format, GetFileName(__FILE__), __LINE__, __VA_ARGS__)
 
     #if !(defined(__GNUC__) || defined(__GNUG__))
     #   define AX_ERROR(format, ...) FatalError("%s -line:%i " format, GetFileName(__FILE__), __LINE__, __VA_ARGS__)
