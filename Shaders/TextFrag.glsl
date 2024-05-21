@@ -58,19 +58,3 @@ void main()
 
     Result = result;
 }
-
-
-    int findPairs(vector<int>& nums, int k) 
-    {
-        unordered_set<int> set;
-        for (int i = 0; i < nums.size(); i++)
-            set.insert(i);
-
-        int numPairs = 0;
-        for (int i = 0; i < nums.size(); i++)
-        {
-            if (set.contains(k - nums[i]) || set.contains(nums[i] - k))
-                numPairs++;
-        }
-        return numPairs;
-    }

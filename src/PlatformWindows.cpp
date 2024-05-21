@@ -12,6 +12,9 @@
 #  define VC_EXTRALEAN
 #endif
 
+#define VMEM_OVERRIDE_NEW_DELETE
+#define VMEM_DEBUG_LEVEL 0 
+
 #include <Windows.h>
 
 #include "../ASTL/Common.hpp"
@@ -64,6 +67,7 @@ void SetKeyPressCallback     (void(*callback)(wchar_t))      { PlatformCtx.KeyPr
 void SetMouseMoveCallback    (void(*callback)(float, float)) { PlatformCtx.MouseMoveCallback    = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback; }
 void wSetWindowMoveCallback  (void(*callback)(int, int))     { PlatformCtx.WindowMoveCallback   = callback; }
+
 
 void wGetWindowSize(int* x, int* y) { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
 void wGetWindowPos (int* x, int* y) { *x = PlatformCtx.WindowPosX;   *y = PlatformCtx.WindowPosY;   }
@@ -185,7 +189,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
             PlatformCtx.MousePosX = (float)LOWORD(lparam); 
             PlatformCtx.MousePosY = (float)HIWORD(lparam); 
             if (PlatformCtx.MouseMoveCallback) 
-                PlatformCtx.MouseMoveCallback(PlatformCtx.MousePosX, PlatformCtx.MousePosY);
+			PlatformCtx.MouseMoveCallback(PlatformCtx.MousePosX, PlatformCtx.MousePosY);
             break;
         case WM_MOUSEWHEEL:
             PlatformCtx.MouseWheelDelta = (float)GET_WHEEL_DELTA_WPARAM(wparam) / (float)WHEEL_DELTA;
@@ -207,7 +211,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_SETFOCUS:
         case WM_KILLFOCUS:
             if (PlatformCtx.FocusChangedCallback)
-                PlatformCtx.FocusChangedCallback(msg == WM_SETFOCUS);
+			PlatformCtx.FocusChangedCallback(msg == WM_SETFOCUS);
             break;
         case WM_KEYUP:
         case WM_SYSKEYUP:
@@ -219,13 +223,13 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_CHAR:
             ::MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, (char*)&wparam, 1, &wch, 1);
             if (PlatformCtx.KeyPressCallback) 
-                PlatformCtx.KeyPressCallback(wch);
+			PlatformCtx.KeyPressCallback(wch);
             break;
         case WM_SIZE:
             PlatformCtx.WindowWidth  = LOWORD(lparam);
             PlatformCtx.WindowHeight = HIWORD(lparam);
             if (PlatformCtx.WindowResizeCallback)
-                PlatformCtx.WindowResizeCallback(PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
+			PlatformCtx.WindowResizeCallback(PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
             break;
         case WM_MOVE:
             PlatformCtx.WindowPosX = LOWORD(lparam);
@@ -242,34 +246,10 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
     return result;
 }
 
-#include <stdio.h>
-
-#define FORMAT_STR() \
-char buffer[1024]; \
-va_list args; \
-va_start(args, format); \
-vsnprintf(buffer, sizeof(buffer), format, args); \
-va_end(args); \
-printf(buffer); \
-
-void DebugLog(const char* format, ...)
-{
-    FORMAT_STR()
-    OutputDebugString(buffer);
-}
-
-void FatalError(const char* format, ...)
-{
-    FORMAT_STR()
-    // Display the message box
-    MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
-}
-
 /********************************************************************************/
 /*                       OpenGL, WGL Initialization                             */
 /********************************************************************************/
 
-#ifdef OPEN_GL
 // See https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_create_context.txt for all values
 // See https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_pixel_format.txt for all values
 // See https://gist.github.com/nickrolfe/1127313ed1dbf80254b614a721b3ee9c
@@ -280,6 +260,22 @@ wglCreateContextAttribsARB_type* wglCreateContextAttribsARB;
 wglChoosePixelFormatARB_type* wglChoosePixelFormatARB = nullptr;
 
 BOOL(WINAPI* wglSwapIntervalEXT)(int) = nullptr;
+
+#include <stdio.h>
+
+void FatalError(const char* format, ...)
+{
+    char buffer[1024]; // Adjust the size according to your needs
+    // Format the error message
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    printf(buffer);
+    OutputDebugString(buffer);
+    // Display the message box
+    MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
+}
 
 // https://gist.github.com/mmozeiko/6825cb94d393cb4032d250b8e7cc9d14
 static void GetWglFunctions(void)
@@ -303,14 +299,14 @@ static void GetWglFunctions(void)
 
     int format = ChoosePixelFormat(dc, &desc);
     if (!format)
-        FatalError("Cannot choose OpenGL pixel format for dummy window!");
+	FatalError("Cannot choose OpenGL pixel format for dummy window!");
 
     int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
     ASSERT(ok && "Failed to describe OpenGL pixel format");
 
     // reason to create dummy window is that SetPixelFormat can be called only once for the window
     if (!SetPixelFormat(dc, format, &desc))
-        FatalError("Cannot set OpenGL pixel format for dummy window!");
+	FatalError("Cannot set OpenGL pixel format for dummy window!");
 
     HGLRC rc = wglCreateContext(dc);
     ASSERT(rc && "Failed to create OpenGL context for dummy window");
@@ -328,83 +324,24 @@ static void GetWglFunctions(void)
     DestroyWindow(dummy);
 }
 
-HGLRC InitOpenGL(HWND window)
-{
-    HDC dc = GetDC(window);
-    ASSERT(dc && "Failed to window device context");
-
-    // figure out pixel format
-    int attrib[] = {
-        0x2001, GL_TRUE, // WGL_DRAW_TO_WINDOW_ARB
-        0x2010, GL_TRUE, // WGL_SUPPORT_OPENGL_ARB
-        0x2011, GL_TRUE, // WGL_DOUBLE_BUFFER_ARB
-        0x2013, 0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
-        0x2014, 24, // WGL_COLOR_BITS_ARB
-        0x2022, 24, // WGL_DEPTH_BITS_ARB
-        0x2023,  8, // WGL_STENCIL_BITS_ARB
-        // uncomment for sRGB framebuffer, from WGL_ARB_framebuffer_sRGB extension
-        // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_framebuffer_sRGB.txt
-        //WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB, GL_TRUE,
-        // uncomment for multisampeld framebuffer, from WGL_ARB_multisample extension
-        // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_multisample.txt
-        0x2041, 1, // WGL_SAMPLE_BUFFERS_ARB
-        0x2042, 4, // 4x MSAA WGL_SAMPLES_ARB
-        0,
-    };
-    
-    // VERY IMPORTANT: all windows sharing same OpenGL context must have same pixel format
-    // this is mentioned in https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_create_context.txt
-    int format = 0;
-    PIXELFORMATDESCRIPTOR desc = {};
-    desc.nSize = sizeof(desc);
-    
-    GetWglFunctions();
-
-    UINT formats;
-    if (!wglChoosePixelFormatARB(dc, attrib, NULL, 1, &format, &formats) || formats == 0)
-        FatalError("OpenGL does not support required pixel format!");
-    
-    int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
-    ASSERT(ok && "Failed to describe OpenGL pixel format");
-
-    // always set pixel format, same for all windows
-    if (!SetPixelFormat(dc, format, &desc))
-       FatalError("Cannot set OpenGL selected pixel format!");
-
-    // now create modern OpenGL context, can do it after pixel format is set
-    int attrib[] =
-    {
-        0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
-        0x2092, 3, // WGL_CONTEXT_MINOR_VERSION_ARB
-        0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
-#ifdef DEBUG
-        // ask for debug context for non "Release" builds
-        // this is so we can enable debug callback
-        0x2094, 0x00000001, // WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB
-#endif
-        0,
-    };
-
-    // we'll use only one OpenGL context for simplicity, no need to worry about resource sharing
-    HGLRC rc = wglCreateContextAttribsARB(dc, NULL, attrib);
-    if (!rc)
-    {
-        FatalError("Cannot create modern OpenGL context! OpenGL version 4.3 not supported?");
-    }
-
-    BOOL ok = wglMakeCurrent(dc, rc);
-    ASSERT(ok && "Failed to make current OpenGL context");
-    return rc;
-}
-#else // VULKAN
-
-extern bool InitVulkan(HINSTANCE win32Instance, HWND hwnd);
-
-#endif OPEN_GL
-
 static HWND WindowCreate(HINSTANCE instance)
 {
+    GetWglFunctions();
     // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
+    int pixel_format_attribs[] = {
+		0x2001,          1, // WGL_DRAW_TO_WINDOW_ARB
+		0x2010,          1, // WGL_SUPPORT_OPENGL_ARB
+		0x2011,          1, // WGL_DOUBLE_BUFFER_ARB
+		0x2003,     0x2027, // WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB
+		0x2013,     0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
+		0x2014,         32, // WGL_COLOR_BITS_ARB
+		0x2022,         24, // WGL_DEPTH_BITS_ARB
+		0x2023,          8, // WGL_STENCIL_BITS_ARB
+		0x20A9,          1, // WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB <- SRGB support
+		0x2041,          1, // WGL_SAMPLE_BUFFERS_ARB           <- enable MSAA
+		0x2042,          8, // WGL_SAMPLES_ARB                  <- 4x MSAA
+		0
+    };
     // register window class to have custom WindowProc callback
     WNDCLASSEX wc = {};
     wc.cbSize = sizeof(wc),
@@ -427,14 +364,81 @@ static HWND WindowCreate(HINSTANCE instance)
     DWORD exstyle = WS_EX_APPWINDOW;
     DWORD style = WS_OVERLAPPEDWINDOW;
 
+    // VERY IMPORTANT: all windows sharing same OpenGL context must have same pixel format
+    // this is mentioned in https://www.khronos.org/registry/OpenGL/extensions/ARB/WGL_ARB_create_context.txt
+    int format = 0;
+    PIXELFORMATDESCRIPTOR desc = {};
+    desc.nSize = sizeof(desc);
+
     // create window
     HWND window = CreateWindowEx(
         exstyle, wc.lpszClassName, WindowName, style,
         CW_USEDEFAULT, CW_USEDEFAULT, width, height,
         NULL, NULL, wc.hInstance, NULL);
-
     ASSERT(window && "Failed to create window");
+
+    HDC dc = GetDC(window);
+    ASSERT(dc && "Failed to window device context");
+
+    // figure out pixel format
+    int attrib[] = {
+        0x2001, GL_TRUE, // WGL_DRAW_TO_WINDOW_ARB
+        0x2010, GL_TRUE, // WGL_SUPPORT_OPENGL_ARB
+        0x2011, GL_TRUE, // WGL_DOUBLE_BUFFER_ARB
+        0x2013, 0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
+        0x2014, 24, // WGL_COLOR_BITS_ARB
+        0x2022, 24, // WGL_DEPTH_BITS_ARB
+        0x2023,  8, // WGL_STENCIL_BITS_ARB
+        // uncomment for sRGB framebuffer, from WGL_ARB_framebuffer_sRGB extension
+        // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_framebuffer_sRGB.txt
+        //WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB, GL_TRUE,
+        // uncomment for multisampeld framebuffer, from WGL_ARB_multisample extension
+        // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_multisample.txt
+        0x2041, 1, // WGL_SAMPLE_BUFFERS_ARB
+        0x2042, 4, // 4x MSAA WGL_SAMPLES_ARB
+        0,
+    };
+    
+    UINT formats;
+    if (!wglChoosePixelFormatARB(dc, attrib, NULL, 1, &format, &formats) || formats == 0)
+	FatalError("OpenGL does not support required pixel format!");
+    
+    int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
+    ASSERT(ok && "Failed to describe OpenGL pixel format");
+
+    // always set pixel format, same for all windows
+    if (!SetPixelFormat(dc, format, &desc))
+	FatalError("Cannot set OpenGL selected pixel format!");
+
     return window;
+}
+
+HGLRC InitOpenGL(HDC dc)
+{
+    // now create modern OpenGL context, can do it after pixel format is set
+    int attrib[] =
+    {
+        0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
+        0x2092, 3, // WGL_CONTEXT_MINOR_VERSION_ARB
+        0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+		#ifdef DEBUG
+        // ask for debug context for non "Release" builds
+        // this is so we can enable debug callback
+        0x2094, 0x00000001, // WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB
+		#endif
+        0,
+    };
+
+    // we'll use only one OpenGL context for simplicity, no need to worry about resource sharing
+    HGLRC rc = wglCreateContextAttribsARB(dc, NULL, attrib);
+    if (!rc)
+    {
+        FatalError("Cannot create modern OpenGL context! OpenGL version 4.5 not supported?");
+    }
+
+    BOOL ok = wglMakeCurrent(dc, rc);
+    ASSERT(ok && "Failed to make current OpenGL context");
+    return rc;
 }
 
 /********************************************************************************/
@@ -472,10 +476,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     PlatformCtx.hwnd = WindowCreate(inst);
     HDC   dc         = GetDC(PlatformCtx.hwnd);
     HGLRC rc         = InitOpenGL(dc);
-
-    bool initVulkan = InitVulkan(inst, PlatformCtx.hwnd);
-    if (!initVulkan) { FatalError("vulkan Init failed!"); return 1; }
-
+    
     gladLoaderLoadGL();
     
     ShowWindow(PlatformCtx.hwnd, show);
@@ -495,7 +496,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     PlatformCtx.Frequency   = frequency.QuadPart;
 
     if (AXStart() == 0)
-        return 1; // user defined startup failed
+	return 1; // user defined startup failed
 
     while (true)
     {   
@@ -503,7 +504,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
         {
             if (msg.message == WM_QUIT) 
-                goto end_infinite_loop;
+			goto end_infinite_loop;
          
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
@@ -516,17 +517,16 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         prevTime = currentTime;
         
         if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check
-            goto end_infinite_loop;
+		goto end_infinite_loop;
+
+        // char fps[10]={};
+        // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));
+        // wSetWindowName(fps);
 
         // Do OpenGL rendering here
         AXLoop(true); // should render true
-
-        #ifdef OPEN_GL
         wglSwapIntervalEXT(PlatformCtx.VSyncActive); // vsync
         SwapBuffers(dc);
-        #else
-
-        #endif
 
         RecordLastKeys();
         PlatformCtx.MouseWheelDelta = 0.0f;
@@ -539,12 +539,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         AXExit();
         rDestroyRenderer();
         wglMakeCurrent(dc, 0);
-        #ifdef OPEN_GL
         ReleaseDC(PlatformCtx.hwnd, dc);
         wglDeleteContext(rc);
-        #else
-        
-        #endif
         DestroyWindow(PlatformCtx.hwnd);
     }
     // VMem::Destroy();

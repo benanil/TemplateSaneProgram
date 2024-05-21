@@ -1,4 +1,6 @@
 
+#include <math.h>
+
 #include "include/CharacterController.hpp"
 #include "include/Platform.hpp"
 #include "include/SceneRenderer.hpp"
@@ -146,11 +148,11 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     cursorPos = { touch0.positionX, touch0.positionY };
 
     bool pressing = numTouch > 0 && interacted;
-    if (!wasPressing && pressing) {
+    if (!mWasPressing && pressing) {
         mTouchStart = cursorPos;
     }
 
-    wasPressing = pressing;
+    mWasPressing = pressing;
     if (pressing)
         // use rsqrt and mul instead of sqrt and div, to avoid devide zero by zero
         targetMovement = Vector2f::NormalizeEst(mTouchStart - cursorPos);  
@@ -211,7 +213,7 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     x += -inputAngle / 2.0f;
     // handle character position
     {   
-        Vector3f forward = MakeVec3(sinf(x), 0.0f, cosf(x));
+        Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
         Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
         Vector3f oldPos = mPosition;
 

@@ -24,7 +24,7 @@ struct CharacterController
     Vector3f   mPosition;
 
     Vector2f mTouchStart;
-    bool wasPressing;
+    bool mWasPressing;
 
 //------------------------------------------------------------------------
     void Start(Prefab* _character);

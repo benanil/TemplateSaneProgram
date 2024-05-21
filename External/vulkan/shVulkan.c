@@ -1,3 +1,5 @@
+#if 0
+
 #ifdef __cplusplus
 "C" {
 #endif//__cplusplus
@@ -3742,3 +3744,5 @@ uint8_t shPipelinePoolUpdateDescriptorSetUnits(
 #ifdef __cplusplus
 }
 #endif//__cplusplus
+
+#endif

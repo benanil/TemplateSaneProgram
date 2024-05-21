@@ -20,7 +20,8 @@ struct Camera
 
 	Vector3f position;
 	Vector2f mouseOld;
-
+	Vector3f targetPos;
+	Vector2f angle;
 	Vector3f Front, Right, Up;
  
 	float pitch = 0.0f, yaw = -9.0f , senstivity = 10.0f;
@@ -174,6 +175,7 @@ struct Camera
 #endif
 };
 */
+
 struct Camera
 {
 	Matrix4 projection;
@@ -207,7 +209,7 @@ struct Camera
 		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
 		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
-		direction = Vector3f::Normalize(MakeVec3(cosf(angle.x * TwoPI), 0.0f, sinf(angle.x * TwoPI)));
+		direction = Vector3f::Normalize(MakeVec3(Cos(angle.x * TwoPI), 0.0f, Sin(angle.x * TwoPI)));
 
 		RecalculateView();
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
@@ -275,7 +277,7 @@ struct Camera
 		}
 	}
 
-#ifndef __ANDROID__ /* NOT android */
+#if !defined(__ANDROID__)  // not android
 	void Update()
 	{
 		bool pressing = GetMouseDown(MouseButton_Right);

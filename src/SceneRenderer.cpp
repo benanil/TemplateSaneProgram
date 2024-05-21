@@ -782,7 +782,7 @@ static void DrawSkybox()
 void EndRendering()
 {
     Vector2i windowSize;
-    wGetMonitorSize(&windowSize.x, &windowSize.y);
+    wGetWindowSize(&windowSize.x, &windowSize.y);
     rSetViewportSize(windowSize.x, windowSize.y);
 
     rUnbindFrameBuffer(); // < draw to backbuffer after this line
@@ -802,11 +802,9 @@ void EndRendering()
     }
 
     rSetDepthTest(true);
-
     {
         DrawSkybox();
     }
-
     rSetDepthWrite(true);
 }
 

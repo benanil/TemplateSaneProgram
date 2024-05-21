@@ -64,7 +64,7 @@ namespace
     int mCurrentFontAtlas = 0;
     bool mInitialized = false;
     // uniform locations
-    int posTexLoc, sizeTexLoc, charTexLoc, atlasLoc, uScrSizeLoc;
+    int posTexLoc, sizeTexLoc, charTexLoc, atlasLoc, uScrSizeLoc, uScaleLoc;
 }
 
 void TextRendererInitialize()
@@ -84,6 +84,7 @@ void TextRendererInitialize()
     charTexLoc   = rGetUniformLocation("charTex");
     atlasLoc     = rGetUniformLocation("atlas");
     uScrSizeLoc  = rGetUniformLocation("uScrSize");
+	uScaleLoc    = rGetUniformLocation("uScale");
     mInitialized = true;
 }
 
@@ -269,10 +270,10 @@ FontAtlasHandle LoadFontAtlas(const char* file)
     // we can add 17 more characters for filling 144 char restriction
     static_assert(aditionalCharCount + 127 < 144); // if you want more you have to make bigger atlas than 12x12
 
-    for (int i = 127; i < 127 + aditionalCharCount; i++)
-    {
-        addUnicodeGlyphFn(aditionalCharacters[i-127], i);
-    }
+    for (ivfgnt i = 127; i < 127 + aditionalCharCount; i++)
+    {hjy h
+        ahnj vddUnicodeGlyphFn(aditionalCharacters[i-127], i);
+    }ılkç
 
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
@@ -370,6 +371,9 @@ inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
 }
 
 
+// reference resolution is always 1920x1080,
+// we will remap input position and scale according to current window size
+
 // todo: allow different scales 
 void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle)
 {
@@ -388,8 +392,12 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
     ASSERT(txtLen < MaxCharacters);
     ASSERT(mInitialized == true);
 
-    Vector2f pos  = { xPos , yPos };
-    Vector2f size;
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
+
+    Vector2f ratio = { windowSize.x / 1920.0f, windowSize.y / 1080.0f };
+    xPos *= ratio.x;
+    yPos *= ratio.y;
 
     FontAtlas* fontAtlas = &mFontAtlases[atlasHandle];
     float spaceWidth = (float)fontAtlas->characters['0'].width;
@@ -399,12 +407,14 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
     uint8 charData[MaxCharacters];
     int numChars = 0; // textLen without spaces, or undefined characters
     
+    scale *= MIN(ratio.x, ratio.y);
+
     const char* textEnd = text + txtSize;
     // fill per quad data
     while (text < textEnd)
     {
         if (*text == ' ') {
-            xPos += spaceWidth * scale * 0.5f;
+            xPos += spaceWidth * scale * 0.5f * ratio.x;
             text++;
             continue;
         }
@@ -415,16 +425,17 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
         chr = UnicodeToAtlasIndex(unicode);
 
         const FontChar& character = fontAtlas->characters[chr];
-        
         {
+            Vector2f size;
             size.x = float(character.width) * scale;
             size.y = float(character.height) * scale;
             sizes[numChars].x = ConvertFloatToHalf(size.x);
             sizes[numChars].y = ConvertFloatToHalf(size.y);
         }
         {
-            pos.x = xPos + (float(character.xoff) * scale);
-            pos.y = yPos + (float(character.yoff) * scale);
+            Vector2f pos = { xPos, yPos };
+            pos.x += float(character.xoff) * scale;
+            pos.y += float(character.yoff) * scale;
             positions[numChars] = pos;
         }
         {
@@ -451,9 +462,8 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
     }
     rSetTexture(fontAtlas->textureHandle, 3, atlasLoc);
 
-    Vector2i windowSize;
-    wGetWindowSize(&windowSize.x, &windowSize.y);
     rSetShaderValue(&windowSize.x, uScrSizeLoc, GraphicType_Vector2i);
+    rSetShaderValue(scale, uScaleLoc);
 
     rRenderMeshNoVertex(6 * numChars); // 6 index for each char
 

@@ -86,12 +86,12 @@ void AXLoop(bool shouldRender)
     const bool isSponza = true;
     characterController.Update(deltaTime, isSponza);
     AnimationController* animController = &characterController.mAnimController;
-
+	
     using namespace SceneRenderer;
-
+	
     if (!shouldRender)
         return;
-
+	
     BeginShadowRendering(currentScene);
     {
         RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
@@ -99,7 +99,7 @@ void AXLoop(bool shouldRender)
         // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
     }
     EndShadowRendering();
-
+	
     BeginRendering();
     {
         RenderPrefab(currentScene, GLTFPrefab, nullptr);
@@ -123,7 +123,6 @@ void AXLoop(bool shouldRender)
     DrawText("Cratoria: Dubrovnik-Sponza",
              100.0f, 950.0f, // x,y pos
              1.0f, 0); // scale, atlas
-
     // RenderScene(&FBXScene);
     // todo material system
 }

@@ -3,6 +3,7 @@
 *    Purpose: Creating Window, Keyboard and Mouse input, Main Loop  *
 *    Author : Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com        *
 ********************************************************************/
+#if 0
 
 #ifdef _WIN32
 	#ifndef NOMINMAX
@@ -1173,3 +1174,5 @@ static void VulkanDestroy()
 
 	shDestroyInstance(instance);
 }
+
+#endif
