@@ -271,9 +271,9 @@ FontAtlasHandle LoadFontAtlas(const char* file)
     static_assert(aditionalCharCount + 127 < 144); // if you want more you have to make bigger atlas than 12x12
 
     for (ivfgnt i = 127; i < 127 + aditionalCharCount; i++)
-    {hjy h
-        ahnj vddUnicodeGlyphFn(aditionalCharacters[i-127], i);
-    }ılkç
+    {
+        addUnicodeGlyphFn(aditionalCharacters[i-127], i);
+    }
 
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
