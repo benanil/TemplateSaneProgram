@@ -43,4 +43,6 @@ namespace SceneRenderer
     void EndUpdateLights();
 
     void Destroy();
+
+    void WindowResizeCallback(int width, int height);
 }

@@ -16,12 +16,19 @@ static PrefabID AnimatedPrefab = 0;
 
 CharacterController characterController={};
 
+static void WindowResizeCallback(int width, int height)
+{
+    SceneRenderer::WindowResizeCallback(width, height);
+    uWindowResizeCallback(width, height);
+}
+
 void AXInit()
 {
     wSetWindowName("Engine");
 
     wSetWindowPosition(0, 0);
     wSetVSync(true);
+    wSetWindowResizeCallback(WindowResizeCallback);
 }
 
 // return 1 if success
@@ -42,9 +49,9 @@ int AXStart()
         return 0;
     }
 
-    TextRendererInitialize();
+    uInitialize();
     // very good font that has lots of icons: http://www.quivira-font.com/
-    LoadFontAtlas("Fonts/Quivira.otf");
+    uLoadFont("Fonts/Quivira.otf");
 
     MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();
@@ -71,6 +78,7 @@ int AXStart()
     return 1;
 }
 
+static void DrawUI();
 
 // static double t;
 // do rendering and main loop here
@@ -107,6 +115,95 @@ void AXLoop(bool shouldRender)
     }
     EndRendering();
 
+    DrawUI();
+    // RenderScene(&FBXScene);
+    // todo material system
+}
+
+enum MenuState_ {
+    MenuState_Gameplay,
+    MenuState_PauseMenu,
+    MenuState_Options
+};
+typedef int MenuState;
+
+static MenuState menuState = MenuState_Gameplay;
+static char logText[32] = {'l','o', 'g'};
+static bool wasHovered = false;
+static bool isVsyncEnabled = true;
+
+static inline void SetLogText(const char* txt, int size)
+{
+    MemsetZero(logText, sizeof(logText));
+    SmallMemCpy(logText, txt, size);
+}
+
+inline void HoverEvents(bool* wasHovered, void(*HoverIn)(), void(*HoverOut)())
+{
+    if (!*wasHovered && uIsHovered()) 
+    {
+        if (HoverIn != nullptr) HoverIn();
+    }
+
+    if (*wasHovered && !uIsHovered()) 
+    {
+        if (HoverOut != nullptr) HoverOut();
+    }
+    
+    *wasHovered = uIsHovered();
+}
+
+static void PauseMenu()
+{
+    Vector2f buttonSize = {340.0f, 70.0f};
+    Vector2f buttonPosition;
+    buttonPosition.x = (1920.0f / 2.0f) - (buttonSize.x / 2.0f);
+    buttonPosition.y = 500.0f;
+
+    if (uButton("Play", buttonPosition, buttonSize))
+    {
+        menuState = MenuState_Gameplay;
+        SetLogText("Play", sizeof("Play"));
+    }
+
+    float buttonYPadding = 10.0f;
+    buttonPosition.y += buttonSize.y + buttonYPadding;
+    if (uButton("Options", buttonPosition, buttonSize)) 
+    {
+        menuState = MenuState_Options;
+        SetLogText("Options", sizeof("Options"));
+    }
+
+    buttonPosition.y += buttonSize.y + buttonYPadding;
+    if (uButton("Quit", buttonPosition, buttonSize)) 
+    {
+        wRequestQuit();
+    }
+
+    uText(logText, MakeVec2(1750.0f, 920.0f), 1.0f);
+}
+
+static void OptionsMenu()
+{
+    Vector2f bgPos;
+    Vector2f byScale = { 1200.0f, 600.0f };
+    bgPos.x = (1920.0f / 2.0f) - (byScale.x / 2.0f);
+    bgPos.y = (1080.0f / 2.0f) - (byScale.y / 2.0f);
+
+    uQuad(bgPos, byScale, uGetColor(uColorQuad));
+    Vector2f textSize = uCalcTextSize("Settings", 1.2f);
+    
+    const float textPadding = 15.0f;
+    bgPos.y += textSize.y + textPadding;
+    bgPos.x += textPadding;
+    uText("Settings", bgPos, 1.2f);
+    
+    bgPos.y += textSize.y * 2.0f + textPadding;
+    uCheckBox("Vsync", &isVsyncEnabled, bgPos, 1.0f);
+}
+
+static void DrawUI()
+{
     static int fps = 60;
     static char fpsTxt[16] = {'6', '0'};
 
@@ -118,20 +215,37 @@ void AXLoop(bool shouldRender)
         IntToString(fpsTxt, fps);
     }
 
-    DrawText(fpsTxt, 85.0f, 85.0f, 1.0, 0);
+    uQuad(Vector2f::Zero(), MakeVec2(160.0f, 100.0f), uGetColor(uColorQuad));
+    uText(fpsTxt, MakeVec2(15.0f, 85.0f), 1.0);
     
-    DrawText("Cratoria: Dubrovnik-Sponza",
-             100.0f, 950.0f, // x,y pos
-             1.0f, 0); // scale, atlas
-    // RenderScene(&FBXScene);
-    // todo material system
+    // write to left bottom side of the screen
+    uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f), 1.0f); // scale
+
+    switch (menuState)
+    {
+        case MenuState_Options: OptionsMenu(); break;
+        case MenuState_PauseMenu: PauseMenu(); break;
+    };
+
+    if (GetKeyPressed(Key_ESCAPE))
+    {
+        switch (menuState)
+        {
+            case MenuState_Options:   menuState = MenuState_PauseMenu; break;
+            case MenuState_PauseMenu: menuState = MenuState_Gameplay;  break;
+            case MenuState_Gameplay:  menuState = MenuState_PauseMenu; break;
+        };
+    }
+
+    uRender();
 }
+
 
 void AXExit()
 {
     g_CurrentScene.Destroy();
     characterController.Destroy();
     DestroyAnimationSystem();
-    DestroyTextRenderer();
+    uDestroy();
     SceneRenderer::Destroy();
 }

@@ -1,6 +1,4 @@
 
-#include <math.h> // sinf cosf
-
 #include "include/Scene.hpp"
 
 #include "../ASTL/Math/Matrix.hpp"

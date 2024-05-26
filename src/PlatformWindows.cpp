@@ -58,6 +58,7 @@ struct PlatformContextWin
     double   DeltaTime;
 
     bool VSyncActive;
+    bool ShouldClose;
 } PlatformCtx;
 
 static char WindowName[64] = { 'S', 'a', 'n', 'e', 'E', 'n', 'g', 'i', 'n', 'e' };
@@ -68,6 +69,9 @@ void SetMouseMoveCallback    (void(*callback)(float, float)) { PlatformCtx.Mouse
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback; }
 void wSetWindowMoveCallback  (void(*callback)(int, int))     { PlatformCtx.WindowMoveCallback   = callback; }
 
+void wRequestQuit() {
+    PlatformCtx.ShouldClose = true;
+}
 
 void wGetWindowSize(int* x, int* y) { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
 void wGetWindowPos (int* x, int* y) { *x = PlatformCtx.WindowPosX;   *y = PlatformCtx.WindowPosY;   }
@@ -498,7 +502,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     if (AXStart() == 0)
 	return 1; // user defined startup failed
 
-    while (true)
+    while (!PlatformCtx.ShouldClose)
     {   
         MSG msg;
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))

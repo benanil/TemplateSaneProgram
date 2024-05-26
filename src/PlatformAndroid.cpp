@@ -51,6 +51,7 @@ struct PlatformContextAndroid
     bool VSyncActive;
     bool RendererInitialized;
     bool ShouldRender;
+    bool ShouldClose;
 
     Touch Fingers[NumTouch];
 
@@ -67,6 +68,10 @@ void SetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseM
 
 void wGetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
 void wGetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowWidth; *height = PlatformCtx.WindowHeight; }
+
+void wRequestQuit() {
+    PlatformCtx.ShouldClose = true;
+}
 
 void UpdateRenderArea()
 {
@@ -289,6 +294,7 @@ void android_main(android_app *pApp)
     uint64 currentTime    = PerformanceCounter();
     uint64 prevTime       = currentTime;
     PlatformCtx.StartTime = currentTime;
+    PlatformCtx.ShouldClose = false;
     AXInit();
 
     do
@@ -329,7 +335,7 @@ void android_main(android_app *pApp)
             PlatformCtx.FingerReleased = 0;
             PlatformCtx.FingerPressed = 0;
         }
-    } while (!pApp->destroyRequested);
+    } while (!pApp->destroyRequested || !PlatformCtx.ShouldClose);
 
     end_loop:
     {

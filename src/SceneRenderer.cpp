@@ -209,7 +209,7 @@ static void DeleteFrameBuffers()
     DeleteSSAOFrameBuffer();
 }
 
-static void WindowResizeCallback(int width, int height)
+void WindowResizeCallback(int width, int height)
 {
     int smallerWidth  = GetRBWidth(width, height);
     int smallerHeight = GetRBHeight(width, height);
@@ -401,7 +401,6 @@ void Init()
     CreateFrameBuffers(windowStartSize.x, windowStartSize.y);
 
     m_Camera.Init(windowStartSize);
-    wSetWindowResizeCallback(WindowResizeCallback);
 
     SetupShadowRendering();
 

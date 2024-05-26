@@ -8,7 +8,7 @@
 
 #pragma once
 
-#if defined(_DEBUG) || defined(DEBUG)
+#if defined(_DEBUG) || defined(DEBUG) || defined(Debug)
 #ifdef __ANDROID__
     #include <android/log.h>
     #define AX_ERROR(format, ...) { __android_log_print(ANDROID_LOG_FATAL, "AX-FATAL", "%s -line:%i " format, GetFileName(__FILE__), __LINE__, ##__VA_ARGS__); ASSERT(0);}
@@ -68,6 +68,7 @@ void wSetFocusChangedCallback(void(*callback)(bool focused));
 void wSetWindowResizeCallback(void(*callback)(int, int));
 void wGetWindowSize(int* x, int* y);
 void wGetMonitorSize(int* width, int* height);
+void wRequestQuit();
 
 ////////                Keyboard             ////////
 

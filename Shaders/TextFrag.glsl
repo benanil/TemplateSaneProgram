@@ -6,7 +6,8 @@ out vec4 Result;
 #endif
 
 uniform lowp sampler2D atlas;
-in mediump vec2 texCoord;
+in mediump vec2 vTexCoord;
+in lowp vec4 vColor;
 
 float saturate(float x) {
     return clamp(x, 0.0, 1.0);
@@ -20,10 +21,10 @@ float contour(float dist, float edge, float width) {
 // #define SHADOW
 void main() 
 {
-    float dist  = texture(atlas, texCoord).r;
+    float dist  = texture(atlas, vTexCoord).r;
     float width = fwidth(dist);
     
-    vec4 textColor = vec4(1.0);
+    vec4 textColor = vColor;
     float outerEdge = 0.5;
 
     float alpha = contour(dist, outerEdge, width);
@@ -49,7 +50,7 @@ void main()
 
         // https://github.com/mattdesl/gl-sprite-text/blob/master/demo/sdf/frag.glsl
         vec2 texelSize = vec2(1.0) / vec2(CharSize);
-        float dist2 = texture(atlas, texCoord - texelSize * ShadowDist).r;
+        float dist2 = texture(atlas, vTexCoord - texelSize * ShadowDist).r;
 
         vec4 glowColor = vec4(0.1, 0.1, 0.1, 1.0);
         vec4 glow = glowColor * smoothstep(glowMin, glowMax, dist2);

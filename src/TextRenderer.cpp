@@ -54,54 +54,125 @@ struct FontAtlas
     int ascent, descent, lineGap;
 };
 
-namespace 
+// we will store this in RGBA32u texture, efficient than storing for each vertex
+// 16 byte per quad: 4 byte for each vertex, we even have empty padding =)
+// x = half2:size,
+// y = character: uint8, depth: uint8, scale: half
+// z = rgba8 color, w = empty
+struct TextData
 {
+    uint size;
+    uint8 character, depth;
+    half scale;
+    uint color;
+    uint padd;
+};
+
+namespace
+{
+    uint mColors[] = { 
+        ~0u, 0x8C000000u, // uColorText, uColorQuad
+        0x8CFFFFFFu // uColorHover
+    };
+    const int NumColors = sizeof(mColors) / sizeof(uint);
+
     FontAtlas mFontAtlases[4] = {};
-    Shader fontShader;
-    Texture mPosTexture;
-    Texture mScaleTexture;
-    Texture mCharTexture;
-    int mCurrentFontAtlas = 0;
+    FontAtlas* mCurrentFontAtlas;
+    int mNumFontAtlas = 0;
+
+    Shader mFontShader;
+    Texture mPosTex;
+    Texture mDataTex; // x = half2:size, y = character: uint8, depth: uint8, scale: half  
+
+    Vector2f mTextPositions[MaxCharacters];
+    TextData mTextData[MaxCharacters];
+
+    Vector2f mWindowRatio; // ratio against 1920x1080, [1.0, 1.0] if 1080p 0.5 if half of it, 2.0 if two times bigger
+    float mUIScale; // min(mWindowRatio.x, mWindowRatio.y)
+
+    bool mWasHovered = false; // last button was hovered?
+
+    int mNumChars = 0; // textLen without spaces, or undefined characters    
+    char mCurrentDepth;
     bool mInitialized = false;
     // uniform locations
-    int posTexLoc, sizeTexLoc, charTexLoc, atlasLoc, uScrSizeLoc, uScaleLoc;
+    int posTexLoc, dataTexLoc, atlasLoc, uScrSizeLoc, uScaleLoc;
+
+    //------------------------------------------------------------------------
+    // Quad Batch renderer
+    const int MaxQuads = 512;
+
+    Shader mQuadShader;
+
+    Vector2f mQuadPositions[MaxQuads];
+    Vector2i mQuadData[MaxQuads];
+
+    Texture mQuadPosTex;
+    Texture mQuadDataTex;
+
+    int mQuadIndex = 0;
+    // uniform locations
+    int posTexLocQuad, dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad;
 }
 
-void TextRendererInitialize()
+void uWindowResizeCallback(int width, int height)
 {
-    ScopedText vert = ReadAllText("Shaders/TextVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    ScopedText frag = ReadAllText("Shaders/TextFrag.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    fontShader = rCreateShader(vert.text, frag.text);
+    mWindowRatio = { width / 1920.0f, height / 1080.0f };
+    mUIScale = MIN(mWindowRatio.x, mWindowRatio.y);
+}
+
+void uInitialize()
+{
+    ScopedText fontVert = ReadAllText("Shaders/TextVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText fontFrag = ReadAllText("Shaders/TextFrag.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    mFontShader = rCreateShader(fontVert.text, fontFrag.text);
     
     // per character textures
-    mPosTexture   = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RG32F , TexFlags_RawData);
-    mScaleTexture = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RG16F , TexFlags_RawData);
-    mCharTexture  = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_R8UI, TexFlags_RawData);
+    mPosTex  = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RG32F , TexFlags_RawData);
+    // we will store mTextData array in this texture
+    mDataTex = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
     
-    rBindShader(fontShader);
-    posTexLoc    = rGetUniformLocation("posTex");
-    sizeTexLoc   = rGetUniformLocation("sizeTex");
-    charTexLoc   = rGetUniformLocation("charTex");
-    atlasLoc     = rGetUniformLocation("atlas");
-    uScrSizeLoc  = rGetUniformLocation("uScrSize");
-	uScaleLoc    = rGetUniformLocation("uScale");
-    mInitialized = true;
+    rBindShader(mFontShader);
+    posTexLoc     = rGetUniformLocation("posTex");
+    dataTexLoc    = rGetUniformLocation("dataTex");
+    atlasLoc      = rGetUniformLocation("atlas");
+    uScrSizeLoc   = rGetUniformLocation("uScrSize");
+	uScaleLoc     = rGetUniformLocation("uScale");
+    mInitialized  = true;
+    mCurrentFontAtlas = nullptr, mCurrentDepth = 0;
+    
+    ScopedText quadVert = ReadAllText("Shaders/QuadBatch.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText quadFrag = ReadAllText("Shaders/QuadFrag.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    mQuadShader = rCreateShader(quadVert.text, quadFrag.text);
+    
+    // per character textures
+    mQuadPosTex  = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RG32F , TexFlags_RawData);
+    mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RG32UI, TexFlags_RawData);
+    
+    rBindShader(mQuadShader);
+    posTexLocQuad   = rGetUniformLocation("posTex");
+    dataTexLocQuad  = rGetUniformLocation("dataTex");
+    uScrSizeLocQuad = rGetUniformLocation("uScrSize");
+    uScaleLocQuad   = rGetUniformLocation("uScale");
 }
 
-void DestroyTextRenderer()
+void uDestroy()
 {
     if (!mInitialized) 
         return;
-    rDeleteShader(fontShader);
-    rDeleteTexture(mPosTexture);
-    rDeleteTexture(mScaleTexture);
-    rDeleteTexture(mCharTexture);
+    rDeleteShader(mFontShader);
+    rDeleteTexture(mPosTex);
+    rDeleteTexture(mDataTex);
 
-    for (int i = 0; i < mCurrentFontAtlas; i++) {
+    for (int i = 0; i < mNumFontAtlas; i++) {
         Texture fakeTex;
         fakeTex.handle = mFontAtlases[i].textureHandle;
         rDeleteTexture(fakeTex);
     }
+
+    rDeleteShader(mQuadShader);
+    rDeleteTexture(mQuadPosTex);
+    rDeleteTexture(mQuadDataTex);
 }
 
 static void WriteGlyphToAtlass(int i, 
@@ -166,9 +237,9 @@ static bool BFTLastVersion(const char* path)
     return version == AtlasVersion;
 }
 
-FontAtlasHandle LoadFontAtlas(const char* file)
+FontHandle uLoadFont(const char* file)
 {
-    ASSERT(mCurrentFontAtlas < 4); // max 4 atlas for now
+    ASSERT(mNumFontAtlas < 4); // max 4 atlas for now
     // 12 is sqrt(128)
     unsigned char image[AtlasWidth][AtlasWidth] = {0};
 
@@ -181,10 +252,11 @@ FontAtlasHandle LoadFontAtlas(const char* file)
         ChangeExtension(path, pathLen, "bft");
         if (FileExist(path) && BFTLastVersion(path))
         {
-            currentAtlas = &mFontAtlases[mCurrentFontAtlas++];
+            currentAtlas = &mFontAtlases[mNumFontAtlas++];
             LoadFontAtlasBin(path, currentAtlas, image);
             currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
-            return mCurrentFontAtlas - 1;
+            mCurrentFontAtlas = currentAtlas;
+            return mNumFontAtlas - 1;
         }
     }
 #if AX_GAME_BUILD == 0
@@ -201,7 +273,7 @@ FontAtlasHandle LoadFontAtlas(const char* file)
     int res = stbtt_InitFont(&info, data.ptr, 0);
     ASSERT(res != 0);
     
-    currentAtlas = &mFontAtlases[mCurrentFontAtlas++];
+    currentAtlas = &mFontAtlases[mNumFontAtlas++];
     currentAtlas->cellCount = CellCount;
     currentAtlas->charSize  = CellSize;
     stbtt_GetFontVMetrics(&info, &currentAtlas->ascent, &currentAtlas->descent, &currentAtlas->lineGap);
@@ -280,7 +352,7 @@ FontAtlasHandle LoadFontAtlas(const char* file)
 #else
     AX_UNREACHABLE();
 #endif
-    return mCurrentFontAtlas-1;
+    return mNumFontAtlas-1;
 }
 
 struct UTF8Table
@@ -370,13 +442,46 @@ inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
     return '-';
 }
 
+static inline Vector2i GetWindowSize()
+{
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
+    return windowSize;
+}
 
+void uSetFont(FontHandle font) {
+    mCurrentFontAtlas = &mFontAtlases[font];
+}
+
+void uSetDepth(char depth) {
+    mCurrentDepth = depth;
+}
+
+void uSetTheme(uColor what, uint color) {
+    mColors[what] = color;
+}
+
+uint uGetColor(uColor color) {
+    return mColors[color];
+}
+
+void uSetTheme(uint* colors) {
+    SmallMemCpy(mColors, colors, sizeof(colors));
+}
+
+bool uIsHovered() {
+    return mWasHovered;
+}
 // reference resolution is always 1920x1080,
 // we will remap input position and scale according to current window size
 
 // todo: allow different scales 
-void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle)
+void uText(const char* text, Vector2f position, float scale)
 {
+    ASSERT(mInitialized == true);
+    ASSERT(text != nullptr)
+    ASSERT(mCurrentFontAtlas != nullptr); // you have to initialize at least one font
+    
     int txtLen = 0, txtSize = 0;
     {
         const char* s = text;
@@ -387,34 +492,20 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
             s++;
         }
     }
-    
-    ASSERT(atlasHandle < mCurrentFontAtlas); // you have to initialize at least one font
     ASSERT(txtLen < MaxCharacters);
-    ASSERT(mInitialized == true);
 
-    Vector2i windowSize;
-    wGetWindowSize(&windowSize.x, &windowSize.y);
-
-    Vector2f ratio = { windowSize.x / 1920.0f, windowSize.y / 1080.0f };
-    xPos *= ratio.x;
-    yPos *= ratio.y;
-
-    FontAtlas* fontAtlas = &mFontAtlases[atlasHandle];
-    float spaceWidth = (float)fontAtlas->characters['0'].width;
-
-    Vector2f positions[MaxCharacters];
-    Vector2h sizes[MaxCharacters];
-    uint8 charData[MaxCharacters];
-    int numChars = 0; // textLen without spaces, or undefined characters
-    
-    scale *= MIN(ratio.x, ratio.y);
+    position *= mWindowRatio;
+    float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
+    scale *= mUIScale;
+    uint color = mColors[uColorText];
 
     const char* textEnd = text + txtSize;
+    ushort scaleFP16 = ConvertFloatToHalf(scale);
     // fill per quad data
     while (text < textEnd)
     {
         if (*text == ' ') {
-            xPos += spaceWidth * scale * 0.5f * ratio.x;
+            position.x += spaceWidth * scale * 0.5f * mWindowRatio.x;
             text++;
             continue;
         }
@@ -424,48 +515,192 @@ void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHa
         text += TextCharFromUtf8(&unicode, text, textEnd);
         chr = UnicodeToAtlasIndex(unicode);
 
-        const FontChar& character = fontAtlas->characters[chr];
-        {
-            Vector2f size;
-            size.x = float(character.width) * scale;
-            size.y = float(character.height) * scale;
-            sizes[numChars].x = ConvertFloatToHalf(size.x);
-            sizes[numChars].y = ConvertFloatToHalf(size.y);
-        }
-        {
-            Vector2f pos = { xPos, yPos };
-            pos.x += float(character.xoff) * scale;
-            pos.y += float(character.yoff) * scale;
-            positions[numChars] = pos;
-        }
-        {
-            charData[numChars] = chr;
-        }
+        const FontChar& character = mCurrentFontAtlas->characters[chr];
+        // pack per quad data:
+        // x = half2:size, y = character: uint8, depth: uint8, scale: half  
+        Vector2f size;
+        size.x = float(character.width) * scale;
+        size.y = float(character.height) * scale;
+        mTextData[mNumChars].size  = ConvertFloatToHalf(size.x);
+        mTextData[mNumChars].size |= uint(ConvertFloatToHalf(size.y)) << 16;
 
-        // xPos += (padding-1) * scale;
-        xPos += character.advence * scale;
-        numChars++;
+        mTextData[mNumChars].character = chr;  
+        mTextData[mNumChars].depth = mCurrentDepth;
+        mTextData[mNumChars].scale = scaleFP16;
+        mTextData[mNumChars].color = color;
+
+        Vector2f pos = position;
+        pos.x += float(character.xoff) * scale;
+        pos.y += float(character.yoff) * scale;
+        mTextPositions[mNumChars] = pos;
+
+        position.x += character.advence * scale;
+        mNumChars++;
     }
-    
-    rBindShader(fontShader);
+}
+
+void uRenderTexts()
+{
+    rBindShader(mFontShader);
     rSetBlending(true);
     rSetBlendingFunction(rBlendFunc_Alpha, rBlendFunc_OneMinusAlpha);
 
     {
-        rUpdateTexture(mPosTexture, positions);
-        rUpdateTexture(mScaleTexture, sizes);
-        rUpdateTexture(mCharTexture, charData);
-
-        rSetTexture(mPosTexture  , 0, posTexLoc);
-        rSetTexture(mScaleTexture, 1, sizeTexLoc);
-        rSetTexture(mCharTexture , 2, charTexLoc);
+        rUpdateTexture(mPosTex, mTextPositions);
+        rUpdateTexture(mDataTex, mTextData);
+        rSetTexture(mPosTex , 0, posTexLoc);
+        rSetTexture(mDataTex, 1, dataTexLoc);
     }
-    rSetTexture(fontAtlas->textureHandle, 3, atlasLoc);
+    rSetTexture(mCurrentFontAtlas->textureHandle, 3, atlasLoc);
 
+    Vector2i windowSize = GetWindowSize();
     rSetShaderValue(&windowSize.x, uScrSizeLoc, GraphicType_Vector2i);
-    rSetShaderValue(scale, uScaleLoc);
 
-    rRenderMeshNoVertex(6 * numChars); // 6 index for each char
-
+    rRenderMeshNoVertex(6 * mNumChars); // 6 index for each char
+    mNumChars = 0;
     rSetBlending(false);
+}
+
+Vector2f uCalcTextSize(const char* text, float scale)
+{
+    float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
+    const char* textEnd = text + StringLength(text);
+
+    Vector2f size = {0.0f, 0.0f};
+    short lastXoff, lastWidth;
+    unsigned int chr;
+
+    while (*text)
+    {
+        if (*text == ' ') {
+            size.x += spaceWidth * scale * 0.5f * mWindowRatio.x;
+            text++;
+            continue;
+        }
+
+        unsigned int unicode;
+        text += TextCharFromUtf8(&unicode, text, textEnd);
+        chr = UnicodeToAtlasIndex(unicode);
+        
+        const FontChar& character = mCurrentFontAtlas->characters[chr];
+        lastXoff  = character.xoff;
+        lastWidth = character.width;
+        size.x += character.advence * scale;
+        size.y = MAX(size.y, character.height * scale);
+    }
+    // size.x += (lastWidth + lastXoff) * scale;
+    return size;
+}
+
+
+//------------------------------------------------------------------------
+// Quad Drawing
+void uQuad(Vector2f position, Vector2f scale, uint color)
+{
+    ASSERT(mQuadIndex < MaxQuads);
+    if (mQuadIndex >= MaxQuads) return;
+
+    mQuadPositions[mQuadIndex] = position * mWindowRatio;
+
+    mQuadData[mQuadIndex].x  = ConvertFloatToHalf(scale.x);
+    mQuadData[mQuadIndex].x |= uint32_t(ConvertFloatToHalf(scale.y)) << 16;
+    
+    mQuadData[mQuadIndex].y = color;
+    mQuadIndex++;
+}
+
+static void uRenderQuads()
+{
+    Vector2i windowSize = GetWindowSize();
+    rSetBlending(true);
+    rSetBlendingFunction(rBlendFunc_Alpha, rBlendFunc_OneMinusAlpha);
+
+    rBindShader(mQuadShader);
+
+    rUpdateTexture(mQuadPosTex, mQuadPositions);
+    rUpdateTexture(mQuadDataTex, mQuadData);
+
+    rSetTexture(mQuadPosTex , 0, posTexLocQuad);
+    rSetTexture(mQuadDataTex, 1, dataTexLocQuad);
+    
+    rSetShaderValue(&mWindowRatio.x, uScaleLocQuad, GraphicType_Vector2f);
+    rSetShaderValue(&windowSize.x, uScrSizeLocQuad, GraphicType_Vector2i);
+
+    rRenderMeshNoVertex(6 * mQuadIndex); // 6 index for each char
+
+    mQuadIndex = 0;
+       
+    rSetBlending(false);
+}
+
+static bool ClickCheck(Vector2f pos, Vector2f scale)
+{
+    Vector2f mousePos;
+    GetMouseWindowPos(&mousePos.x, &mousePos.y);
+    
+    Vector2f scaledPos = pos * mWindowRatio;
+    Vector2f scaledScale = scale * mWindowRatio;
+    mWasHovered = PointBoxIntersection(scaledPos, scaledPos + scaledScale, mousePos);
+    bool pressed = mWasHovered && GetMouseReleased(MouseButton_Left);
+    return pressed;
+}
+
+//------------------------------------------------------------------------
+bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
+{
+    bool pressed = ClickCheck(pos, scale);
+
+    uint quadColor = mColors[uColorQuad];
+    if (mWasHovered || opt == uButtonOptions_Hovered)
+        quadColor = mColors[uColorHovered];
+
+    uQuad(pos, scale, quadColor);
+    if (!text) return pressed;
+    
+    Vector2f textSize = uCalcTextSize(text, 1.0f);
+    // align text to the center of the button
+    Vector2f padding = (scale - textSize) * 0.5f;
+    pos.y += textSize.y;
+    pos += padding;
+    uText(text, pos, 1.0f);
+    return pressed;
+}
+
+bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, float scale)
+{
+    Vector2f textSize = uCalcTextSize(text, scale);
+    uText(text, pos, 1.0f);
+
+    const float boxPadding = 10.0f;
+    Vector2f boxScale = { textSize.y, textSize.y };
+    pos.x += textSize.x + boxPadding;
+    pos.y -= textSize.y;
+
+    uQuad(pos, boxScale, 0x7BCDABCDu);
+
+    bool enabled = *isEnabled;
+    if (ClickCheck(pos, boxScale)) {
+        enabled = !enabled;
+    }
+
+    if (enabled) {
+        const char* checkmark = IC_CHECK_MARK;
+        pos.y += textSize.y;
+        uText(checkmark, pos, scale);
+    }
+
+    bool changed = enabled != *isEnabled;
+    *isEnabled = enabled;
+    return changed;
+}
+
+bool uSlider(Vector2f pos, float* val, float scale)
+{
+    return false;
+}
+
+void uRender()
+{
+    uRenderQuads();
+    uRenderTexts();
 }

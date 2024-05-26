@@ -1,5 +1,8 @@
 
 #pragma once
+
+#include "../../ASTL/Math/Vector.hpp"
+
 // usefull icons. Usage:  DrawText(IC_ALARM ": 12:00pm, " IC_CIRCLE) // c string concatanation
 #define IC_LEFT_TRIANGLE "\xE2\x8F\xB4"
 #define IC_RIGHT_TRIANGLE "\xE2\x8F\xB5"
@@ -16,20 +19,47 @@
 #define IC_STAR "\xE2\x98\x85"
 
 
-typedef int FontAtlasHandle;
-
 enum {
-    InvalidFontHandle = -1   
+    InvalidFontHandle = -1,
+    uOptNone = 0
 };
+typedef int FontHandle;
 
-FontAtlasHandle LoadFontAtlas(const char* file);
+enum uColor_{
+  uColorText, uColorQuad, uColorHovered  
+};
+typedef int uColor;
+
+enum uButtonOptions_ { // bitmask
+    uButtonOptions_Hovered = 1
+};
+typedef int uButtonOptions;
+
+
+// also sets the current font to the loaded font
+FontHandle uLoadFont(const char* file);
+
+void uInitialize();
+
+void uSetFont(FontHandle font);
+void uSetDepth(char depth);
+void uSetColor(uColor what, uint color); // set color of the buttons, texts etc.
+void uSetTheme(uint* colors);
+
+uint uGetColor(uColor color);
+bool uIsHovered(); // last button was hovered?
 
 // text is an utf8 string
-void DrawText(const char* text, float xPos, float yPos, float scale, FontAtlasHandle atlasHandle = 0);
+void uText(const char* text, Vector2f position, float scale);
+bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt = 0); // returns true if clicked
+void uQuad(Vector2f position, Vector2f scale, uint color);
+bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, float scale);
+bool uSlider(Vector2f pos, float* val, float scale); // val should be between 0 and 1
 
-void TextRendererInitialize();
+Vector2f uCalcTextSize(const char* text, float scale);
 
-void DestroyTextRenderer();
+void uRender();
 
+void uWindowResizeCallback(int width, int height);
 
-
+void uDestroy();

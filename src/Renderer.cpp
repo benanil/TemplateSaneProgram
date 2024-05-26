@@ -682,12 +682,11 @@ static void CheckShaderError(uint shader)
     glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
     if (isCompiled == GL_FALSE)
     {
-        GLint maxLength = 1024;
-        char infoLog[1024]={};
+        GLint maxLength = 2048;
+        char infoLog[2048]={};
         glGetShaderInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);
-        rDestroyRenderer();
     }
 }
 
@@ -697,12 +696,11 @@ static void CheckLinkerError(uint shader)
     glGetProgramiv(shader, GL_LINK_STATUS, &isCompiled);
     if (isCompiled == GL_FALSE)
     {
-        GLint maxLength = 1024;
-        char infoLog[1024]={};
+        GLint maxLength = 2048;
+        char infoLog[2048]={};
         glGetProgramInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader compile error: %s", infoLog);
         glDeleteShader(shader);
-        rDestroyRenderer();
     }
 }
 

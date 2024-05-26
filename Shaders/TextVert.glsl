@@ -1,23 +1,13 @@
 
 // per character textures
-uniform highp  sampler2D posTex;  // vec2 fp32
-uniform highp  sampler2D sizeTex; // vec2 fp16
-uniform lowp  usampler2D charTex; // uint8
+uniform highp sampler2D posTex;  // vec2 fp32
+// x = half2:size, y = character: uint8, depth: uint8, scale: half
+uniform highp usampler2D dataTex; 
 
 uniform ivec2 uScrSize;
-uniform float uScale;
 
-out mediump vec2 texCoord;
-
-mat4 OrthoRH(float right, float top)
-{
-    mat4 res = mat4(0.0);
-    res[0][0] = 2.0 / right;
-    res[1][1] = 2.0 / top;
-    res[2][2] = -0.0033333333;// -2.0 / (zFar);//
-    res[3] = vec4(-1.0f, -1.0f, -1.0f, 1.0);
-    return res;
-}
+out mediump vec2 vTexCoord;
+out lowp vec4 vColor;
 
 void main() 
 {
@@ -26,19 +16,29 @@ void main()
 
     // ----    Create Vertex    ----
     vec2 pos  = texelFetch(posTex , ivec2(quadID, 0), 0).rg;
-    vec2 size = texelFetch(sizeTex, ivec2(quadID, 0), 0).rg;
-    float uScrHeight = float(uScrSize.y);
+   
+    // read per quad data
+    uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
+    // unpack per quad data
+    lowp uint depth     = (data.y >> 8) & 0xFFu; // unused for now
+    lowp uint character = data.y & 0xFFu; // corresponds to ascii character, used for atlas indexing
+    float scale = unpackHalf2x16(data.y).y;
+    vec2 size   = unpackHalf2x16(data.x);
+    vColor      = unpackUnorm4x8(data.z);
 
+    // ----    Create Vertex    ----
+    vec2 scrSize = vec2(uScrSize);
     vec2 vertices[6];
-    vertices[0] = vec2(pos.x         , uScrHeight - (pos.y         ));
-    vertices[1] = vec2(pos.x         , uScrHeight - (pos.y + size.y));
-    vertices[2] = vec2(pos.x + size.x, uScrHeight - (pos.y         ));
-    vertices[4] = vec2(pos.x + size.x, uScrHeight - (pos.y + size.y));
+    vertices[0] = vec2(pos.x         , scrSize.y - (pos.y         ));
+    vertices[1] = vec2(pos.x         , scrSize.y - (pos.y + size.y));
+    vertices[2] = vec2(pos.x + size.x, scrSize.y - (pos.y         ));
+    vertices[4] = vec2(pos.x + size.x, scrSize.y - (pos.y + size.y));
     vertices[5] = vertices[2]; // reuse vertex 2
     vertices[3] = vertices[1]; // reuse vertex 1 
 
-    mat4 proj = OrthoRH(float(uScrSize.x), uScrHeight);
-    gl_Position = proj * vec4(vertices[vertexID], 0.0, 1.0);
+    vec2 proj = 2.0 / scrSize;
+    vec2 translate = proj * vertices[vertexID] - 1.0;
+    gl_Position = vec4(translate, 0.0, 1.0);
 
     // ----    Create UV    ----
     const mediump vec2 uvs[6] = vec2[6](
@@ -54,15 +54,14 @@ void main()
     const float cellWidth  = 1.0 / CellSize;
     const float cellHeight = 1.0 / CellSize;
 
-    lowp uint character = texelFetch(charTex, ivec2(quadID, 0), 0).r;
     float u = float(character % 12u) / CellSize;
     float v = float(character / 12u) / CellSize;
     
-    float CharSize = 48.0 * uScale;
+    float CharSize = 48.0 * scale;
     float us = size.x / CharSize;
     float vs = size.y / CharSize;
     mediump vec2 uv = uvs[vertexID];
     // Calculate the UV coordinates within the character cell
     uv = vec2(u + (uv.x * cellWidth * us), v + (uv.y * cellHeight * vs));
-    texCoord = uv;
+    vTexCoord = uv;
 }
