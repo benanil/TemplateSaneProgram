@@ -7,7 +7,7 @@
 #include "include/SceneRenderer.hpp"
 #include "include/CharacterController.hpp"
 #include "include/Camera.hpp"
-#include "include/TextRenderer.hpp"
+#include "include/UI.hpp"
 
 #include <stdio.h>
 
@@ -22,6 +22,11 @@ static void WindowResizeCallback(int width, int height)
     uWindowResizeCallback(width, height);
 }
 
+static void KeyPressCallback(unsigned key)
+{
+    uKeyPressCallback(key); // send to ui to process
+}
+
 void AXInit()
 {
     wSetWindowName("Engine");
@@ -29,6 +34,7 @@ void AXInit()
     wSetWindowPosition(0, 0);
     wSetVSync(true);
     wSetWindowResizeCallback(WindowResizeCallback);
+    wSetKeyPressCallback(KeyPressCallback);
 }
 
 // return 1 if success
@@ -78,7 +84,8 @@ int AXStart()
     return 1;
 }
 
-static void DrawUI();
+// from Menu.cpp
+extern void ShowMenu();
 
 // static double t;
 // do rendering and main loop here
@@ -97,147 +104,27 @@ void AXLoop(bool shouldRender)
 	
     using namespace SceneRenderer;
 	
-    if (!shouldRender)
-        return;
-	
-    BeginShadowRendering(currentScene);
+    if (shouldRender)
     {
-        RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
-        // don't render shadow of character, we will fake it.
-        // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
-    }
-    EndShadowRendering();
+        BeginShadowRendering(currentScene);
+        {
+            RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
+            // don't render shadow of character, we will fake it.
+            // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
+        }
+        EndShadowRendering();
 	
-    BeginRendering();
-    {
-        RenderPrefab(currentScene, GLTFPrefab, nullptr);
-        RenderPrefab(currentScene, AnimatedPrefab, animController);
+        BeginRendering();
+        {
+            RenderPrefab(currentScene, GLTFPrefab, nullptr);
+            RenderPrefab(currentScene, AnimatedPrefab, animController);
+        }
+        EndRendering();
     }
-    EndRendering();
 
-    DrawUI();
+    ShowMenu();
     // RenderScene(&FBXScene);
     // todo material system
-}
-
-enum MenuState_ {
-    MenuState_Gameplay,
-    MenuState_PauseMenu,
-    MenuState_Options
-};
-typedef int MenuState;
-
-static MenuState menuState = MenuState_Gameplay;
-static char logText[32] = {'l','o', 'g'};
-static bool wasHovered = false;
-static bool isVsyncEnabled = true;
-
-static inline void SetLogText(const char* txt, int size)
-{
-    MemsetZero(logText, sizeof(logText));
-    SmallMemCpy(logText, txt, size);
-}
-
-inline void HoverEvents(bool* wasHovered, void(*HoverIn)(), void(*HoverOut)())
-{
-    if (!*wasHovered && uIsHovered()) 
-    {
-        if (HoverIn != nullptr) HoverIn();
-    }
-
-    if (*wasHovered && !uIsHovered()) 
-    {
-        if (HoverOut != nullptr) HoverOut();
-    }
-    
-    *wasHovered = uIsHovered();
-}
-
-static void PauseMenu()
-{
-    Vector2f buttonSize = {340.0f, 70.0f};
-    Vector2f buttonPosition;
-    buttonPosition.x = (1920.0f / 2.0f) - (buttonSize.x / 2.0f);
-    buttonPosition.y = 500.0f;
-
-    if (uButton("Play", buttonPosition, buttonSize))
-    {
-        menuState = MenuState_Gameplay;
-        SetLogText("Play", sizeof("Play"));
-    }
-
-    float buttonYPadding = 10.0f;
-    buttonPosition.y += buttonSize.y + buttonYPadding;
-    if (uButton("Options", buttonPosition, buttonSize)) 
-    {
-        menuState = MenuState_Options;
-        SetLogText("Options", sizeof("Options"));
-    }
-
-    buttonPosition.y += buttonSize.y + buttonYPadding;
-    if (uButton("Quit", buttonPosition, buttonSize)) 
-    {
-        wRequestQuit();
-    }
-
-    uText(logText, MakeVec2(1750.0f, 920.0f), 1.0f);
-}
-
-static void OptionsMenu()
-{
-    Vector2f bgPos;
-    Vector2f byScale = { 1200.0f, 600.0f };
-    bgPos.x = (1920.0f / 2.0f) - (byScale.x / 2.0f);
-    bgPos.y = (1080.0f / 2.0f) - (byScale.y / 2.0f);
-
-    uQuad(bgPos, byScale, uGetColor(uColorQuad));
-    Vector2f textSize = uCalcTextSize("Settings", 1.2f);
-    
-    const float textPadding = 15.0f;
-    bgPos.y += textSize.y + textPadding;
-    bgPos.x += textPadding;
-    uText("Settings", bgPos, 1.2f);
-    
-    bgPos.y += textSize.y * 2.0f + textPadding;
-    uCheckBox("Vsync", &isVsyncEnabled, bgPos, 1.0f);
-}
-
-static void DrawUI()
-{
-    static int fps = 60;
-    static char fpsTxt[16] = {'6', '0'};
-
-    double timeSinceStart = TimeSinceStartup();
-    if (timeSinceStart - (float)int(timeSinceStart) < 0.1)
-    {
-        double dt = GetDeltaTime();
-        fps = (int)(1.0 / dt);
-        IntToString(fpsTxt, fps);
-    }
-
-    uQuad(Vector2f::Zero(), MakeVec2(160.0f, 100.0f), uGetColor(uColorQuad));
-    uText(fpsTxt, MakeVec2(15.0f, 85.0f), 1.0);
-    
-    // write to left bottom side of the screen
-    uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f), 1.0f); // scale
-
-    switch (menuState)
-    {
-        case MenuState_Options: OptionsMenu(); break;
-        case MenuState_PauseMenu: PauseMenu(); break;
-    };
-
-    if (GetKeyPressed(Key_ESCAPE))
-    {
-        switch (menuState)
-        {
-            case MenuState_Options:   menuState = MenuState_PauseMenu; break;
-            case MenuState_PauseMenu: menuState = MenuState_Gameplay;  break;
-            case MenuState_Gameplay:  menuState = MenuState_PauseMenu; break;
-        };
-    }
-
-    uRender();
 }
 
 

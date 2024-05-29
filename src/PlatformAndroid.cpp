@@ -63,14 +63,22 @@ struct PlatformContextAndroid
 
 void wSetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback;}
-void SetKeyPressCallback(void(*callback)(wchar_t))          { PlatformCtx.KeyPressCallback     = callback; }
-void SetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseMoveCallback    = callback;}
+void wSetKeyPressCallback(void(*callback)(unsigned))         { PlatformCtx.KeyPressCallback     = callback; }
+void wSetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.MouseMoveCallback    = callback;}
 
 void wGetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
 void wGetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowWidth; *height = PlatformCtx.WindowHeight; }
 
 void wRequestQuit() {
     PlatformCtx.ShouldClose = true;
+}
+
+const char* wGetClipboardString() {
+    return nullptr;
+}
+
+const char* wSetClipboardString(const char* string) {
+    return false;
 }
 
 void UpdateRenderArea()

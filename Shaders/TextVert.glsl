@@ -38,7 +38,7 @@ void main()
 
     vec2 proj = 2.0 / scrSize;
     vec2 translate = proj * vertices[vertexID] - 1.0;
-    gl_Position = vec4(translate, 0.0, 1.0);
+    gl_Position = vec4(translate, (float(depth) / 255.0), 1.0);
 
     // ----    Create UV    ----
     const mediump vec2 uvs[6] = vec2[6](

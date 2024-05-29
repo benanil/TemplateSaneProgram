@@ -22,7 +22,8 @@ REM src/AssetManager.cpp ^
 REM src/Animation.cpp ^
 REM src/CharacterController.cpp ^
 REM src/Renderer.cpp ^
-REM src/TextRenderer.cpp ^
+REM src/UI.cpp ^
+REM src/Menu.cpp^
 REM src/Scene.cpp ^
 REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
@@ -45,7 +46,8 @@ REM  src/AssetManager.cpp ^
 REM  src/Animation.cpp ^
 REM  src/CharacterController.cpp ^
 REM  src/Renderer.cpp ^
-REM  src/TextRenderer.cpp ^
+REM  src/UI.cpp ^
+REM  src/Menu.cpp ^
 REM  src/Scene.cpp ^
 REM  src/SceneRenderer.cpp ^
 REM  src/Texture.cpp ^

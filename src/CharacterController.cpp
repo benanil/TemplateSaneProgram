@@ -5,7 +5,7 @@
 #include "include/Platform.hpp"
 #include "include/SceneRenderer.hpp"
 #include "include/Camera.hpp"
-#include "include/TextRenderer.hpp"
+#include "include/UI.hpp"
 
 #include "../ASTL/String.hpp" // StringEqual
 

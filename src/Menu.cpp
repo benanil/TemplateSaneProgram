@@ -1,0 +1,262 @@
+
+#include "include/UI.hpp"
+#include "../ASTL/Algorithms.hpp"
+#include "include/Platform.hpp"
+
+enum MenuState_ {
+    MenuState_Gameplay,
+    MenuState_PauseMenu,
+    MenuState_Options
+};
+typedef int MenuState;
+
+static MenuState menuState = MenuState_Gameplay;
+static char logText[32] = {};
+static bool wasHovered = false;
+static bool isVsyncEnabled = true;
+static bool showFPS = true;
+static bool showLocation = true; // shows the scene name
+
+static int currentHover = 0;
+static bool isAnyHovered = false;
+static bool hoveredButtons[3] = {};
+
+static inline void SetLogText(const char* txt, int size)
+{
+    MemsetZero(logText, sizeof(logText));
+    SmallMemCpy(logText, txt, size);
+}
+
+inline void HoverEvents(bool* wasHovered, void(*HoverIn)(), void(*HoverOut)())
+{
+    if (!*wasHovered && uIsHovered()) 
+        if (HoverIn != nullptr) HoverIn();
+
+    if (*wasHovered && !uIsHovered()) 
+        if (HoverOut != nullptr) HoverOut();
+    
+    *wasHovered = uIsHovered();
+}
+
+static void SetAnyHoveredTrue()  { isAnyHovered = true; }
+static void SetAnyHoveredFalse() { isAnyHovered = false; }
+
+static void PauseMenu()
+{
+    Vector2f buttonSize = {340.0f, 70.0f};
+    Vector2f buttonPosition;
+    buttonPosition.x = (1920.0f / 2.0f) - (buttonSize.x / 2.0f);
+    buttonPosition.y = 500.0f;
+
+    uButtonOptions buttonOpt;
+    const char* buttonNames[] = { "Play", "Options", "Quit" };
+    const MenuState targetMenus[] = { MenuState_Gameplay, MenuState_Options, MenuState_PauseMenu };
+    
+    const int numButtons = 3;
+    float buttonYPadding = 10.0f;
+    int clickedButton = -1;
+
+    for (int i = 0; i < numButtons; i++)
+    {
+        buttonOpt = !isAnyHovered && currentHover == i ? uButtonOpt_Hovered : 0;
+        buttonOpt |= uButtonOpt_Border;
+        if (uButton(buttonNames[i], buttonPosition, buttonSize, buttonOpt))
+        {
+            menuState = targetMenus[i];
+            clickedButton = i;
+        }
+        HoverEvents(hoveredButtons + i, SetAnyHoveredTrue, SetAnyHoveredFalse);
+        buttonPosition.y += buttonSize.y + buttonYPadding;
+    }
+
+    if (GetKeyPressed('W') || GetKeyPressed(Key_UP)) {
+        currentHover = currentHover == 0 ? 2 : currentHover-1;
+    }
+
+    if (GetKeyPressed('S') || GetKeyPressed(Key_DOWN)) {
+        currentHover = currentHover == 2 ? 0 : currentHover + 1;
+    }
+
+    if (GetKeyPressed(Key_ENTER)) {
+        menuState = targetMenus[currentHover];
+        clickedButton = currentHover;
+    }
+
+    // clickedQuit
+    if (clickedButton == 2) {
+        wRequestQuit();
+    }
+
+    uText(logText, MakeVec2(1750.0f, 920.0f));
+}
+
+static void OptionsMenu()
+{
+    Vector2f bgPos;
+    Vector2f bgScale = { 1200.0f, 600.0f };
+    bgPos.x = (1920.0f / 2.0f) - (bgScale.x / 2.0f);
+    bgPos.y = (1080.0f / 2.0f) - (bgScale.y / 2.0f);
+    Vector2f pos = bgPos;
+
+    const float textPadding      = 13.0f;
+    const float elementScale     = 0.8f;
+    const float settingsXStart   = 18.0f;
+    const float squareButtonSize = 30.0f;
+    Vector2f zero2 = { 0.0f, 0.0f };
+    
+    float settingElementWidth = bgScale.x / 3.0f;
+    float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
+
+    uPushFloat(ufContentStart, settingElementWidth);
+
+    uQuad(pos, bgScale, uGetColor(uColorQuad));
+    uBorder(pos, bgScale);
+
+    uPushFloat(ufTextScale, 1.2f);
+    Vector2f textSize = uCalcTextSize("Settings");
+    pos.y += textSize.y + textPadding;
+    pos.x += settingsXStart;
+    uText("Settings", pos);
+    uPopFloat(ufTextScale);
+
+    float lineLength = bgScale.x * 0.85f;
+    float xoffset = (bgScale.x - lineLength) * 0.5f; // where line starts
+    pos.x += xoffset;
+    pos.y += 20.0f; // line padding
+    pos.x -= settingsXStart;
+    uLineHorizontal(pos, lineLength);
+    pos.x -= xoffset;
+
+    pos.x += elementsXOffset;
+    pos.y += textSize.y + textPadding;
+
+    static int CurrElement = 0;
+    const int numElements = 6; // number of options plus back button
+    float elementsYStart = pos.y - (textSize.y * 0.42f);
+    float elementsXStart = pos.x;
+    
+    uPushFloat(ufTextScale, elementScale);
+    if (uCheckBox("Vsync", &isVsyncEnabled, pos))
+    {
+        wSetVSync(isVsyncEnabled);
+    }
+
+    textSize.y = uCalcTextSize("V").y;
+    pos.y += textSize.y + textPadding;
+    uCheckBox("Show Fps", &showFPS, pos);
+    
+
+    pos.y += textSize.y + textPadding;
+    uCheckBox("Show Location", &showLocation, pos);
+    
+    pos.y += textSize.y + textPadding;
+    static char name[128] = {};
+    uTextBoxOptions txtOpt = CurrElement == 3;
+    if (uTextBox("Name", pos, zero2, name, txtOpt)) {
+        CurrElement = 3;
+    }
+
+    pos.y += textSize.y + textPadding;
+    static float volume = 0.5f;
+    if (uSlider("Volume", pos, &volume, uGetFloat(ufTextBoxWidth))) {
+        CurrElement = 4;
+    }
+
+    pos = bgPos + bgScale - MakeVec2(200.0f, 100.0f);
+    uButtonOptions buttonOpt = uButtonOpt_Border * (CurrElement == 5);
+    if (uButton("Back", pos, zero2, buttonOpt)) {
+        menuState = MenuState_PauseMenu;
+    }
+    uPopFloat(ufTextScale);
+    uPopFloat(ufContentStart);
+ 
+    // draw selection Border
+    Vector2f borderPos = {elementsXStart, elementsYStart + 
+                                          textSize.y * CurrElement + 
+                                          textPadding * CurrElement};
+    
+    if (CurrElement != 5)
+    {
+        float borderspace = uGetFloat(ufButtonSpace) * 0.8f;
+        borderPos -= borderspace;
+        uBorder(borderPos, MakeVec2(settingElementWidth + borderspace, textSize.y) + borderspace);
+    }
+
+    if (GetKeyPressed(Key_UP))
+        CurrElement = CurrElement == 0 ? numElements - 1 : CurrElement - 1;
+    else if (GetKeyPressed(Key_DOWN) || GetKeyPressed(Key_TAB))
+        CurrElement = CurrElement == numElements - 1 ? 0 : CurrElement + 1;
+
+    if (GetKeyPressed(Key_ENTER))
+    {
+        switch (CurrElement)
+        {
+            case 0:
+                isVsyncEnabled = !isVsyncEnabled; 
+                wSetVSync(isVsyncEnabled); 
+                break;
+            case 1: showFPS = !showFPS; break;
+            case 2: showLocation = !showLocation; break;
+            // case 3: // text edit entered do nothing
+            // case 4: // slider do  nothing
+            case 5: menuState = MenuState_PauseMenu; break;
+        };
+    }
+}
+
+static void ShowFPS()
+{
+    if (!showFPS) return;
+
+    static int fps = 60;
+    static char fpsTxt[16] = {'6', '0'};
+
+    double timeSinceStart = TimeSinceStartup();
+    if (timeSinceStart - (float)int(timeSinceStart) < 0.1)
+    {
+        double dt = GetDeltaTime();
+        fps = (int)(1.0 / dt);
+        IntToString(fpsTxt, fps);
+    }
+
+    uText(fpsTxt, MakeVec2(15.0f, 85.0f));
+}
+
+void ShowMenu()
+{
+    uBegin();
+    uSetFloat(ufTextScale, 1.0f);
+
+    ShowFPS();
+
+    if (IsAndroid() && menuState == MenuState_Gameplay) {
+        if (uButton(IC_PAUSE, MakeVec2(1880.0f, 30.0f), Vector2f::Zero()))
+        {
+            menuState = MenuState_PauseMenu;
+        }
+    }
+
+    if (showLocation) {
+        // write to left bottom side of the screen
+        uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
+    }
+
+    switch (menuState)
+    {
+        case MenuState_Options: OptionsMenu(); break;
+        case MenuState_PauseMenu: PauseMenu(); break;
+    };
+
+    if (GetKeyPressed(Key_ESCAPE))
+    {
+        switch (menuState)
+        {
+            case MenuState_Options:   menuState = MenuState_PauseMenu; break;
+            case MenuState_PauseMenu: menuState = MenuState_Gameplay;  break;
+            case MenuState_Gameplay:  menuState = MenuState_PauseMenu; break;
+        };
+        currentHover = 0;
+    }
+
+    uRender();
+}

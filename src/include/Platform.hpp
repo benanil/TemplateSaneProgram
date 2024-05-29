@@ -66,9 +66,16 @@ void wSetVSync(bool active);
 
 void wSetFocusChangedCallback(void(*callback)(bool focused));
 void wSetWindowResizeCallback(void(*callback)(int, int));
+void wSetKeyPressCallback(void(*callback)(unsigned));
+void wSetMouseMoveCallback(void(*callback)(float, float));
+
 void wGetWindowSize(int* x, int* y);
 void wGetMonitorSize(int* width, int* height);
 void wRequestQuit();
+
+const char* wGetClipboardString();
+bool wSetClipboardString(const char* str); // returns true if success
+
 
 ////////                Keyboard             ////////
 
@@ -82,7 +89,6 @@ bool GetKeyReleased(char c);
 
 bool AnyKeyDown();
 
-void SetKeyPressCallback(void(*callback)(wchar_t));
 
 ////////                Mouse                ////////
 // Mouse is finger in Android, and MouseButton is finger id.
@@ -102,7 +108,6 @@ bool GetMousePressed(MouseButton button);
 
 void GetMousePos(float* x, float* y);
 void GetMouseWindowPos(float* x, float* y);
-void SetMouseMoveCallback(void(*callback)(float, float));
 float GetMouseWheelDelta();
 
 struct Touch
@@ -148,7 +153,7 @@ enum KeyboardKey_
     Key_BACK       = 0x08,   
     Key_TAB        = 0x09,   
     Key_CLEAR      = 0x0C,   
-    Key_RETURN     = 0x0D,   
+    Key_RETURN     = 0x0D, Key_ENTER = 0x0D,
     Key_SHIFT      = 0x10,   
     Key_CONTROL    = 0x11,   
     Key_MENU       = 0x12, // alt key

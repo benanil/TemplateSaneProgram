@@ -27,7 +27,8 @@ add_library(game SHARED
         ../../../../../src/Animation.cpp
         ../../../../../src/CharacterController.cpp
         ../../../../../src/SceneRenderer.cpp
-        ../../../../../src/TextRenderer.cpp
+        ../../../../../src/UI.cpp
+        ../../../../../src/Menu.cpp
         ../../../../../src/AssetManager.cpp
         ../../../../../src/Texture.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp

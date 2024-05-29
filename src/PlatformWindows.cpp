@@ -16,6 +16,7 @@
 #define VMEM_DEBUG_LEVEL 0 
 
 #include <Windows.h>
+#include <bitset>
 
 #include "../ASTL/Common.hpp"
 #include "../ASTL/Algorithms.hpp"
@@ -33,7 +34,7 @@ struct PlatformContextWin
     void(*WindowMoveCallback)  (int, int);
     void(*WindowResizeCallback)(int, int);
     void(*MouseMoveCallback)   (float, float);
-    void(*KeyPressCallback)    (wchar_t);
+    void(*KeyPressCallback)    (unsigned);
     void(*FocusChangedCallback)(bool);
     
     // Window
@@ -44,10 +45,10 @@ struct PlatformContextWin
     HWND hwnd;
 
     // Input Code, 128 bit bitmasks for key states.
-    unsigned long DownKeys[2];
-    unsigned long LastKeys[2];
-    unsigned long PressedKeys[2];
-    unsigned long ReleasedKeys[2];
+    std::bitset<128> DownKeys;
+    std::bitset<128> LastKeys;
+    std::bitset<128> PressedKeys;
+    std::bitset<128> ReleasedKeys;
     // Mouse
     int    MouseDown, MouseLast, MousePressed, MouseReleased;
     float  MousePosX, MousePosY;
@@ -59,13 +60,14 @@ struct PlatformContextWin
 
     bool VSyncActive;
     bool ShouldClose;
+    char* ClipboardString;
 } PlatformCtx;
 
 static char WindowName[64] = { 'S', 'a', 'n', 'e', 'E', 'n', 'g', 'i', 'n', 'e' };
 
 void wSetFocusChangedCallback(void(*callback)(bool))         { PlatformCtx.FocusChangedCallback = callback; }
-void SetKeyPressCallback     (void(*callback)(wchar_t))      { PlatformCtx.KeyPressCallback     = callback; }
-void SetMouseMoveCallback    (void(*callback)(float, float)) { PlatformCtx.MouseMoveCallback    = callback; }
+void wSetKeyPressCallback    (void(*callback)(unsigned))     { PlatformCtx.KeyPressCallback     = callback; }
+void wSetMouseMoveCallback   (void(*callback)(float, float)) { PlatformCtx.MouseMoveCallback    = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback; }
 void wSetWindowMoveCallback  (void(*callback)(int, int))     { PlatformCtx.WindowMoveCallback   = callback; }
 
@@ -119,11 +121,11 @@ void wSetVSync(bool active)
 /*                          Keyboard and Mouse Input                            */
 /********************************************************************************/
 
-inline bool GetBit128(unsigned long bits[2], int idx)   { return !!(bits[idx > 63] & (1ull << (idx & 63))); }
-inline void SetBit128(unsigned long bits[2], int idx)   { bits[idx > 63] |= 1ull << (idx & 63); }
-inline void ResetBit128(unsigned long bits[2], int idx) { bits[idx > 63] &= ~(1ull << (idx & 63)); }
+inline bool GetBit128(const std::bitset<128>& bits, int idx) { return bits[idx]; }
+inline void SetBit128(std::bitset<128>& bits, int idx)   { bits.set(idx); }
+inline void ResetBit128(std::bitset<128>& bits, int idx) { bits.reset(idx); }
 
-bool AnyKeyDown() { return (PlatformCtx.DownKeys[0] + PlatformCtx.DownKeys[1]) > 0; }
+bool AnyKeyDown() { return (PlatformCtx.DownKeys.count()) > 0; }
 
 bool GetKeyDown(char c)     { return GetBit128(PlatformCtx.DownKeys, c); }
 
@@ -133,18 +135,15 @@ bool GetKeyPressed(char c)  { return GetBit128(PlatformCtx.PressedKeys, c); }
 
 static void SetPressedAndReleasedKeys()
 {
-    PlatformCtx.ReleasedKeys[0] = PlatformCtx.LastKeys[0] & ~PlatformCtx.DownKeys[0];
-    PlatformCtx.ReleasedKeys[1] = PlatformCtx.LastKeys[1] & ~PlatformCtx.DownKeys[1];
-    PlatformCtx.PressedKeys[0]  = ~PlatformCtx.LastKeys[0] & PlatformCtx.DownKeys[0];
-    PlatformCtx.PressedKeys[1]  = ~PlatformCtx.LastKeys[1] & PlatformCtx.DownKeys[1];
+    PlatformCtx.ReleasedKeys = PlatformCtx.LastKeys & ~PlatformCtx.DownKeys;
+    PlatformCtx.PressedKeys  = ~PlatformCtx.LastKeys & PlatformCtx.DownKeys;
     // Mouse
     PlatformCtx.MouseReleased = PlatformCtx.MouseLast & ~PlatformCtx.MouseDown;
     PlatformCtx.MousePressed  = ~PlatformCtx.MouseLast & PlatformCtx.MouseDown;
 }
 
 static void RecordLastKeys() {
-    PlatformCtx.LastKeys[0] = PlatformCtx.DownKeys[0];
-    PlatformCtx.LastKeys[1] = PlatformCtx.DownKeys[1];
+    PlatformCtx.LastKeys = PlatformCtx.DownKeys;
     PlatformCtx.MouseLast = PlatformCtx.MouseDown;
 }
 
@@ -208,7 +207,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
         {
-            if (wparam > 127) break;
+            if (wparam > 127 || wparam < 0) break;
             SetBit128(PlatformCtx.DownKeys, (int)wparam);
             break;
         }
@@ -220,20 +219,19 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_KEYUP:
         case WM_SYSKEYUP:
         {
-            if (wparam > 127) break;
+            if (wparam > 127 || wparam < 0) break;
             ResetBit128(PlatformCtx.DownKeys, (int)wparam);
             break;
         }
         case WM_CHAR:
-            ::MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, (char*)&wparam, 1, &wch, 1);
             if (PlatformCtx.KeyPressCallback) 
-			PlatformCtx.KeyPressCallback(wch);
+                PlatformCtx.KeyPressCallback((uint)wparam);
             break;
         case WM_SIZE:
             PlatformCtx.WindowWidth  = LOWORD(lparam);
             PlatformCtx.WindowHeight = HIWORD(lparam);
             if (PlatformCtx.WindowResizeCallback)
-			PlatformCtx.WindowResizeCallback(PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
+                PlatformCtx.WindowResizeCallback(PlatformCtx.WindowWidth, PlatformCtx.WindowHeight);
             break;
         case WM_MOVE:
             PlatformCtx.WindowPosX = LOWORD(lparam);
@@ -279,6 +277,19 @@ void FatalError(const char* format, ...)
     OutputDebugString(buffer);
     // Display the message box
     MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
+    ASSERT(0);
+}
+
+void DebugLog(const char* format, ...)
+{
+    char buffer[1024]; // Adjust the size according to your needs
+    // Format the error message
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    printf(buffer);
+    OutputDebugString(buffer);
 }
 
 // https://gist.github.com/mmozeiko/6825cb94d393cb4032d250b8e7cc9d14
@@ -546,11 +557,132 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         ReleaseDC(PlatformCtx.hwnd, dc);
         wglDeleteContext(rc);
         DestroyWindow(PlatformCtx.hwnd);
+        if (PlatformCtx.ClipboardString)
+            delete[] PlatformCtx.ClipboardString;
     }
     // VMem::Destroy();
 
     return 0;
 }
+
+// https://github.com/glfw/glfw/blob/master/src/win32_init.c#L467
+static char* CreateUTF8FromWideStringWin32(const WCHAR* source)
+{
+    char* target;
+    int size;
+
+    size = WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
+    if (!size) {
+        DebugLog("Win32: Failed to convert string to UTF-8");
+        return nullptr;
+    }
+
+    target = new char[size];
+
+    if (!WideCharToMultiByte(CP_UTF8, 0, source, -1, target, size, NULL, NULL))
+    {
+        DebugLog("Win32: Failed to convert string to UTF-8");
+        delete[] target;
+        return nullptr;
+    }
+    return target;
+}
+
+const char* wGetClipboardString()
+{
+    HANDLE object;
+    WCHAR* buffer;
+    int tries = 0;
+
+    // NOTE: Retry clipboard opening a few times as some other application may have it
+    //       open and also the Windows Clipboard History reads it after each update
+    while (!OpenClipboard(PlatformCtx.hwnd))
+    {
+        Sleep(1);
+        tries++;
+
+        if (tries == 3)
+        {
+            DebugLog("Win32: Failed to open clipboard");
+            return nullptr;
+        }
+    }
+
+    object = GetClipboardData(CF_UNICODETEXT);
+    if (!object)
+    {
+        DebugLog("Win32: Failed to convert clipboard to string");
+        CloseClipboard();
+        return nullptr;
+    }
+
+    buffer = (WCHAR*)GlobalLock(object);
+    if (!buffer)
+    {
+        DebugLog("Win32: Failed to lock global handle");
+        CloseClipboard();
+        return nullptr;
+    }
+
+    if (PlatformCtx.ClipboardString)
+        delete[] PlatformCtx.ClipboardString;
+    PlatformCtx.ClipboardString = CreateUTF8FromWideStringWin32(buffer);
+
+    GlobalUnlock(object);
+    CloseClipboard();
+
+    return PlatformCtx.ClipboardString;
+}
+
+bool wSetClipboardText(const char* string) 
+{
+    int characterCount, tries = 0;
+    HANDLE object;
+    WCHAR* buffer;
+
+    characterCount = MultiByteToWideChar(CP_UTF8, 0, string, -1, NULL, 0);
+    if (!characterCount)
+        return false;
+
+    object = GlobalAlloc(GMEM_MOVEABLE, characterCount * sizeof(WCHAR));
+    if (!object)
+    {
+        DebugLog("Win32: Failed to allocate global handle for clipboard");
+        return false;
+    }
+
+    buffer = (WCHAR*)GlobalLock(object);
+    if (!buffer)
+    {
+        DebugLog("Win32: Failed to lock global handle");
+        GlobalFree(object);
+        return false;
+    }
+
+    MultiByteToWideChar(CP_UTF8, 0, string, -1, buffer, characterCount);
+    GlobalUnlock(object);
+
+    // NOTE: Retry clipboard opening a few times as some other application may have it
+    //       open and also the Windows Clipboard History reads it after each update
+    while (!OpenClipboard(PlatformCtx.hwnd))
+    {
+        Sleep(1);
+        tries++;
+
+        if (tries == 3)
+        {
+            DebugLog("Win32: Failed to open clipboard");
+            GlobalFree(object);
+            return false;
+        }
+    }
+
+    EmptyClipboard();
+    SetClipboardData(CF_UNICODETEXT, object);
+    CloseClipboard();
+    return true;
+}
+
 
 // https://stackoverflow.com/questions/2382464/win32-full-screen-and-hiding-taskbar
 bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight) 

@@ -25,7 +25,8 @@ set(SOURCES
     src/AssetManager.cpp
     src/SaneProgram.cpp
     src/Renderer.cpp
-    src/TextRenderer.cpp
+    src/UI.cpp
+    src/Menu.cpp
     src/PlatformWindows.cpp
     src/VulkanBackend.cpp
     src/Scene.cpp
