@@ -81,6 +81,14 @@ bool wSetClipboardString(const char* string) {
     return false;
 }
 
+bool AnyNumberPressed() {
+    return 0;
+}
+
+int GetPressedNumber() {
+    return -1;
+}
+
 void UpdateRenderArea()
 {
     EGLint width, height;

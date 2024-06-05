@@ -136,7 +136,7 @@ static void OptionsMenu()
     pos.y += textSize.y + textPadding;
 
     static int CurrElement = 0;
-    const int numElements = 7; // number of options plus back button
+    const int numElements = 9; // number of options plus back button
     const int backIndex = numElements - 1;
     float elementsYStart = pos.y - (textSize.y * 0.42f);
     float elementsXStart = pos.x;
@@ -182,10 +182,24 @@ static void OptionsMenu()
     }
     CurrentGraphics = selectedGraphics;
 
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 6);
+    static int numFrames = 144;
+    if (uIntField("Num Frames", pos, &numFrames)) {
+        CurrElement = 6;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 7);
+    static float senstivity = 1.0f;
+    if (uFloatField("Senstivity", pos, &senstivity)) {
+        CurrElement = 7;
+    }
+
     pos = bgPos + bgScale - MakeVec2(200.0f, 100.0f);
     // draw border only if we selected or it is android
     uButtonOptions buttonOpt = uButtonOpt_Border * (CurrElement == backIndex || IsAndroid());
-    uSetElementFocused(CurrElement == 6);
+    uSetElementFocused(CurrElement == 8);
     if (uButton("Back", pos, zero2, buttonOpt)) {
         menuState = MenuState_PauseMenu;
     }

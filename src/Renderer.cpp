@@ -234,6 +234,7 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     else
     #ifndef __ANDROID__ 
     {
+
         int blockSize = width * height;
         blockSize >>= int(type == TextureType_CompressedR); // bc4 is 0.5 byte per pixel
 

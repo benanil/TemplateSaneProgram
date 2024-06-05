@@ -15,7 +15,8 @@ void main()
     int vertexID = gl_VertexID % 6;
 
     // unpack per quad data
-    highp uvec2 data = texelFetch(dataTex, ivec2(quadID, 0), 0).rg;
+    highp uvec3 data = texelFetch(dataTex, ivec2(quadID, 0), 0).rgb;
+    lowp uint depth = data.z & 0xFF;
     vec2 size  = vec2(float(data.x >> 0u  & 0xFFFFu),
                       float(data.x >> 16u & 0xFFFFu)) * uScale;
     vColor = unpackUnorm4x8(data.y);
@@ -34,7 +35,7 @@ void main()
 
     vec2 proj = 2.0 / scrSize;
     vec2 translate = proj * vertices[vertexID] - 1.0;
-    gl_Position = vec4(translate, 0.0, 1.0);
+    gl_Position = vec4(translate, (float(depth) / 255.0), 1.0);
 
     // ----    Create UV    ----
     const mediump vec2 uvs[6] = vec2[6](

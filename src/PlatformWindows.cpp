@@ -152,6 +152,17 @@ bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.MouseDown     
 bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.MouseReleased & button); }
 bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.MousePressed  & button); }
 
+int GetPressedNumber() {
+    for (int i = '0'; i <= '9'; i++)
+        if (PlatformCtx.ReleasedKeys[i])
+            return i - '0';
+    return -1;
+}
+
+bool AnyNumberPressed() {
+    return GetPressedNumber() != -1;
+}
+
 void GetMousePos(float* x, float* y)
 {
     ASSERT((uint64_t)x & (uint64_t)y); // shouldn't be nullptr

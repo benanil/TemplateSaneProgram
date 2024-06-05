@@ -72,6 +72,15 @@ struct TextData
     uint padding;
 };
 
+struct QuadData
+{
+    uint size;
+    uint color;
+    uint8 depth;
+    uint8 padding[3];
+    uint padding1;
+};
+
 namespace
 {
     FontAtlas mFontAtlases[4] = {};
@@ -88,6 +97,7 @@ namespace
     Vector2f mWindowRatio; // ratio against 1920x1080, [1.0, 1.0] if 1080p 0.5 if half of it, 2.0 if two times bigger
     float mUIScale; // min(mWindowRatio.x, mWindowRatio.y)
 
+    Vector2f mMouseOld;
     bool mWasHovered = false; // last button was hovered?
 
     int mNumChars = 0; // textLen without spaces, or undefined characters    
@@ -103,7 +113,7 @@ namespace
     Shader mQuadShader;
 
     Vector2f mQuadPositions[MaxQuads];
-    Vector2i mQuadData[MaxQuads];
+    QuadData mQuadData[MaxQuads];
 
     Texture mQuadPosTex;
     Texture mQuadDataTex;
@@ -126,9 +136,12 @@ namespace
     bool mAnyTextEdited = false;
     uint mLastStrHash;
 
+    bool mLastFloatEditing = false;
+    int mFloatDigits = 3;
+    float* mEditingFloat;
+        
     //------------------------------------------------------------------------
     // configuration
-    char mCurrentDepth = 0;
 
     uint mColors[] = { 
         0xFFE1E1E1u, // uColorText
@@ -153,7 +166,9 @@ namespace
         18.0f , // ButtonSpace
         1.0f  , // TextScale,
         175.0f, // TextBoxWidth
-        18.0f  // Slider Width
+        18.0f , // Slider Width
+        0.9f  , // Depth 
+        1.0f  , // Drag Speed
     };
     constexpr int NumFloats = sizeof(mFloats) / sizeof(float);
 
@@ -185,7 +200,7 @@ void uInitialize()
     atlasLoc      = rGetUniformLocation("atlas");
     uScrSizeLoc   = rGetUniformLocation("uScrSize");
     mInitialized  = true;
-    mCurrentFontAtlas = nullptr, mCurrentDepth = 0;
+    mCurrentFontAtlas = nullptr;
     
     ScopedText quadVert = ReadAllText("Shaders/QuadBatch.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     ScopedText quadFrag = ReadAllText("Shaders/QuadFrag.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
@@ -193,13 +208,15 @@ void uInitialize()
     
     // per character textures
     mQuadPosTex  = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RG32F , TexFlags_RawData);
-    mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RG32UI, TexFlags_RawData);
+    mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
     
     rBindShader(mQuadShader);
     posTexLocQuad   = rGetUniformLocation("posTex");
     dataTexLocQuad  = rGetUniformLocation("dataTex");
     uScrSizeLocQuad = rGetUniformLocation("uScrSize");
     uScaleLocQuad   = rGetUniformLocation("uScale");
+    
+    GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
 }
 
 static void WriteGlyphToAtlass(int i, 
@@ -283,7 +300,7 @@ FontHandle uLoadFont(const char* file)
             LoadFontAtlasBin(path, currentAtlas, image);
             currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
             mCurrentFontAtlas = currentAtlas;
-            currentAtlas->maxCharWidth = uCalcTextSize("a").x;
+            currentAtlas->maxCharWidth  = uCalcTextSize("a").x;
             return mNumFontAtlas - 1;
         }
     }
@@ -379,6 +396,7 @@ FontHandle uLoadFont(const char* file)
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     mCurrentFontAtlas = currentAtlas;
     currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
+    currentAtlas->maxCharWidth  = uCalcTextSize("a").x;
 #else
     AX_UNREACHABLE();
 #endif
@@ -490,9 +508,6 @@ void uSetFont(FontHandle font) {
     mCurrentFontAtlas = &mFontAtlases[font];
 }
 
-void uSetDepth(char depth) {
-    mCurrentDepth = depth;
-}
 
 void uSetTheme(uColor what, uint color) {
     mColors[what] = color;
@@ -504,7 +519,7 @@ void uSetFloat(uFloat what, float val) {
 
 float uGetFloat(uFloat what) {
     int stackCnt = mFloatStackCnt[what];
-    if (stackCnt > 0) // if user used PushColor use the one from stack
+    if (stackCnt > 0) // if user used PushFloat use the one from stack
         return mFloatStack[what][stackCnt-1];
     return mFloats[what];
 }
@@ -577,6 +592,7 @@ void uText(const char* text, Vector2f position)
     uint color = uGetColor(uColorText);
 
     const char* textEnd = text + txtSize;
+    uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f) ;
     // fill per quad data
     while (text < textEnd)
     {
@@ -602,7 +618,7 @@ void uText(const char* text, Vector2f position)
         mTextData[mNumChars].size |= uint32_t(size.y + 1.0f) << 16;
 
         mTextData[mNumChars].character = chr;  
-        mTextData[mNumChars].depth = mCurrentDepth;
+        mTextData[mNumChars].depth = currentDepth;
         mTextData[mNumChars].scale = scalef16;
         mTextData[mNumChars].color = color;
 
@@ -660,10 +676,12 @@ void uQuad(Vector2f position, Vector2f scale, uint color)
 
     mQuadPositions[mQuadIndex] = position * mWindowRatio;
 
-    mQuadData[mQuadIndex].x  = uint32_t(scale.x + 1.0f);
-    mQuadData[mQuadIndex].x |= uint32_t(scale.y + 1.0f) << 16;
+    mQuadData[mQuadIndex].size  = uint32_t(scale.x + 1.0f);
+    mQuadData[mQuadIndex].size |= uint32_t(scale.y + 1.0f) << 16;
     
-    mQuadData[mQuadIndex].y = color;
+    uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
+    mQuadData[mQuadIndex].color = color;
+    mQuadData[mQuadIndex].depth = currentDepth;
     mQuadIndex++;
 }
 
@@ -865,7 +883,7 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
-    bool clicked = ClickCheck(pos, pos + size);
+    bool clicked = ClickCheck(pos, size);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
     uBorder(pos, size);
 
@@ -945,8 +963,8 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     pos.y -= size.y;
     uBorder(pos, size);
 
-    bool edited = ClickCheck(pos, pos + size, CheckOpt_WhileMouseDown);
-    if (edited) {
+    bool edited = ClickCheck(pos, size, CheckOpt_WhileMouseDown);
+    if (edited && mElementFocused) {
         Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
         mousePos -= pos;
         *val = Remap(mousePos.x, 0.0f, size.x, 0.0f, 1.0f);
@@ -987,7 +1005,9 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     float centerOffset = (size.x - nameSize.x) / 2.0f;
     
     pos.x += centerOffset;
-    uText(names[current], pos);    
+    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
+        uText(names[current], pos);    
+    uPopFloat(ufTextScale);
     pos.x -= centerOffset + arrowSize.x;
 
     uText(IC_LEFT_TRIANGLE, pos);
@@ -1013,11 +1033,204 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     return current;
 }
 
+bool uIntField(const char* label, Vector2f pos, int* val)
+{
+    Vector2f labelSize = Label(label, pos);
+    Vector2f size = { uGetFloat(ufTextBoxWidth) * 0.5f, uGetFloat(ufSliderHeight) };
+    size.y = labelSize.y; // maybe change: y scale using label height is weierd 
+
+    float contentStart = uGetFloat(ufContentStart);
+    pos.x += contentStart - size.x;
+    pos.y -= size.y;
+
+    bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
+    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uBorder(pos, size);
+
+    int value = *val;
+    bool changed = false;
+    if (mElementFocused)
+    {
+        bool mousePressing = GetMouseDown(MouseButton_Left);
+        Vector2f mousePos;
+        GetMouseWindowPos(&mousePos.x, &mousePos.y);
+        Vector2f scaledPos = pos * mWindowRatio;
+        Vector2f scaledSize = size * mWindowRatio;
+        float mouseDiff = (mousePos.x - mMouseOld.x) * mWindowRatio.x;
+
+        if (mousePressing && mousePos.y > scaledPos.y + 0.0f && 
+                             mousePos.y < scaledPos.y + scaledSize.y) 
+        {
+            float dragSpeed = uGetFloat(ufDragSpeed);
+            value += int(mouseDiff * dragSpeed);
+        }
+        value += GetKeyReleased(Key_RIGHT);
+        value -= GetKeyReleased(Key_LEFT);
+
+        const int maxDigits = 10;
+        int numDigits = Log10((unsigned)value) + 1;
+        int pressedNumber = GetPressedNumber();
+
+        if (pressedNumber != -1 && numDigits < maxDigits) {
+            value *= 10;
+            value += pressedNumber;
+            changed = true;
+        }
+        if (GetKeyPressed(Key_BACK) && value != 0) {
+            value -= value % 10;
+            value /= 10;
+            changed = true;
+        }
+        *val = value;
+    }
+    
+    float offset = size.y * 0.1f;
+    pos.y += size.y - offset;
+    pos.x += offset;
+
+    char valText[16] = {};
+    IntToString(valText, value);
+    float textScale = uGetFloat(ufTextScale);
+    uPushFloat(ufTextScale, textScale * 0.7f);
+        uText(valText, pos);
+    uPopFloat(ufTextScale);
+    return changed;
+}
+
+static const int tenMap[] = { 1, 10, 100, 1000, 10000 };
+
+// used to remove last fraction of the real number. ie: 12.345
+inline float SetFloatFract0(float val, int n)
+{
+    float ival = float((int)val); // 12.0
+    val -= ival; // 0.345
+    val *= tenMap[n]; // 345
+    int lastDigit = int(val) % 10; // 5
+    val -= lastDigit; // 340
+    val *= 1.0f / tenMap[n]; // 0.340
+    return val + ival; // 12.340
+}
+
+bool uFloatField(const char* label, Vector2f pos, float* val)
+{
+    Vector2f labelSize = Label(label, pos);
+    Vector2f size = { uGetFloat(ufTextBoxWidth) * 0.5f, uGetFloat(ufSliderHeight) };
+    size.y = labelSize.y; // maybe change: y scale using label height is weierd 
+
+    float contentStart = uGetFloat(ufContentStart);
+    pos.x += contentStart - size.x;
+    pos.y -= size.y;
+
+    bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
+    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uBorder(pos, size);
+
+    float value = *val;
+    bool changed = false;
+    int numDigits = Log10((unsigned)value) + 1;
+
+    if (mElementFocused)
+    {
+        if (mEditingFloat != val) 
+            mLastFloatEditing = false, mFloatDigits = 3;
+        
+        mEditingFloat = val;
+        bool mousePressing = GetMouseDown(MouseButton_Left);
+        Vector2f mousePos;
+        GetMouseWindowPos(&mousePos.x, &mousePos.y);
+        Vector2f scaledPos = pos * mWindowRatio;
+        Vector2f scaledSize = size * mWindowRatio;
+        float mouseDiff = (mousePos.x - mMouseOld.x) * mWindowRatio.x;
+
+        if (mousePressing && mousePos.y > scaledPos.y + 0.0f && 
+            mousePos.y < scaledPos.y + scaledSize.y) 
+        {
+            float dragSpeed = uGetFloat(ufDragSpeed);
+            value += mouseDiff * (dragSpeed * 0.1f);
+            mLastFloatEditing = false, mFloatDigits = 3;
+        }
+        value += GetKeyReleased(Key_RIGHT) * 0.1f;
+        value -= GetKeyReleased(Key_LEFT) * 0.1f;
+
+        const int maxDigits = 10;
+        int pressedNumber = GetPressedNumber();
+
+        if (pressedNumber != -1 && numDigits < maxDigits) {
+            // todo add pressed number at the end of the number
+            mLastFloatEditing = true;
+            changed = true;
+            if (mFloatDigits == 0) {
+                value *= 10.0f;
+                value += (float)pressedNumber;
+            }
+            else {
+                value = SetFloatFract0(value, mFloatDigits);
+                value += pressedNumber * (1.0f / tenMap[mFloatDigits++]);
+            }
+            mFloatDigits = MIN(mFloatDigits, 4);
+        }
+        if (GetKeyPressed(Key_BACK) && value >= 0.001f) {
+            // todo add pressed number at the end of the number
+            mLastFloatEditing = true;
+            changed = true;
+
+            if (value < 10.0f) 
+                value = 0.0f;
+
+            if (mFloatDigits == 0) {
+                value -= value - float((int)value);
+                value /= 10.0f;
+            }
+            else {
+                value = SetFloatFract0(value, mFloatDigits--);
+                mFloatDigits = MAX(mFloatDigits, 0);
+            }
+        }
+
+        if (GetKeyPressed(Key_CONTROL) && mFloatDigits == 0) {
+            mFloatDigits = 1;
+        }
+        *val = value;
+    }
+
+    float offset = size.y * 0.1f;
+    pos.y += size.y - offset;
+    pos.x += offset;
+
+    char valText[32] = {};
+    if (!mLastFloatEditing) {
+        int afterpoint = 4 - MAX(numDigits, 1); // number of digits after dot'.' for example 123.000
+        FloatToString(valText, value, afterpoint);
+    } 
+    else {
+        if (mFloatDigits == 0) {
+            IntToString(valText, (int)value);
+        } else {
+            FloatToString(valText, value, mFloatDigits);
+        }
+    }
+    
+    float textScale = uGetFloat(ufTextScale);
+    uPushFloat(ufTextScale, textScale * 0.7f);
+        uText(valText, pos);
+    uPopFloat(ufTextScale);
+    return changed || clicked;
+}
+
+bool uIntVecField(const char* label, Vector2f pos, int* val, int N)
+{
+    return false;
+}
+
+bool uFloatVecField(const char* label, Vector2f pos, float* val, int N)
+{
+    return false;
+}
+
 void uBegin()
 {
     mAnyTextEdited = false;
 }
-
 //------------------------------------------------------------------------
 // Rendering
 
@@ -1076,6 +1289,7 @@ void uRender()
     }
 
     rSetBlending(false);
+    GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
 }
 
 void uDestroy()

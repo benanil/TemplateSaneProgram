@@ -46,10 +46,12 @@ enum uFloat_ {
     // if set to zero it will start at the end of the text
     // Content Start is: Vsync On _________ [X]  the space between label and content
     ufContentStart,
-    ufButtonSpace,
-    ufTextScale,
+    ufButtonSpace , 
+    ufTextScale   , // 1.0 default
     ufTextBoxWidth,
-    ufSliderHeight
+    ufSliderHeight,
+    ufDepth       , // < between [0.0, 1.0] lower depth will shown on top
+    ufDragSpeed   , // drag speed of int or float fields default value 1.0
 };
 
 typedef int FontHandle;
@@ -68,7 +70,6 @@ void uKeyPressCallback(unsigned unicode);
 //------------------------------------------------------------------------
 void uSetElementFocused(bool val); // next element that will drawn is going to be focused
 void uSetFont(FontHandle font);
-void uSetDepth(char depth);
 void uSetColor(uColor what, uint color); // set color of the buttons, texts etc.
 void uSetTheme(uint* colors);
 void uSetFloat(uFloat color, float val);
@@ -99,6 +100,10 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos);
 
 // val should be between 0 and 1
 bool uSlider(const char* label, Vector2f pos, float* val, float scale); 
+
+bool uIntField(const char* label, Vector2f pos, int* val);
+
+bool uFloatField(const char* label, Vector2f pos, float* val);
 
 // it will look like this: <  option  >
 // current is the current index of elements.

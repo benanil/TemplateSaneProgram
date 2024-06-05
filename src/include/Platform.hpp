@@ -8,7 +8,6 @@
 
 #pragma once
 
-#define _DEBUG
 #if defined(_DEBUG) || defined(DEBUG) || defined(Debug)
 #ifdef __ANDROID__
     #include <android/log.h>
@@ -103,6 +102,9 @@ enum MouseButton_
 typedef int MouseButton;
 
 bool AnyMouseKeyDown();
+bool AnyNumberPressed();
+int GetPressedNumber();
+
 bool GetMouseDown(MouseButton button);
 bool GetMouseReleased(MouseButton button);
 bool GetMousePressed(MouseButton button);
