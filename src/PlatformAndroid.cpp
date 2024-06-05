@@ -33,7 +33,7 @@ struct PlatformContextAndroid
     // Callbacks
     void(*WindowResizeCallback)(int  , int) ;
     void(*MouseMoveCallback)   (float, float);
-    void(*KeyPressCallback)    (wchar_t);
+    void(*KeyPressCallback)    (unsigned);
     void(*FocusChangedCallback)(bool);
 
     EGLDisplay Display;
@@ -77,7 +77,7 @@ const char* wGetClipboardString() {
     return nullptr;
 }
 
-const char* wSetClipboardString(const char* string) {
+bool wSetClipboardString(const char* string) {
     return false;
 }
 
@@ -86,8 +86,9 @@ void UpdateRenderArea()
     EGLint width, height;
     eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_WIDTH, &width);
     eglQuerySurface(PlatformCtx.Display, PlatformCtx.Surface, EGL_HEIGHT, &height);
-    PlatformCtx.WindowWidth  = width;
+    PlatformCtx.WindowWidth = width;
     PlatformCtx.WindowHeight = height;
+
     if (PlatformCtx.WindowResizeCallback)
         PlatformCtx.WindowResizeCallback(width, height);
 }
@@ -213,6 +214,7 @@ static void InitWindow()
 
     CreateSurface();
     SetContext();
+    UpdateRenderArea();
 }
 
 static void TerminateWindow()
@@ -233,6 +235,7 @@ void HandleCMD(android_app *pApp, int32_t cmd)
             if (!PlatformCtx.RendererInitialized)
             {
                 PlatformCtx.RendererInitialized = true;
+                AXInit();
                 InitWindow();
                 rInitRenderer();
 
@@ -303,9 +306,8 @@ void android_main(android_app *pApp)
     uint64 prevTime       = currentTime;
     PlatformCtx.StartTime = currentTime;
     PlatformCtx.ShouldClose = false;
-    AXInit();
 
-    do
+    while (pApp->destroyRequested || !PlatformCtx.ShouldClose)
     {
         // Process all pending events before running game logic.
         while (ALooper_pollAll(0, nullptr, &events, (void **) &pSource) >= 0)
@@ -343,7 +345,7 @@ void android_main(android_app *pApp)
             PlatformCtx.FingerReleased = 0;
             PlatformCtx.FingerPressed = 0;
         }
-    } while (!pApp->destroyRequested || !PlatformCtx.ShouldClose);
+    } // < main loop
 
     end_loop:
     {

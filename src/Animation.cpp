@@ -194,6 +194,7 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
     // output matrices to GPU
     {
         Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
+        
         Matrix3x4f16 outMatrices[MaxNumJoints];
 
         for (int i = 0; i < skin.numJoints; i++)

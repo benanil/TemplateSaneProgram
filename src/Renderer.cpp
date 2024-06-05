@@ -7,6 +7,7 @@
 *        Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
+
 #ifdef __ANDROID__
     #include <game-activity/native_app_glue/android_native_app_glue.h>
     #include <android/log.h>
@@ -198,10 +199,11 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     bool nearest    = !!(flags & TexFlags_Nearest);
     bool compressed = !!(flags & TexFlags_Compressed);
 
-    __const int defaultMagFilter = IsAndroid() ? GL_NEAREST : GL_LINEAR;
     __const int mipmapFilter = GL_LINEAR_MIPMAP_NEAREST; // < higher | lower quality > GL_NEAREST_MIPMAP_NEAREST
-    int minFilter = nearest ? GL_NEAREST : GL_LINEAR;
+    int defaultMagFilter = IsAndroid() ? GL_NEAREST : GL_LINEAR;
+    defaultMagFilter = (flags & TexFlags_Linear) ? GL_LINEAR : defaultMagFilter;
 
+    int minFilter = nearest ? GL_NEAREST : GL_LINEAR;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : defaultMagFilter);

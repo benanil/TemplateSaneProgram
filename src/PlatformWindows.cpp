@@ -314,14 +314,14 @@ static void GetWglFunctions(void)
 
     int format = ChoosePixelFormat(dc, &desc);
     if (!format)
-	FatalError("Cannot choose OpenGL pixel format for dummy window!");
+	    FatalError("Cannot choose OpenGL pixel format for dummy window!");
 
     int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
     ASSERT(ok && "Failed to describe OpenGL pixel format");
 
     // reason to create dummy window is that SetPixelFormat can be called only once for the window
     if (!SetPixelFormat(dc, format, &desc))
-	FatalError("Cannot set OpenGL pixel format for dummy window!");
+	    FatalError("Cannot set OpenGL pixel format for dummy window!");
 
     HGLRC rc = wglCreateContext(dc);
     ASSERT(rc && "Failed to create OpenGL context for dummy window");
@@ -416,14 +416,14 @@ static HWND WindowCreate(HINSTANCE instance)
     
     UINT formats;
     if (!wglChoosePixelFormatARB(dc, attrib, NULL, 1, &format, &formats) || formats == 0)
-	FatalError("OpenGL does not support required pixel format!");
+	    FatalError("OpenGL does not support required pixel format!");
     
     int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
     ASSERT(ok && "Failed to describe OpenGL pixel format");
 
     // always set pixel format, same for all windows
     if (!SetPixelFormat(dc, format, &desc))
-	FatalError("Cannot set OpenGL selected pixel format!");
+	    FatalError("Cannot set OpenGL selected pixel format!");
 
     return window;
 }

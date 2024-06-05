@@ -8,6 +8,7 @@
 
 #pragma once
 
+#define _DEBUG
 #if defined(_DEBUG) || defined(DEBUG) || defined(Debug)
 #ifdef __ANDROID__
     #include <android/log.h>

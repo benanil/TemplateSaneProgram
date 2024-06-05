@@ -15,8 +15,9 @@ void main()
     int vertexID = gl_VertexID % 6;
 
     // unpack per quad data
-    uvec2 data = texelFetch(dataTex, ivec2(quadID, 0), 0).rg;
-    vec2 size  = unpackHalf2x16(data.x) * uScale;
+    highp uvec2 data = texelFetch(dataTex, ivec2(quadID, 0), 0).rg;
+    vec2 size  = vec2(float(data.x >> 0u  & 0xFFFFu),
+                      float(data.x >> 16u & 0xFFFFu)) * uScale;
     vColor = unpackUnorm4x8(data.y);
     
     // ----    Create Vertex    ----

@@ -69,7 +69,7 @@ struct TextData
     uint8 character, depth;
     half scale;
     uint color;
-    uint padd;
+    uint padding;
 };
 
 namespace
@@ -92,8 +92,9 @@ namespace
 
     int mNumChars = 0; // textLen without spaces, or undefined characters    
     bool mInitialized = false;
+    bool mElementFocused = false;   
     // uniform locations
-    int posTexLoc, dataTexLoc, atlasLoc, uScrSizeLoc, uScaleLoc;
+    int posTexLoc, dataTexLoc, atlasLoc, uScrSizeLoc;
 
     //------------------------------------------------------------------------
     // Quad Batch renderer
@@ -136,7 +137,9 @@ namespace
         0xFFDEDEDEu, // uColorLine
         0xFF484848u, // uColorBorder
         0xFF0B0B0Bu, // uColorCheckboxBG
-        0xFF0B0B0Bu  // UColorTextBoxBG
+        0xFF0B0B0Bu, // UColorTextBoxBG
+        0xFF383838u, // uColorSliderInside 
+        0xFFFFFFFFu  // uColorTextBoxCursor
     };
     constexpr int NumColors = sizeof(mColors) / sizeof(uint);
     constexpr int StackSize = 6;
@@ -149,8 +152,8 @@ namespace
         160.0f, // ufContentStart
         18.0f , // ButtonSpace
         1.0f  , // TextScale,
-        165.0f, // TextBoxWidth
-        18.0f , // Slider Width
+        175.0f, // TextBoxWidth
+        18.0f  // Slider Width
     };
     constexpr int NumFloats = sizeof(mFloats) / sizeof(float);
 
@@ -181,7 +184,6 @@ void uInitialize()
     dataTexLoc    = rGetUniformLocation("dataTex");
     atlasLoc      = rGetUniformLocation("atlas");
     uScrSizeLoc   = rGetUniformLocation("uScrSize");
-	uScaleLoc     = rGetUniformLocation("uScale");
     mInitialized  = true;
     mCurrentFontAtlas = nullptr, mCurrentDepth = 0;
     
@@ -198,25 +200,6 @@ void uInitialize()
     dataTexLocQuad  = rGetUniformLocation("dataTex");
     uScrSizeLocQuad = rGetUniformLocation("uScrSize");
     uScaleLocQuad   = rGetUniformLocation("uScale");
-}
-
-void uDestroy()
-{
-    if (!mInitialized) 
-        return;
-    rDeleteShader(mFontShader);
-    rDeleteTexture(mPosTex);
-    rDeleteTexture(mDataTex);
-
-    for (int i = 0; i < mNumFontAtlas; i++) {
-        Texture fakeTex;
-        fakeTex.handle = mFontAtlases[i].textureHandle;
-        rDeleteTexture(fakeTex);
-    }
-
-    rDeleteShader(mQuadShader);
-    rDeleteTexture(mQuadPosTex);
-    rDeleteTexture(mQuadDataTex);
 }
 
 static void WriteGlyphToAtlass(int i, 
@@ -298,7 +281,7 @@ FontHandle uLoadFont(const char* file)
         {
             currentAtlas = &mFontAtlases[mNumFontAtlas++];
             LoadFontAtlasBin(path, currentAtlas, image);
-            currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
+            currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
             mCurrentFontAtlas = currentAtlas;
             currentAtlas->maxCharWidth = uCalcTextSize("a").x;
             return mNumFontAtlas - 1;
@@ -395,7 +378,7 @@ FontHandle uLoadFont(const char* file)
     // stbi_write_png("atlas.png", AtlasWidth, AtlasWidth, 1, image, AtlasWidth);
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     mCurrentFontAtlas = currentAtlas;
-    currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_None).handle;
+    currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
 #else
     AX_UNREACHABLE();
 #endif
@@ -499,6 +482,10 @@ static inline Vector2i GetWindowSize()
     return windowSize;
 }
 
+void uSetElementFocused(bool val) {
+    mElementFocused = val;
+}
+
 void uSetFont(FontHandle font) {
     mCurrentFontAtlas = &mFontAtlases[font];
 }
@@ -586,10 +573,10 @@ void uText(const char* text, Vector2f position)
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
     float scale = uGetFloat(ufTextScale);
     scale *= mUIScale;
+    half scalef16 = ConvertFloatToHalf(scale);
     uint color = uGetColor(uColorText);
 
     const char* textEnd = text + txtSize;
-    ushort scaleFP16 = ConvertFloatToHalf(scale);
     // fill per quad data
     while (text < textEnd)
     {
@@ -610,12 +597,13 @@ void uText(const char* text, Vector2f position)
         Vector2f size;
         size.x = float(character.width) * scale;
         size.y = float(character.height) * scale;
-        mTextData[mNumChars].size  = ConvertFloatToHalf(size.x);
-        mTextData[mNumChars].size |= uint(ConvertFloatToHalf(size.y)) << 16;
+
+        mTextData[mNumChars].size  = uint32_t(size.x + 1.0f);
+        mTextData[mNumChars].size |= uint32_t(size.y + 1.0f) << 16;
 
         mTextData[mNumChars].character = chr;  
         mTextData[mNumChars].depth = mCurrentDepth;
-        mTextData[mNumChars].scale = scaleFP16;
+        mTextData[mNumChars].scale = scalef16;
         mTextData[mNumChars].color = color;
 
         Vector2f pos = position;
@@ -626,28 +614,6 @@ void uText(const char* text, Vector2f position)
         position.x += character.advence * scale;
         mNumChars++;
     }
-}
-
-void uRenderTexts()
-{
-    rBindShader(mFontShader);
-    rSetBlending(true);
-    rSetBlendingFunction(rBlendFunc_Alpha, rBlendFunc_OneMinusAlpha);
-
-    {
-        rUpdateTexture(mPosTex, mTextPositions);
-        rUpdateTexture(mDataTex, mTextData);
-        rSetTexture(mPosTex , 0, posTexLoc);
-        rSetTexture(mDataTex, 1, dataTexLoc);
-        rSetTexture(mCurrentFontAtlas->textureHandle, 3, atlasLoc);
-    }
-
-    Vector2i windowSize = GetWindowSize();
-    rSetShaderValue(&windowSize.x, uScrSizeLoc, GraphicType_Vector2i);
-
-    rRenderMeshNoVertex(6 * mNumChars); // 6 index for each char
-    mNumChars = 0;
-    rSetBlending(false);
 }
 
 Vector2f uCalcTextSize(const char* text)
@@ -694,45 +660,36 @@ void uQuad(Vector2f position, Vector2f scale, uint color)
 
     mQuadPositions[mQuadIndex] = position * mWindowRatio;
 
-    mQuadData[mQuadIndex].x  = ConvertFloatToHalf(scale.x);
-    mQuadData[mQuadIndex].x |= uint32_t(ConvertFloatToHalf(scale.y)) << 16;
+    mQuadData[mQuadIndex].x  = uint32_t(scale.x + 1.0f);
+    mQuadData[mQuadIndex].x |= uint32_t(scale.y + 1.0f) << 16;
     
     mQuadData[mQuadIndex].y = color;
     mQuadIndex++;
 }
 
-static void uRenderQuads()
-{
-    Vector2i windowSize = GetWindowSize();
-    rSetBlending(true);
-    rSetBlendingFunction(rBlendFunc_Alpha, rBlendFunc_OneMinusAlpha);
+enum CheckOpt_ { CheckOpt_WhileMouseDown = 1, CheckOpt_BigColission = 2 };
+typedef int CheckOpt;
 
-    rBindShader(mQuadShader);
-
-    rUpdateTexture(mQuadPosTex, mQuadPositions);
-    rUpdateTexture(mQuadDataTex, mQuadData);
-
-    rSetTexture(mQuadPosTex , 0, posTexLocQuad);
-    rSetTexture(mQuadDataTex, 1, dataTexLocQuad);
-    
-    rSetShaderValue(&mWindowRatio.x, uScaleLocQuad, GraphicType_Vector2f);
-    rSetShaderValue(&windowSize.x, uScrSizeLocQuad, GraphicType_Vector2i);
-
-    rRenderMeshNoVertex(6 * mQuadIndex); // 6 index for each char
-
-    mQuadIndex = 0;
-    rSetBlending(false);
-}
-
-static bool ClickCheck(Vector2f pos, Vector2f scale, bool onHover = false)
+static bool ClickCheck(Vector2f pos, Vector2f scale, CheckOpt flags = 0)
 {
     Vector2f mousePos;
     GetMouseWindowPos(&mousePos.x, &mousePos.y);
     
+    // slightly bigger colission area for easier touching
+    if (flags == CheckOpt_BigColission) 
+    {
+        float slightScaling = MIN(scale.x, scale.y) * 0.5f;
+        pos   -= slightScaling;
+        scale += slightScaling * 2.0f;
+    }
+
     Vector2f scaledPos = pos * mWindowRatio;
     Vector2f scaledScale = scale * mWindowRatio;
     mWasHovered = PointBoxIntersection(scaledPos, scaledPos + scaledScale, mousePos);
-    if (onHover && GetMouseDown(MouseButton_Left)) return mWasHovered;
+    
+    if (!!(flags & CheckOpt_WhileMouseDown) && 
+        GetMouseDown(MouseButton_Left)) 
+        return mWasHovered;
 
     bool released = GetMouseReleased(MouseButton_Left);
     return mWasHovered && released;
@@ -748,7 +705,10 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
         scale = uCalcTextSize(text) + buttonSpace;
         scale.x += buttonSpace;
     }
-    bool pressed = ClickCheck(pos, scale);
+    bool entered = mElementFocused && GetKeyPressed(Key_ENTER);
+    bool pressed = entered || ClickCheck(pos, scale);
+    mElementFocused = false;
+
     uint quadColor = uGetColor(uColorQuad);
     if (mWasHovered || !!(opt & uButtonOpt_Hovered))
         quadColor = mColors[uColorHovered];
@@ -792,16 +752,17 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos)
     uBorder(pos, boxScale);
 
     bool enabled = *isEnabled;
-    if (ClickCheck(pos, boxScale)) {
+    bool entered = mElementFocused && GetKeyPressed(Key_ENTER);
+    if (entered || ClickCheck(pos, boxScale, CheckOpt_BigColission)) {
         enabled = !enabled;
     }
+    mElementFocused = false;
 
     if (enabled) {
-        const char* checkmark = IC_CHECK_MARK; // todo properly scale the checkmark
         float scale = uGetFloat(ufTextScale);
         pos.y += textSize.y - 4.0f;
         uPushFloat(ufTextScale, scale * 0.85f);
-        uText(checkmark, pos);
+        uText(IC_CHECK_MARK, pos); // todo properly scale the checkmark
         uPopFloat(ufTextScale);
     }
     
@@ -814,7 +775,7 @@ struct LineThicknesBorderColor { float thickness; uint color; };
 
 inline LineThicknesBorderColor GetLineData()
 {
-    return { uGetFloat(ufLineThickness), uGetColor(uColorBorder) };
+    return { uGetFloat(ufLineThickness), uGetColor(uColorLine) };
 }
 
 void uLineVertical(Vector2f begin, float size) {
@@ -829,7 +790,7 @@ void uLineHorizontal(Vector2f begin, float size) {
 
 void uBorder(Vector2f begin, Vector2f scale)
 {
-    LineThicknesBorderColor data = GetLineData();
+    LineThicknesBorderColor data = { uGetFloat(ufLineThickness), uGetColor(uColorBorder) };
     uQuad(begin, MakeVec2(scale.x, data.thickness), data.color);
     uQuad(begin, MakeVec2(data.thickness, scale.y), data.color);
     
@@ -891,32 +852,33 @@ inline Vector2f Label(const char* label, Vector2f pos) {
 // maybe feature: TextBox control shift fast move
 // maybe feature: TextBox Shift Arrow select. (paste works copy doesnt)
 // feature:       TextBox multiline text
-bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text, uTextBoxOptions opt)
+bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
 {
     Vector2f labelSize = Label(label, pos);
 
     if (size.x + size.y < Epsilon) // if size is not determined generate it
     {
         size.x = uGetFloat(ufTextBoxWidth);
-        size.y = labelSize.y;
+        size.y = labelSize.y * 0.85f;
     }
     float contentStart = uGetFloat(ufContentStart);
     pos.x += contentStart - size.x;
-    pos.y -= labelSize.y;
+    pos.y -= size.y;
 
     bool clicked = ClickCheck(pos, pos + size);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
     uBorder(pos, size);
 
-    // todo check focus, add cursor
+    // todo: add cursor movement
+    // set text position
     float textScale = uGetFloat(ufTextScale);
-    float offset = labelSize.y * 0.1f;
-    pos.y += labelSize.y - offset;
+    float offset = size.y * 0.1f;
+    pos.y += size.y - offset;
     pos.x += offset;
 
     uPushFloat(ufTextScale, textScale * 0.7f);
     
-    if (!!(opt & uTextBoxOptions_Editing))
+    if (mElementFocused)
     {
         // max number of characters that we can write
         const int TextCapacity = 128; // todo: make adjustable
@@ -949,12 +911,27 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text, uTextB
         mCurrText.str = text;
         mCurrText.Len = StringLength(text);
         mLastStrHash = hash;
+
+        // draw textbox cursor
+        double timeSinceStart = TimeSinceStartup();
+        if (timeSinceStart - (float)int(timeSinceStart) < 0.5)
+        {
+            Vector2f textSize = uCalcTextSize(text);
+            Vector2f cursorPos = pos;
+            cursorPos.x += textSize.x;
+            cursorPos.y -= textSize.y;
+
+            uint cursorColor = uGetColor(uColorTextBoxCursor);
+            uPushColor(uColorLine, cursorColor);
+            uLineVertical(cursorPos, textSize.y);
+            uPopColor(uColorLine);
+        }
     }
 
     uText(text, pos);
     
     uPopFloat(ufTextScale);
-
+    mElementFocused = false;
     return clicked;
 }
 
@@ -965,38 +942,75 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     
     float contentStart = uGetFloat(ufContentStart);
     pos.x += contentStart - size.x;
-    pos.y -= labelSize.y;
-    pos.y += labelSize.y / 2;
+    pos.y -= size.y;
     uBorder(pos, size);
 
-    bool clicked = ClickCheck(pos, pos + size, true);
-    if (clicked) {
+    bool edited = ClickCheck(pos, pos + size, CheckOpt_WhileMouseDown);
+    if (edited) {
         Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
         mousePos -= pos;
         *val = Remap(mousePos.x, 0.0f, size.x, 0.0f, 1.0f);
     }
 
-    if (GetKeyReleased(Key_LEFT))  
-        *val -= 0.1f,  clicked = true;
-    if (GetKeyReleased(Key_RIGHT)) 
-        *val += 0.1f,  clicked = true;
+    if (mElementFocused && GetKeyReleased(Key_LEFT))  
+        *val -= 0.1f,  edited = true;
+    if (mElementFocused && GetKeyReleased(Key_RIGHT)) 
+        *val += 0.1f,  edited = true;
 
     *val = Clamp(*val, 0.0f, 1.0f);
     
-    float lineThickness = uGetFloat(ufLineThickness);
-    size.x *= *val;
-    pos    += lineThickness;
-    size   -= lineThickness;
-    uQuad(pos, size, 0xFF181818u);
-
-    // todo
-    return clicked;
+    if (*val > 0.001f)
+    {
+        float lineThickness = uGetFloat(ufLineThickness);
+        size.x *= *val;
+        pos    += lineThickness;
+        size   -= lineThickness;
+        uQuad(pos, size, uGetColor(uColorSliderInside));
+    }
+    mElementFocused = false;
+    return edited;
 }
 
+
 int uChoice(const char* label, Vector2f pos, const char** names, int numNames, int current)
-{
-    // todo
-    return false;
+{   
+    Vector2f labelSize = Label(label, pos);
+    Vector2f size = { uGetFloat(ufTextBoxWidth), uGetFloat(ufSliderHeight) };
+
+    float contentStart = uGetFloat(ufContentStart);
+    pos.x += contentStart - size.x;
+
+    Vector2f startPos = pos;
+    // write centered text
+    Vector2f nameSize  = uCalcTextSize(names[current]);
+    Vector2f arrowSize = MakeVec2(mCurrentFontAtlas->maxCharWidth);
+    float centerOffset = (size.x - nameSize.x) / 2.0f;
+    
+    pos.x += centerOffset;
+    uText(names[current], pos);    
+    pos.x -= centerOffset + arrowSize.x;
+
+    uText(IC_LEFT_TRIANGLE, pos);
+    pos.y -= size.y;
+    const CheckOpt chkOpt = CheckOpt_BigColission;
+    bool goLeft = mElementFocused && GetKeyPressed(Key_LEFT);
+    if (ClickCheck(pos, arrowSize, chkOpt) || goLeft)
+    {
+        if (current > 0) current--;
+        else current = numNames - 1;
+    }
+    pos = startPos;
+    pos.x += size.x;
+    uText(IC_RIGHT_TRIANGLE, pos);
+    pos.y -= size.y;
+    bool goRight = mElementFocused && GetKeyPressed(Key_RIGHT);
+    if (ClickCheck(pos, arrowSize, chkOpt) || goRight)
+    {
+        if (current < numNames-1) current++;
+        else current = 0;
+    }
+    mElementFocused = false;
+    return current;
 }
 
 void uBegin()
@@ -1004,12 +1018,81 @@ void uBegin()
     mAnyTextEdited = false;
 }
 
+//------------------------------------------------------------------------
+// Rendering
+
+static void uRenderQuads()
+{
+    Vector2i windowSize = GetWindowSize();
+    rBindShader(mQuadShader);
+
+    rUpdateTexture(mQuadPosTex, mQuadPositions);
+    rUpdateTexture(mQuadDataTex, mQuadData);
+
+    rSetTexture(mQuadPosTex , 0, posTexLocQuad);
+    rSetTexture(mQuadDataTex, 1, dataTexLocQuad);
+    
+    rSetShaderValue(&mWindowRatio.x, uScaleLocQuad, GraphicType_Vector2f);
+    rSetShaderValue(&windowSize.x, uScrSizeLocQuad, GraphicType_Vector2i);
+
+    rRenderMeshNoVertex(6 * mQuadIndex); // 6 index for each char
+
+    mQuadIndex = 0;
+}
+
+static void uRenderTexts()
+{
+    rBindShader(mFontShader);
+
+    {
+        rUpdateTexture(mPosTex, mTextPositions);
+        rUpdateTexture(mDataTex, mTextData);
+        rSetTexture(mPosTex , 0, posTexLoc);
+        rSetTexture(mDataTex, 1, dataTexLoc);
+        rSetTexture(mCurrentFontAtlas->textureHandle, 3, atlasLoc);
+    }
+
+    Vector2i windowSize = GetWindowSize();
+    rSetShaderValue(&windowSize.x, uScrSizeLoc, GraphicType_Vector2i);
+
+    rRenderMeshNoVertex(6 * mNumChars); // 6 index for each char
+    mNumChars = 0;
+}
+
 void uRender()
 {
+    // prepare
+    rSetBlending(true);
+    rSetBlendingFunction(rBlendFunc_Alpha, rBlendFunc_OneMinusAlpha);
+
+    rUnpackAlignment(4);
+    rClearDepth();
+
     uRenderQuads();
     uRenderTexts();
 
     if (!mAnyTextEdited) {
         mCurrText.Editing = false;
     }
+
+    rSetBlending(false);
+}
+
+void uDestroy()
+{
+    if (!mInitialized) 
+        return;
+    rDeleteShader(mFontShader);
+    rDeleteTexture(mPosTex);
+    rDeleteTexture(mDataTex);
+
+    for (int i = 0; i < mNumFontAtlas; i++) {
+        Texture fakeTex;
+        fakeTex.handle = mFontAtlases[i].textureHandle;
+        rDeleteTexture(fakeTex);
+    }
+
+    rDeleteShader(mQuadShader);
+    rDeleteTexture(mQuadPosTex);
+    rDeleteTexture(mQuadDataTex);
 }

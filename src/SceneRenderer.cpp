@@ -745,8 +745,6 @@ static void LightingPass()
         Matrix4 invView = Matrix4::Inverse(m_Camera.view);
         Matrix4 invProj = Matrix4::Inverse(m_Camera.projection);
 
-        rSetShaderValue((float)GetDeltaTime(), rGetUniformLocation("uDeltaTime"));
-        
         rSetShaderValue(&sunLight.dir.x  , lSunDir, GraphicType_Vector3f);
         rSetShaderValue(&m_CharacterPos.x, lPlayerPos, GraphicType_Vector3f);
 

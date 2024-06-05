@@ -15,15 +15,16 @@ void main()
     int vertexID = gl_VertexID % 6;
 
     // ----    Create Vertex    ----
-    vec2 pos  = texelFetch(posTex , ivec2(quadID, 0), 0).rg;
+    vec2 pos = texelFetch(posTex , ivec2(quadID, 0), 0).rg;
    
     // read per quad data
-    uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
+    highp uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
     // unpack per quad data
     lowp uint depth     = (data.y >> 8) & 0xFFu; // unused for now
     lowp uint character = data.y & 0xFFu; // corresponds to ascii character, used for atlas indexing
     float scale = unpackHalf2x16(data.y).y;
-    vec2 size   = unpackHalf2x16(data.x);
+    vec2 size   = vec2(float((data.x >> 0u)  & 0xFFFFu),
+                       float((data.x >> 16u) & 0xFFFFu));
     vColor      = unpackUnorm4x8(data.z);
 
     // ----    Create Vertex    ----

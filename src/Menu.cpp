@@ -99,9 +99,9 @@ static void OptionsMenu()
     Vector2f pos = bgPos;
 
     const float textPadding      = 13.0f;
-    const float elementScale     = 0.8f;
     const float settingsXStart   = 18.0f;
     const float squareButtonSize = 30.0f;
+    float elementScale = !IsAndroid() ? 0.8f : 1.25f;
     Vector2f zero2 = { 0.0f, 0.0f };
     
     float settingElementWidth = bgScale.x / 3.0f;
@@ -112,7 +112,7 @@ static void OptionsMenu()
     uQuad(pos, bgScale, uGetColor(uColorQuad));
     uBorder(pos, bgScale);
 
-    uPushFloat(ufTextScale, 1.2f);
+    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.2f);
     Vector2f textSize = uCalcTextSize("Settings");
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
@@ -124,46 +124,68 @@ static void OptionsMenu()
     pos.x += xoffset;
     pos.y += 20.0f; // line padding
     pos.x -= settingsXStart;
-    uLineHorizontal(pos, lineLength);
-    pos.x -= xoffset;
 
+    uPushColor(uColorLine, 0xABABABABu);
+    uPushFloat(ufLineThickness, uGetFloat(ufLineThickness) * 0.62f);
+    uLineHorizontal(pos, lineLength);
+    uPopFloat(ufLineThickness);
+    uPopColor(uColorLine);
+
+    pos.x -= xoffset;
     pos.x += elementsXOffset;
     pos.y += textSize.y + textPadding;
 
     static int CurrElement = 0;
-    const int numElements = 6; // number of options plus back button
+    const int numElements = 7; // number of options plus back button
+    const int backIndex = numElements - 1;
     float elementsYStart = pos.y - (textSize.y * 0.42f);
     float elementsXStart = pos.x;
     
     uPushFloat(ufTextScale, elementScale);
+    uSetElementFocused(CurrElement == 0);
     if (uCheckBox("Vsync", &isVsyncEnabled, pos))
     {
         wSetVSync(isVsyncEnabled);
     }
 
     textSize.y = uCalcTextSize("V").y;
+    uSetElementFocused(CurrElement == 1);
     pos.y += textSize.y + textPadding;
     uCheckBox("Show Fps", &showFPS, pos);
     
-
     pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 2);
     uCheckBox("Show Location", &showLocation, pos);
     
     pos.y += textSize.y + textPadding;
     static char name[128] = {};
-    uTextBoxOptions txtOpt = CurrElement == 3;
-    if (uTextBox("Name", pos, zero2, name, txtOpt)) {
+    uSetElementFocused(CurrElement == 3);
+    if (uTextBox("Name", pos, zero2, name)) {
         CurrElement = 3;
     }
 
     pos.y += textSize.y + textPadding;
     static float volume = 0.5f;
+    uSetElementFocused(CurrElement == 4);
     if (uSlider("Volume", pos, &volume, uGetFloat(ufTextBoxWidth))) {
         CurrElement = 4;
     }
 
+    const char* graphicsNames[] = { "Low" , "Medium", "High", "Ultra" };
+    static int CurrentGraphics = 0;
+    pos.y += textSize.y + textPadding;
+
+    uSetElementFocused(CurrElement == 5);
+    int selectedGraphics = uChoice("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics);
+    if (selectedGraphics != CurrentGraphics) { // element changed
+        CurrElement = 5;
+    }
+    CurrentGraphics = selectedGraphics;
+
     pos = bgPos + bgScale - MakeVec2(200.0f, 100.0f);
-    uButtonOptions buttonOpt = uButtonOpt_Border * (CurrElement == 5);
+    // draw border only if we selected or it is android
+    uButtonOptions buttonOpt = uButtonOpt_Border * (CurrElement == backIndex || IsAndroid());
+    uSetElementFocused(CurrElement == 6);
     if (uButton("Back", pos, zero2, buttonOpt)) {
         menuState = MenuState_PauseMenu;
     }
@@ -175,33 +197,17 @@ static void OptionsMenu()
                                           textSize.y * CurrElement + 
                                           textPadding * CurrElement};
     
-    if (CurrElement != 5)
+    if (!IsAndroid() && CurrElement != backIndex)
     {
         float borderspace = uGetFloat(ufButtonSpace) * 0.8f;
         borderPos -= borderspace;
         uBorder(borderPos, MakeVec2(settingElementWidth + borderspace, textSize.y) + borderspace);
-    }
+    } 
 
     if (GetKeyPressed(Key_UP))
         CurrElement = CurrElement == 0 ? numElements - 1 : CurrElement - 1;
     else if (GetKeyPressed(Key_DOWN) || GetKeyPressed(Key_TAB))
         CurrElement = CurrElement == numElements - 1 ? 0 : CurrElement + 1;
-
-    if (GetKeyPressed(Key_ENTER))
-    {
-        switch (CurrElement)
-        {
-            case 0:
-                isVsyncEnabled = !isVsyncEnabled; 
-                wSetVSync(isVsyncEnabled); 
-                break;
-            case 1: showFPS = !showFPS; break;
-            case 2: showLocation = !showLocation; break;
-            // case 3: // text edit entered do nothing
-            // case 4: // slider do  nothing
-            case 5: menuState = MenuState_PauseMenu; break;
-        };
-    }
 }
 
 static void ShowFPS()
@@ -225,12 +231,12 @@ static void ShowFPS()
 void ShowMenu()
 {
     uBegin();
-    uSetFloat(ufTextScale, 1.0f);
 
     ShowFPS();
 
     if (IsAndroid() && menuState == MenuState_Gameplay) {
-        if (uButton(IC_PAUSE, MakeVec2(1880.0f, 30.0f), Vector2f::Zero()))
+        uSetFloat(ufTextScale, 1.2f);
+        if (uButton(IC_PAUSE, MakeVec2(1880.0f, 30.0f), Vector2f::Zero(), uButtonOpt_Border))
         {
             menuState = MenuState_PauseMenu;
         }

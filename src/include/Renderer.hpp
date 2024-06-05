@@ -201,6 +201,7 @@ enum TexFlags_
     TexFlags_Compressed  = 2,
     TexFlags_ClampToEdge = 4,
     TexFlags_Nearest     = 8,
+    TexFlags_Linear      = 16, // default linear in desktop platforms
     // no filtering or wrapping
     TexFlags_RawData     = TexFlags_Nearest | TexFlags_ClampToEdge
 };

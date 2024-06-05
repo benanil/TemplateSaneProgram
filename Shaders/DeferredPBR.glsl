@@ -37,7 +37,6 @@ uniform lowp    sampler2D uAmbientOclussionTex; // < ambient occlusion
 
 uniform highp   vec3 uPlayerPos;
 uniform mediump vec3 uSunDir;
-uniform mediump float uDeltaTime;
 
 uniform highp mat4 uInvView;
 uniform highp mat4 uInvProj;

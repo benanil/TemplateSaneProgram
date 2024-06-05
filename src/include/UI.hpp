@@ -31,16 +31,14 @@ enum uColor_{
     uColorLine, 
     uColorBorder,
     uColorCheckboxBG,
-    uColorTextBoxBG
+    uColorTextBoxBG,
+    uColorSliderInside,
+    uColorTextBoxCursor
 };
 
-enum uButtonOptions_ { // bitmask
+enum uButtonOpt_ { // bitmask
     uButtonOpt_Hovered = 1,
     uButtonOpt_Border  = 2
-};
-
-enum uTextBoxOptions_ { // bitmask
-    uTextBoxOptions_Editing = 1
 };
 
 enum uFloat_ {
@@ -58,7 +56,6 @@ typedef int FontHandle;
 typedef int uColor;
 typedef int uButtonOptions;
 typedef int uFloat;
-typedef int uTextBoxOptions;
 //------------------------------------------------------------------------
 // also sets the current font to the loaded font
 FontHandle uLoadFont(const char* file);
@@ -69,6 +66,7 @@ void uWindowResizeCallback(int width, int height);
 void uKeyPressCallback(unsigned unicode);
 
 //------------------------------------------------------------------------
+void uSetElementFocused(bool val); // next element that will drawn is going to be focused
 void uSetFont(FontHandle font);
 void uSetDepth(char depth);
 void uSetColor(uColor what, uint color); // set color of the buttons, texts etc.
@@ -102,7 +100,16 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos);
 // val should be between 0 and 1
 bool uSlider(const char* label, Vector2f pos, float* val, float scale); 
 
-bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text, uTextBoxOptions opt = 0);
+// it will look like this: <  option  >
+// current is the current index of elements.
+// returns new index if value changed.
+// usage:
+//      const char* graphicsNames[] = { "Low" , "Medium", "High", "Ultra" };
+//      static int CurrentGraphics = 0;
+//      CurrentGraphics = uChoice("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics)
+int uChoice(const char* label, Vector2f pos, const char** elements, int numElements, int current);
+
+bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text);
 
 void uLineVertical(Vector2f begin, float size);
 
