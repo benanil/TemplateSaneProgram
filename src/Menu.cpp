@@ -93,7 +93,7 @@ static void PauseMenu()
 static void OptionsMenu()
 {
     Vector2f bgPos;
-    Vector2f bgScale = { 1200.0f, 600.0f };
+    Vector2f bgScale = { 800.0f, 600.0f };
     bgPos.x = (1920.0f / 2.0f) - (bgScale.x / 2.0f);
     bgPos.y = (1080.0f / 2.0f) - (bgScale.y / 2.0f);
     Vector2f pos = bgPos;
@@ -104,7 +104,7 @@ static void OptionsMenu()
     float elementScale = !IsAndroid() ? 0.8f : 1.25f;
     Vector2f zero2 = { 0.0f, 0.0f };
     
-    float settingElementWidth = bgScale.x / 3.0f;
+    float settingElementWidth = bgScale.x / 1.25f;
     float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
 
     uPushFloat(ufContentStart, settingElementWidth);
@@ -125,9 +125,9 @@ static void OptionsMenu()
     pos.y += 20.0f; // line padding
     pos.x -= settingsXStart;
 
-    uPushColor(uColorLine, 0xABABABABu);
+    uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
     uPushFloat(ufLineThickness, uGetFloat(ufLineThickness) * 0.62f);
-    uLineHorizontal(pos, lineLength);
+        uLineHorizontal(pos, lineLength);
     uPopFloat(ufLineThickness);
     uPopColor(uColorLine);
 
@@ -136,14 +136,14 @@ static void OptionsMenu()
     pos.y += textSize.y + textPadding;
 
     static int CurrElement = 0;
-    const int numElements = 9; // number of options plus back button
+    const int numElements = 10; // number of options plus back button
     const int backIndex = numElements - 1;
     float elementsYStart = pos.y - (textSize.y * 0.42f);
     float elementsXStart = pos.x;
     
     uPushFloat(ufTextScale, elementScale);
     uSetElementFocused(CurrElement == 0);
-    if (uCheckBox("Vsync", &isVsyncEnabled, pos))
+    if (uCheckBox("Vsync", &isVsyncEnabled, pos, true))
     {
         wSetVSync(isVsyncEnabled);
     }
@@ -151,11 +151,11 @@ static void OptionsMenu()
     textSize.y = uCalcTextSize("V").y;
     uSetElementFocused(CurrElement == 1);
     pos.y += textSize.y + textPadding;
-    uCheckBox("Show Fps", &showFPS, pos);
+    uCheckBox("Show Fps", &showFPS, pos, true);
     
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 2);
-    uCheckBox("Show Location", &showLocation, pos);
+    uCheckBox("Show Location", &showLocation, pos, true);
     
     pos.y += textSize.y + textPadding;
     static char name[128] = {};
@@ -192,14 +192,21 @@ static void OptionsMenu()
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 7);
     static float senstivity = 1.0f;
-    if (uFloatField("Senstivity", pos, &senstivity)) {
+    if (uFloatField("Senstivity", pos, &senstivity, -16.0f, 128.0f, 0.05f)) {
         CurrElement = 7;
     }
 
-    pos = bgPos + bgScale - MakeVec2(200.0f, 100.0f);
-    // draw border only if we selected or it is android
-    uButtonOptions buttonOpt = uButtonOpt_Border * (CurrElement == backIndex || IsAndroid());
+    static Vector2i Resolution = { 1920, 1080 };
+    pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 8);
+    if (uIntVecField("Resolution", pos, Resolution.arr, 2)) {
+        CurrElement = 8;
+    }
+
+    pos = bgPos + bgScale - MakeVec2(100.0f, 100.0f);
+    // draw border only if we selected or it is android
+    uSetElementFocused(CurrElement == 9);
+    uButtonOptions buttonOpt = uButtonOpt_Border | (CurrElement == 9 ? uButtonOpt_Hovered : 0);
     if (uButton("Back", pos, zero2, buttonOpt)) {
         menuState = MenuState_PauseMenu;
     }
@@ -218,9 +225,10 @@ static void OptionsMenu()
         uBorder(borderPos, MakeVec2(settingElementWidth + borderspace, textSize.y) + borderspace);
     } 
 
+    bool tabPressed = GetKeyPressed(Key_TAB) && CurrElement != 8; // if we are at int field we don't want to increase current element instead we want to go next element in vector field
     if (GetKeyPressed(Key_UP))
         CurrElement = CurrElement == 0 ? numElements - 1 : CurrElement - 1;
-    else if (GetKeyPressed(Key_DOWN) || GetKeyPressed(Key_TAB))
+    else if (GetKeyPressed(Key_DOWN) || tabPressed)
         CurrElement = CurrElement == numElements - 1 ? 0 : CurrElement + 1;
 }
 

@@ -25,15 +25,16 @@ enum {
 };
 
 enum uColor_{
-    uColorText, 
-    uColorQuad, 
-    uColorHovered, 
-    uColorLine, 
-    uColorBorder,
-    uColorCheckboxBG,
-    uColorTextBoxBG,
-    uColorSliderInside,
-    uColorTextBoxCursor
+    uColorText          , 
+    uColorQuad          , 
+    uColorHovered       , // < button hovered color
+    uColorLine          ,
+    uColorBorder        ,
+    uColorCheckboxBG    ,
+    uColorTextBoxBG     ,
+    uColorSliderInside  ,
+    uColorTextBoxCursor ,
+    uColorSelectedBorder, // < selected field, slider, textbox, checkbox...
 };
 
 enum uButtonOpt_ { // bitmask
@@ -51,7 +52,7 @@ enum uFloat_ {
     ufTextBoxWidth,
     ufSliderHeight,
     ufDepth       , // < between [0.0, 1.0] lower depth will shown on top
-    ufDragSpeed   , // drag speed of int or float fields default value 1.0
+    ufFieldWidth  , // < width of float or int fields
 };
 
 typedef int FontHandle;
@@ -96,14 +97,22 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt 
 void uQuad(Vector2f position, Vector2f scale, uint color);
 
 // returns true if changed
-bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos);
+// if cubeCheckMark is true, selected checkbox will look like square instead of checkmark
+bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMark = false);
 
 // val should be between 0 and 1
 bool uSlider(const char* label, Vector2f pos, float* val, float scale); 
 
-bool uIntField(const char* label, Vector2f pos, int* val);
+enum FieldRes_ { FieldRes_Changed = 1, FieldRes_Clicked = 2 };
+typedef int FieldRes;
 
-bool uFloatField(const char* label, Vector2f pos, float* val);
+FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal = 0, int maxVal = INT32_MAX, float dragSpeed = 1.0f);
+
+FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal = 0.0f, float maxVal = 1.0f, float dragSpeed = 0.1f);
+
+bool uIntVecField(const char* label, Vector2f pos, int* val, int N, int minVal = 0, int maxVal = INT32_MAX, float dragSpeed = 1.0f);
+
+bool uFloatVecField(const char* label, Vector2f pos, float* valArr, int N, float minVal = 0, float maxVal = INT32_MAX, float dragSpeed = 1.0f);
 
 // it will look like this: <  option  >
 // current is the current index of elements.

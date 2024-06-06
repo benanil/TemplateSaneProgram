@@ -24,6 +24,7 @@
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/Random.hpp"
+#include "../ASTL/HashMap.hpp"
 
 #include "include/UI.hpp"
 #include "include/Renderer.hpp"
@@ -102,7 +103,8 @@ namespace
 
     int mNumChars = 0; // textLen without spaces, or undefined characters    
     bool mInitialized = false;
-    bool mElementFocused = false;   
+    bool mElementFocused[8] = {};
+    int mElementFocusedIndex = 0;
     // uniform locations
     int posTexLoc, dataTexLoc, atlasLoc, uScrSizeLoc;
 
@@ -137,12 +139,12 @@ namespace
     uint mLastStrHash;
 
     bool mLastFloatEditing = false;
+    bool mDotPressed = false;
     int mFloatDigits = 3;
     float* mEditingFloat;
         
     //------------------------------------------------------------------------
     // configuration
-
     uint mColors[] = { 
         0xFFE1E1E1u, // uColorText
         0x8C000000u, // uColorQuad
@@ -151,8 +153,9 @@ namespace
         0xFF484848u, // uColorBorder
         0xFF0B0B0Bu, // uColorCheckboxBG
         0xFF0B0B0Bu, // UColorTextBoxBG
-        0xFF383838u, // uColorSliderInside 
-        0xFFFFFFFFu  // uColorTextBoxCursor
+        0xCF888888u, // uColorSliderInside 
+        0xFFFFFFFFu, // uColorTextBoxCursor
+        0xFF008CFAu  // uColorSelectedBorder
     };
     constexpr int NumColors = sizeof(mColors) / sizeof(uint);
     constexpr int StackSize = 6;
@@ -161,20 +164,21 @@ namespace
     int mColorStackCnt[NumColors] = { };
 
     float mFloats[] = {
-        2.2f  , // line thickness  
+        1.82f  , // line thickness  
         160.0f, // ufContentStart
         18.0f , // ButtonSpace
         1.0f  , // TextScale,
         175.0f, // TextBoxWidth
         18.0f , // Slider Width
         0.9f  , // Depth 
-        1.0f  , // Drag Speed
+        98.0f   // Field Width
     };
     constexpr int NumFloats = sizeof(mFloats) / sizeof(float);
-
     // stack for pushed floats
     float mFloatStack[NumFloats][StackSize];
     int mFloatStackCnt[NumFloats] = { };
+    
+    HashMap<void*, int> mIndexMap = {}; // given Field Pointer, returns Index  
 }
 
 void uWindowResizeCallback(int width, int height)
@@ -501,13 +505,18 @@ static inline Vector2i GetWindowSize()
 }
 
 void uSetElementFocused(bool val) {
-    mElementFocused = val;
+    ASSERTR(mElementFocusedIndex < 8, return);
+    mElementFocused[mElementFocusedIndex++] = val;
+}
+
+static bool uGetElementFocused() {
+    if (mElementFocusedIndex < 1) return false;
+    return mElementFocused[--mElementFocusedIndex];
 }
 
 void uSetFont(FontHandle font) {
     mCurrentFontAtlas = &mFontAtlases[font];
 }
-
 
 void uSetTheme(uColor what, uint color) {
     mColors[what] = color;
@@ -723,9 +732,9 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
         scale = uCalcTextSize(text) + buttonSpace;
         scale.x += buttonSpace;
     }
-    bool entered = mElementFocused && GetKeyPressed(Key_ENTER);
+    bool elementFocused = uGetElementFocused();
+    bool entered = elementFocused && GetKeyPressed(Key_ENTER);
     bool pressed = entered || ClickCheck(pos, scale);
-    mElementFocused = false;
 
     uint quadColor = uGetColor(uColorQuad);
     if (mWasHovered || !!(opt & uButtonOpt_Hovered))
@@ -746,7 +755,7 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     return pressed;
 }
 
-bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos)
+bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMark)
 {
     Vector2f textSize = uCalcTextSize(text);
     uText(text, pos);
@@ -767,21 +776,32 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos)
 
     Vector2f boxScale = { textSize.y * 0.85f, textSize.y * 0.85f};
     uQuad(pos, boxScale, uGetColor(uColorCheckboxBG));
-    uBorder(pos, boxScale);
 
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+        uBorder(pos, boxScale);
+    uPopColor(uColorBorder);
+    
     bool enabled = *isEnabled;
-    bool entered = mElementFocused && GetKeyPressed(Key_ENTER);
+    bool entered = elementFocused && GetKeyPressed(Key_ENTER);
     if (entered || ClickCheck(pos, boxScale, CheckOpt_BigColission)) {
         enabled = !enabled;
     }
-    mElementFocused = false;
 
-    if (enabled) {
+    if (enabled && !cubeCheckMark) {
         float scale = uGetFloat(ufTextScale);
         pos.y += textSize.y - 4.0f;
         uPushFloat(ufTextScale, scale * 0.85f);
         uText(IC_CHECK_MARK, pos); // todo properly scale the checkmark
         uPopFloat(ufTextScale);
+    }
+    else if (enabled && cubeCheckMark)
+    {
+        Vector2f slightScale = boxScale * 0.13f;
+        uint color = uGetColor(uColorSliderInside);
+        float lineThickness = uGetFloat(ufLineThickness);
+        uQuad(pos + slightScale + lineThickness, boxScale - (slightScale * 2.0f)-lineThickness, color);
     }
     
     bool changed = enabled != *isEnabled;
@@ -835,6 +855,12 @@ void uKeyPressCallback(unsigned unicode)
 {
     bool isEnter = unicode == 13;
     bool isEscape = unicode == 27;
+
+    if (unicode == '.') {
+        mDotPressed = true;
+        //mFloatDigits = 1;
+    }
+
     if (!mCurrText.Editing || isEnter || GetKeyDown(Key_CONTROL) || isEscape) return;
 
     bool hasSpace = mCurrText.Pos < mCurrText.MaxLen;
@@ -885,7 +911,12 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
 
     bool clicked = ClickCheck(pos, size);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
-    uBorder(pos, size);
+
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+        uBorder(pos, size);
+    uPopColor(uColorBorder);
 
     // todo: add cursor movement
     // set text position
@@ -895,8 +926,7 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     pos.x += offset;
 
     uPushFloat(ufTextScale, textScale * 0.7f);
-    
-    if (mElementFocused)
+    if (elementFocused)
     {
         // max number of characters that we can write
         const int TextCapacity = 128; // todo: make adjustable
@@ -949,7 +979,6 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     uText(text, pos);
     
     uPopFloat(ufTextScale);
-    mElementFocused = false;
     return clicked;
 }
 
@@ -961,18 +990,23 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     float contentStart = uGetFloat(ufContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
-    uBorder(pos, size);
+
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+        uBorder(pos, size);
+    uPopColor(uColorBorder);
 
     bool edited = ClickCheck(pos, size, CheckOpt_WhileMouseDown);
-    if (edited && mElementFocused) {
+    if (edited && elementFocused) {
         Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
         mousePos -= pos;
         *val = Remap(mousePos.x, 0.0f, size.x, 0.0f, 1.0f);
     }
 
-    if (mElementFocused && GetKeyReleased(Key_LEFT))  
+    if (elementFocused && GetKeyReleased(Key_LEFT))  
         *val -= 0.1f,  edited = true;
-    if (mElementFocused && GetKeyReleased(Key_RIGHT)) 
+    if (elementFocused && GetKeyReleased(Key_RIGHT)) 
         *val += 0.1f,  edited = true;
 
     *val = Clamp(*val, 0.0f, 1.0f);
@@ -984,11 +1018,14 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
         pos    += lineThickness;
         size   -= lineThickness;
         uQuad(pos, size, uGetColor(uColorSliderInside));
+        
+        uPushFloat(ufLineThickness, 3.0f);
+        pos.x += size.x;
+        uLineVertical(pos, size.y);
+        uPopFloat(ufLineThickness);
     }
-    mElementFocused = false;
     return edited;
 }
-
 
 int uChoice(const char* label, Vector2f pos, const char** names, int numNames, int current)
 {   
@@ -1010,10 +1047,13 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     uPopFloat(ufTextScale);
     pos.x -= centerOffset + arrowSize.x;
 
+    bool elementFocused = uGetElementFocused();
+    uint iconColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorText);
+    uPushColor(uColorText, iconColor);
     uText(IC_LEFT_TRIANGLE, pos);
     pos.y -= size.y;
     const CheckOpt chkOpt = CheckOpt_BigColission;
-    bool goLeft = mElementFocused && GetKeyPressed(Key_LEFT);
+    bool goLeft = elementFocused && GetKeyPressed(Key_LEFT);
     if (ClickCheck(pos, arrowSize, chkOpt) || goLeft)
     {
         if (current > 0) current--;
@@ -1023,20 +1063,20 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     pos.x += size.x;
     uText(IC_RIGHT_TRIANGLE, pos);
     pos.y -= size.y;
-    bool goRight = mElementFocused && GetKeyPressed(Key_RIGHT);
+    bool goRight = elementFocused && GetKeyPressed(Key_RIGHT);
     if (ClickCheck(pos, arrowSize, chkOpt) || goRight)
     {
         if (current < numNames-1) current++;
         else current = 0;
     }
-    mElementFocused = false;
+    uPopColor(uColorText);
     return current;
 }
 
-bool uIntField(const char* label, Vector2f pos, int* val)
+FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int maxVal, float dragSpeed)
 {
     Vector2f labelSize = Label(label, pos);
-    Vector2f size = { uGetFloat(ufTextBoxWidth) * 0.5f, uGetFloat(ufSliderHeight) };
+    Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
     float contentStart = uGetFloat(ufContentStart);
@@ -1045,11 +1085,18 @@ bool uIntField(const char* label, Vector2f pos, int* val)
 
     bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
-    uBorder(pos, size);
 
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+        uBorder(pos, size);
+    uPopColor(uColorBorder);
+
+    FieldRes result = FieldRes_Clicked * clicked;
     int value = *val;
     bool changed = false;
-    if (mElementFocused)
+
+    if (elementFocused)
     {
         bool mousePressing = GetMouseDown(MouseButton_Left);
         Vector2f mousePos;
@@ -1058,11 +1105,11 @@ bool uIntField(const char* label, Vector2f pos, int* val)
         Vector2f scaledSize = size * mWindowRatio;
         float mouseDiff = (mousePos.x - mMouseOld.x) * mWindowRatio.x;
 
-        if (mousePressing && mousePos.y > scaledPos.y + 0.0f && 
+        if (mousePressing && mousePos.y > scaledPos.y + 0.0f &&
                              mousePos.y < scaledPos.y + scaledSize.y) 
         {
-            float dragSpeed = uGetFloat(ufDragSpeed);
             value += int(mouseDiff * dragSpeed);
+            result |= FieldRes_Changed;
         }
         value += GetKeyReleased(Key_RIGHT);
         value -= GetKeyReleased(Key_LEFT);
@@ -1074,13 +1121,14 @@ bool uIntField(const char* label, Vector2f pos, int* val)
         if (pressedNumber != -1 && numDigits < maxDigits) {
             value *= 10;
             value += pressedNumber;
-            changed = true;
+            result |= FieldRes_Changed;
         }
         if (GetKeyPressed(Key_BACK) && value != 0) {
             value -= value % 10;
             value /= 10;
-            changed = true;
+            result |= FieldRes_Changed;
         }
+        value = Clamp(value, minVal, maxVal);
         *val = value;
     }
     
@@ -1094,7 +1142,7 @@ bool uIntField(const char* label, Vector2f pos, int* val)
     uPushFloat(ufTextScale, textScale * 0.7f);
         uText(valText, pos);
     uPopFloat(ufTextScale);
-    return changed;
+    return result;
 }
 
 static const int tenMap[] = { 1, 10, 100, 1000, 10000 };
@@ -1111,10 +1159,10 @@ inline float SetFloatFract0(float val, int n)
     return val + ival; // 12.340
 }
 
-bool uFloatField(const char* label, Vector2f pos, float* val)
+FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, float maxVal, float dragSpeed)
 {
     Vector2f labelSize = Label(label, pos);
-    Vector2f size = { uGetFloat(ufTextBoxWidth) * 0.5f, uGetFloat(ufSliderHeight) };
+    Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
     float contentStart = uGetFloat(ufContentStart);
@@ -1123,13 +1171,19 @@ bool uFloatField(const char* label, Vector2f pos, float* val)
 
     bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
-    uBorder(pos, size);
+
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+        uBorder(pos, size);
+    uPopColor(uColorBorder);
 
     float value = *val;
     bool changed = false;
-    int numDigits = Log10((unsigned)value) + 1;
+    FieldRes result = FieldRes_Clicked * clicked;
+    int numDigits = Log10(unsigned(Abs(value))) + 1;
 
-    if (mElementFocused)
+    if (elementFocused)
     {
         if (mEditingFloat != val) 
             mLastFloatEditing = false, mFloatDigits = 3;
@@ -1145,51 +1199,51 @@ bool uFloatField(const char* label, Vector2f pos, float* val)
         if (mousePressing && mousePos.y > scaledPos.y + 0.0f && 
             mousePos.y < scaledPos.y + scaledSize.y) 
         {
-            float dragSpeed = uGetFloat(ufDragSpeed);
-            value += mouseDiff * (dragSpeed * 0.1f);
+            value += mouseDiff * dragSpeed;
             mLastFloatEditing = false, mFloatDigits = 3;
+            changed = true;
+            result |= FieldRes_Changed;
         }
-        value += GetKeyReleased(Key_RIGHT) * 0.1f;
-        value -= GetKeyReleased(Key_LEFT) * 0.1f;
+        value += GetKeyReleased(Key_RIGHT) * dragSpeed;
+        value -= GetKeyReleased(Key_LEFT) * dragSpeed;
 
         const int maxDigits = 10;
         int pressedNumber = GetPressedNumber();
 
         if (pressedNumber != -1 && numDigits < maxDigits) {
-            // todo add pressed number at the end of the number
+            // add pressed number at the end of the number
             mLastFloatEditing = true;
-            changed = true;
-            if (mFloatDigits == 0) {
+            result |= FieldRes_Changed;
+            if (mFloatDigits != 0 || mDotPressed) {
+                value = SetFloatFract0(value, mFloatDigits);
+                mFloatDigits += mDotPressed;
+                value += pressedNumber * (1.0f / tenMap[mFloatDigits++]);
+            }
+            else {
                 value *= 10.0f;
                 value += (float)pressedNumber;
             }
-            else {
-                value = SetFloatFract0(value, mFloatDigits);
-                value += pressedNumber * (1.0f / tenMap[mFloatDigits++]);
-            }
+            mDotPressed = false;
             mFloatDigits = MIN(mFloatDigits, 4);
         }
-        if (GetKeyPressed(Key_BACK) && value >= 0.001f) {
-            // todo add pressed number at the end of the number
+        if (GetKeyPressed(Key_BACK)) {
+            // remove digit left of the real number
             mLastFloatEditing = true;
-            changed = true;
-
-            if (value < 10.0f) 
-                value = 0.0f;
+            result |= FieldRes_Changed;
 
             if (mFloatDigits == 0) {
-                value -= value - float((int)value);
-                value /= 10.0f;
+                int ipart = (int)value;
+                value -= value - float(ipart); // remove fraction if any
+                value -= float(ipart % 10); // remove last digit
+                value /= 10.0f; // reduce number of digits
             }
             else {
-                value = SetFloatFract0(value, mFloatDigits--);
+                value = SetFloatFract0(value, --mFloatDigits);
                 mFloatDigits = MAX(mFloatDigits, 0);
             }
         }
-
-        if (GetKeyPressed(Key_CONTROL) && mFloatDigits == 0) {
-            mFloatDigits = 1;
-        }
+        
+        value = Clamp(value, minVal, maxVal);
         *val = value;
     }
 
@@ -1204,9 +1258,10 @@ bool uFloatField(const char* label, Vector2f pos, float* val)
     } 
     else {
         if (mFloatDigits == 0) {
-            IntToString(valText, (int)value);
+            int lastIdx = IntToString(valText, (int)value);
+            if (mDotPressed) valText[lastIdx] = '.';
         } else {
-            FloatToString(valText, value, mFloatDigits);
+            FloatToString(valText, value, mFloatDigits-1);
         }
     }
     
@@ -1214,17 +1269,78 @@ bool uFloatField(const char* label, Vector2f pos, float* val)
     uPushFloat(ufTextScale, textScale * 0.7f);
         uText(valText, pos);
     uPopFloat(ufTextScale);
-    return changed || clicked;
+    return result;
 }
 
-bool uIntVecField(const char* label, Vector2f pos, int* val, int N)
+bool uIntVecField(const char* label, Vector2f pos, int* valArr, int N, int minVal, int maxVal, float dragSpeed)
 {
-    return false;
+    Vector2f labelSize = Label(label, pos);
+    const float fieldWidth = uGetFloat(ufFieldWidth);
+    const float padding = fieldWidth * 0.07f;
+    // start it from left
+    const int Nmin1 = N - 1;
+    pos.x -= fieldWidth * Nmin1 + (padding * Nmin1);
+
+    if (!mIndexMap.Contains((void*)valArr)) {
+        mIndexMap[(void*)valArr] = 0;
+    }
+
+    int currentIndex = mIndexMap[(void*)valArr];
+    if (GetKeyPressed(Key_TAB)) {
+        mIndexMap[(void*)valArr] = currentIndex < N-1 ? currentIndex+1 : currentIndex;
+    }
+
+    bool elementFocused = uGetElementFocused();
+    bool changed = 0;
+    FieldRes fieldRes;
+
+    for (int i = 0; i < N; i++)
+    {
+        bool fieldFocused = i == currentIndex && elementFocused;
+        uSetElementFocused(fieldFocused);
+        fieldRes = uIntField(nullptr, pos, valArr + i, minVal, maxVal, dragSpeed);
+        if (!!(fieldRes & FieldRes_Clicked))
+            mIndexMap[(void*)valArr] = i;
+        changed |= fieldRes > 0;
+        pos.x += fieldWidth + padding;
+    }
+    return changed;
 }
 
-bool uFloatVecField(const char* label, Vector2f pos, float* val, int N)
+bool uFloatVecField(const char* label, Vector2f pos, float* valArr, int N, float minVal, float maxVal, float dragSpeed)
 {
-    return false;
+    Vector2f labelSize = Label(label, pos);
+    const float fieldWidth = uGetFloat(ufFieldWidth);
+    const float padding = fieldWidth * 0.07f;
+    // start it from left
+    const int Nmin1 = N - 1;
+    pos.x -= fieldWidth * Nmin1 + (padding * Nmin1);
+
+    if (!mIndexMap.Contains((void*)valArr)) {
+        mIndexMap[(void*)valArr] = 0;
+    }
+
+    int currentIndex = mIndexMap[(void*)valArr];
+    if (GetKeyPressed(Key_TAB)) {
+        // todo go to next element when index go out
+        mIndexMap[(void*)valArr] = currentIndex < N-1 ? currentIndex+1 : currentIndex;
+    }
+
+    bool elementFocused = uGetElementFocused();
+    bool changed = 0;
+    FieldRes fieldRes;
+
+    for (int i = 0; i < N; i++)
+    {
+        bool fieldFocused = i == currentIndex && elementFocused;
+        uSetElementFocused(fieldFocused);
+        fieldRes = uFloatField(nullptr, pos, valArr + i, minVal, maxVal, dragSpeed);
+        if (!!(fieldRes & FieldRes_Clicked))
+            mIndexMap[(void*)valArr] = i;
+        changed |= fieldRes > 0;
+        pos.x += fieldWidth + padding;
+    }
+    return changed;
 }
 
 void uBegin()
