@@ -178,7 +178,7 @@ namespace
     float mFloatStack[NumFloats][StackSize];
     int mFloatStackCnt[NumFloats] = { };
     
-    HashMap<void*, int> mIndexMap = {}; // given Field Pointer, returns Index  
+    StackHashMap<void*, int, 256> mIndexMap = {}; // given Field Pointer, returns Index  
 }
 
 void uWindowResizeCallback(int width, int height)
