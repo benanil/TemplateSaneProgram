@@ -47,7 +47,7 @@ enum uFloat_ {
     // if set to zero it will start at the end of the text
     // Content Start is: Vsync On _________ [X]  the space between label and content
     ufContentStart,
-    ufButtonSpace , 
+    ufButtonSpace , // Space between button text and button quad start
     ufTextScale   , // 1.0 default
     ufTextBoxWidth,
     ufSliderHeight,
@@ -75,6 +75,7 @@ void uSetColor(uColor what, uint color); // set color of the buttons, texts etc.
 void uSetTheme(uint* colors);
 void uSetFloat(uFloat color, float val);
 
+// 0xFF000000 is black and alpha is 1.0 0x00FF0000 is blue so ABGR when writing with hex
 void uPushColor(uColor color, uint val);
 void uPushFloat(uFloat what, float val);
 
@@ -110,9 +111,23 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal = 0, in
 
 FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal = 0.0f, float maxVal = 1.0f, float dragSpeed = 0.1f);
 
-bool uIntVecField(const char* label, Vector2f pos, int* val, int N, int minVal = 0, int maxVal = INT32_MAX, float dragSpeed = 1.0f);
+bool uIntVecField(const char* label,
+                  Vector2f pos, 
+                  int* val, 
+                  int N, // number of vec elements
+                  int* index = nullptr, // holds the current selected element index
+                  int minVal = 0, 
+                  int maxVal = INT32_MAX, 
+                  float dragSpeed = 1.0f);
 
-bool uFloatVecField(const char* label, Vector2f pos, float* valArr, int N, float minVal = 0, float maxVal = INT32_MAX, float dragSpeed = 1.0f);
+bool uFloatVecField(const char* label, 
+                    Vector2f pos, 
+                    float* valArr, 
+                    int N, // number of vec elements
+                    int* index = nullptr, // holds the current selected element index
+                    float minVal = 0,
+                    float maxVal = 99999.0f, 
+                    float dragSpeed = 1.0f);
 
 // it will look like this: <  option  >
 // current is the current index of elements.

@@ -1,15 +1,15 @@
-/*********************************************************************************
-*  Purpose: Importing Fonts, Creating font atlases and rendering Text            *
-*  Author : Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com                       *
-*  Note:                                                                         *
-*  if you want icons, font must have Unicode Block 'Miscellaneous Technical'     *
-*  I've analysed the european countries languages and alphabets                  *
-*  to support most used letters in European languages.                           *
-*  English, German, Brazilian, Portuguese, Finnish, Swedish fully supported      *
-*  for letters that are not supported in other nations I've used transliteration *
-*  to get closest character. for now 12*12 = 144 character supported             *
-*  each character is maximum 48x48px                                             *
-*********************************************************************************/
+/*************************************************************************************
+*  Purpose: Importing Fonts, Creating font atlases and rendering Text                *
+*  Author : Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com                           *
+*  Note:                                                                             *
+*  if you want icons, font must have Unicode Block 'Miscellaneous Technical'         *
+*  I've analysed the european countries languages and alphabets                      *
+*  to support most used letters in European languages.                               *
+*  English, Turkish, German, Brazilian, Portuguese, Finnish, Swedish fully supported *
+*  for letters that are not supported in other nations I've used transliteration     *
+*  to get closest character. for now 12*12 = 144 character supported                 *
+*  each character is maximum 48x48px                                                 *
+**************************************************************************************/
 
 #include "include/AssetManager.hpp" // for AX_GAME_BUILD macro
 
@@ -24,7 +24,6 @@
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/Random.hpp"
-#include "../ASTL/HashMap.hpp"
 
 #include "include/UI.hpp"
 #include "include/Renderer.hpp"
@@ -70,7 +69,8 @@ struct TextData
     uint8 character, depth;
     half scale;
     uint color;
-    uint padding;
+    short posX;
+    short posY;
 };
 
 struct QuadData
@@ -78,8 +78,8 @@ struct QuadData
     uint size;
     uint color;
     uint8 depth;
-    uint8 padding[3];
-    uint padding1;
+    uint8 padding[3]; // we might want to add aditional data here
+    short posX, posY;
 };
 
 namespace
@@ -87,13 +87,6 @@ namespace
     FontAtlas mFontAtlases[4] = {};
     FontAtlas* mCurrentFontAtlas;
     int mNumFontAtlas = 0;
-
-    Shader mFontShader;
-    Texture mPosTex;
-    Texture mDataTex; // x = half2:size, y = character: uint8, depth: uint8, scale: half  
-
-    Vector2f mTextPositions[MaxCharacters];
-    TextData mTextData[MaxCharacters];
 
     Vector2f mWindowRatio; // ratio against 1920x1080, [1.0, 1.0] if 1080p 0.5 if half of it, 2.0 if two times bigger
     float mUIScale; // min(mWindowRatio.x, mWindowRatio.y)
@@ -105,24 +98,23 @@ namespace
     bool mInitialized = false;
     bool mElementFocused[8] = {};
     int mElementFocusedIndex = 0;
-    // uniform locations
-    int posTexLoc, dataTexLoc, atlasLoc, uScrSizeLoc;
+
+    //------------------------------------------------------------------------
+    // Text Batch renderer
+    Shader   mFontShader;
+    Texture  mTextDataTex; // x = half2:size, y = character: uint8, depth: uint8, scale: half  
+    TextData mTextData[MaxCharacters];
+    int dataTexLoc, atlasLoc, uScrSizeLoc; // uniform locations
 
     //------------------------------------------------------------------------
     // Quad Batch renderer
     const int MaxQuads = 512;
-
-    Shader mQuadShader;
-
-    Vector2f mQuadPositions[MaxQuads];
+    Shader   mQuadShader;
     QuadData mQuadData[MaxQuads];
-
-    Texture mQuadPosTex;
-    Texture mQuadDataTex;
+    Texture  mQuadDataTex;
 
     int mQuadIndex = 0;
-    // uniform locations
-    int posTexLocQuad, dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad;
+    int dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad; // uniform locations
 
     //------------------------------------------------------------------------
     // TextBox
@@ -138,10 +130,11 @@ namespace
     bool mAnyTextEdited = false;
     uint mLastStrHash;
 
-    bool mLastFloatEditing = false;
+    bool mLastFloatWriting = false;
+    bool mAnyFloatEdited = false;
     bool mDotPressed = false;
     int mFloatDigits = 3;
-    float* mEditingFloat;
+    float* mEditedFloat;
         
     //------------------------------------------------------------------------
     // configuration
@@ -166,7 +159,7 @@ namespace
     float mFloats[] = {
         1.82f  , // line thickness  
         160.0f, // ufContentStart
-        18.0f , // ButtonSpace
+        12.0f , // ButtonSpace
         1.0f  , // TextScale,
         175.0f, // TextBoxWidth
         18.0f , // Slider Width
@@ -177,8 +170,6 @@ namespace
     // stack for pushed floats
     float mFloatStack[NumFloats][StackSize];
     int mFloatStackCnt[NumFloats] = { };
-    
-    StackHashMap<void*, int, 256> mIndexMap = {}; // given Field Pointer, returns Index  
 }
 
 void uWindowResizeCallback(int width, int height)
@@ -194,12 +185,10 @@ void uInitialize()
     mFontShader = rCreateShader(fontVert.text, fontFrag.text);
     
     // per character textures
-    mPosTex  = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RG32F , TexFlags_RawData);
     // we will store mTextData array in this texture
-    mDataTex = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
+    mTextDataTex = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
     
     rBindShader(mFontShader);
-    posTexLoc     = rGetUniformLocation("posTex");
     dataTexLoc    = rGetUniformLocation("dataTex");
     atlasLoc      = rGetUniformLocation("atlas");
     uScrSizeLoc   = rGetUniformLocation("uScrSize");
@@ -211,11 +200,9 @@ void uInitialize()
     mQuadShader = rCreateShader(quadVert.text, quadFrag.text);
     
     // per character textures
-    mQuadPosTex  = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RG32F , TexFlags_RawData);
     mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
     
     rBindShader(mQuadShader);
-    posTexLocQuad   = rGetUniformLocation("posTex");
     dataTexLocQuad  = rGetUniformLocation("dataTex");
     uScrSizeLocQuad = rGetUniformLocation("uScrSize");
     uScaleLocQuad   = rGetUniformLocation("uScale");
@@ -596,7 +583,7 @@ void uText(const char* text, Vector2f position)
     position *= mWindowRatio;
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
     float scale = uGetFloat(ufTextScale);
-    scale *= mUIScale;
+    scale *= MAX(mWindowRatio.x, mWindowRatio.y); // mUIScale;
     half scalef16 = ConvertFloatToHalf(scale);
     uint color = uGetColor(uColorText);
 
@@ -622,6 +609,13 @@ void uText(const char* text, Vector2f position)
         Vector2f size;
         size.x = float(character.width) * scale;
         size.y = float(character.height) * scale;
+        
+        Vector2f pos = position;
+        pos.x += float(character.xoff) * scale;
+        pos.y += float(character.yoff) * scale;
+
+        mTextData[mNumChars].posX = (ushort)pos.x;
+        mTextData[mNumChars].posY = (ushort)pos.y;
 
         mTextData[mNumChars].size  = uint32_t(size.x + 1.0f);
         mTextData[mNumChars].size |= uint32_t(size.y + 1.0f) << 16;
@@ -630,11 +624,6 @@ void uText(const char* text, Vector2f position)
         mTextData[mNumChars].depth = currentDepth;
         mTextData[mNumChars].scale = scalef16;
         mTextData[mNumChars].color = color;
-
-        Vector2f pos = position;
-        pos.x += float(character.xoff) * scale;
-        pos.y += float(character.yoff) * scale;
-        mTextPositions[mNumChars] = pos;
 
         position.x += character.advence * scale;
         mNumChars++;
@@ -683,9 +672,11 @@ void uQuad(Vector2f position, Vector2f scale, uint color)
     ASSERTR(mQuadIndex < MaxQuads, return);
     if (mQuadIndex >= MaxQuads) return;
 
-    mQuadPositions[mQuadIndex] = position * mWindowRatio;
+    position *= mWindowRatio;
+    mQuadData[mQuadIndex].posX = (short)position.x;
+    mQuadData[mQuadIndex].posY = (short)position.y;
 
-    mQuadData[mQuadIndex].size  = uint32_t(scale.x + 1.0f);
+    mQuadData[mQuadIndex].size  = uint32_t(scale.x + 1.0f); 
     mQuadData[mQuadIndex].size |= uint32_t(scale.y + 1.0f) << 16;
     
     uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
@@ -770,11 +761,10 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
         pos.x += checkboxStart - checkboxHeight;
     }
 
-    textSize.y = checkboxHeight; // we want same box size for all checkboxes
-    pos.y -= textSize.y - 4.0f;
-    textSize *= mWindowRatio;
-
-    Vector2f boxScale = { textSize.y * 0.85f, textSize.y * 0.85f};
+    Vector2f boxScale = { checkboxHeight, checkboxHeight };
+    pos.y -= boxScale.y - 4.0f;
+    boxScale /= mWindowRatio;
+    boxScale *= 0.80f;
     uQuad(pos, boxScale, uGetColor(uColorCheckboxBG));
 
     bool elementFocused = uGetElementFocused();
@@ -791,7 +781,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
 
     if (enabled && !cubeCheckMark) {
         float scale = uGetFloat(ufTextScale);
-        pos.y += textSize.y - 4.0f;
+        pos.y += boxScale.y - 4.0f;
         uPushFloat(ufTextScale, scale * 0.85f);
         uText(IC_CHECK_MARK, pos); // todo properly scale the checkmark
         uPopFloat(ufTextScale);
@@ -853,15 +843,14 @@ inline char* utf8_prev_char(const char* start, char *s) {
 
 void uKeyPressCallback(unsigned unicode)
 {
-    bool isEnter = unicode == 13;
-    bool isEscape = unicode == 27;
-
     if (unicode == '.') {
         mDotPressed = true;
-        //mFloatDigits = 1;
     }
 
-    if (!mCurrText.Editing || isEnter || GetKeyDown(Key_CONTROL) || isEscape) return;
+    if (!mCurrText.Editing || GetKeyDown(Key_CONTROL) 
+        || unicode == 13 // enter
+        || unicode == 27 // escape
+        || unicode == 9) /* tab */ return; 
 
     bool hasSpace = mCurrText.Pos < mCurrText.MaxLen;
     bool isBackspace = unicode == 8;
@@ -998,6 +987,8 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     uPopColor(uColorBorder);
 
     bool edited = ClickCheck(pos, size, CheckOpt_WhileMouseDown);
+    
+    // fix: doesn't work with different scales
     if (edited && elementFocused) {
         Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
         mousePos -= pos;
@@ -1159,7 +1150,7 @@ inline float SetFloatFract0(float val, int n)
     return val + ival; // 12.340
 }
 
-FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, float maxVal, float dragSpeed)
+FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVal, float maxVal, float dragSpeed)
 {
     Vector2f labelSize = Label(label, pos);
     Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
@@ -1178,17 +1169,18 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
         uBorder(pos, size);
     uPopColor(uColorBorder);
 
-    float value = *val;
+    float value = *valPtr;
     bool changed = false;
     FieldRes result = FieldRes_Clicked * clicked;
     int numDigits = Log10(unsigned(Abs(value))) + 1;
 
     if (elementFocused)
     {
-        if (mEditingFloat != val) 
-            mLastFloatEditing = false, mFloatDigits = 3;
+        mAnyFloatEdited = true;
+        if (mEditedFloat != valPtr) 
+            mLastFloatWriting = false, mFloatDigits = 3;
         
-        mEditingFloat = val;
+        mEditedFloat = valPtr;
         bool mousePressing = GetMouseDown(MouseButton_Left);
         Vector2f mousePos;
         GetMouseWindowPos(&mousePos.x, &mousePos.y);
@@ -1200,7 +1192,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
             mousePos.y < scaledPos.y + scaledSize.y) 
         {
             value += mouseDiff * dragSpeed;
-            mLastFloatEditing = false, mFloatDigits = 3;
+            mLastFloatWriting = false, mFloatDigits = 3;
             changed = true;
             result |= FieldRes_Changed;
         }
@@ -1212,7 +1204,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
 
         if (pressedNumber != -1 && numDigits < maxDigits) {
             // add pressed number at the end of the number
-            mLastFloatEditing = true;
+            mLastFloatWriting = true;
             result |= FieldRes_Changed;
             if (mFloatDigits != 0 || mDotPressed) {
                 value = SetFloatFract0(value, mFloatDigits);
@@ -1228,7 +1220,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
         }
         if (GetKeyPressed(Key_BACK)) {
             // remove digit left of the real number
-            mLastFloatEditing = true;
+            mLastFloatWriting = true;
             result |= FieldRes_Changed;
 
             if (mFloatDigits == 0) {
@@ -1244,7 +1236,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
         }
         
         value = Clamp(value, minVal, maxVal);
-        *val = value;
+        *valPtr = value;
     }
 
     float offset = size.y * 0.1f;
@@ -1252,17 +1244,18 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
     pos.x += offset;
 
     char valText[32] = {};
-    if (!mLastFloatEditing) {
-        int afterpoint = 4 - MAX(numDigits, 1); // number of digits after dot'.' for example 123.000
-        FloatToString(valText, value, afterpoint);
-    } 
-    else {
+    if (mLastFloatWriting && elementFocused) 
+    {
         if (mFloatDigits == 0) {
             int lastIdx = IntToString(valText, (int)value);
             if (mDotPressed) valText[lastIdx] = '.';
         } else {
             FloatToString(valText, value, mFloatDigits-1);
         }
+    } 
+    else {
+        int afterpoint = MAX(4 - numDigits, 1); // number of digits after dot'.' for example 123.000
+        FloatToString(valText, value, afterpoint);
     }
     
     float textScale = uGetFloat(ufTextScale);
@@ -1272,25 +1265,21 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* val, float minVal, 
     return result;
 }
 
-bool uIntVecField(const char* label, Vector2f pos, int* valArr, int N, int minVal, int maxVal, float dragSpeed)
+bool uIntVecField(const char* label, Vector2f pos, int* vecPtr, int N, int* index, int minVal, int maxVal, float dragSpeed)
 {
+    AX_ASSUME(N <= 8);
     Vector2f labelSize = Label(label, pos);
     const float fieldWidth = uGetFloat(ufFieldWidth);
     const float padding = fieldWidth * 0.07f;
     // start it from left
     const int Nmin1 = N - 1;
     pos.x -= fieldWidth * Nmin1 + (padding * Nmin1);
-
-    if (!mIndexMap.Contains((void*)valArr)) {
-        mIndexMap[(void*)valArr] = 0;
-    }
-
-    int currentIndex = mIndexMap[(void*)valArr];
-    if (GetKeyPressed(Key_TAB)) {
-        mIndexMap[(void*)valArr] = currentIndex < N-1 ? currentIndex+1 : currentIndex;
-    }
-
     bool elementFocused = uGetElementFocused();
+
+    int currentIndex = index != nullptr ? *index : 0;
+    if (currentIndex > N - 1) currentIndex = 0;
+    currentIndex += elementFocused && GetKeyPressed(Key_TAB);
+
     bool changed = 0;
     FieldRes fieldRes;
 
@@ -1298,17 +1287,20 @@ bool uIntVecField(const char* label, Vector2f pos, int* valArr, int N, int minVa
     {
         bool fieldFocused = i == currentIndex && elementFocused;
         uSetElementFocused(fieldFocused);
-        fieldRes = uIntField(nullptr, pos, valArr + i, minVal, maxVal, dragSpeed);
+        fieldRes = uIntField(nullptr, pos, vecPtr + i, minVal, maxVal, dragSpeed);
         if (!!(fieldRes & FieldRes_Clicked))
-            mIndexMap[(void*)valArr] = i;
+            currentIndex = i;
         changed |= fieldRes > 0;
         pos.x += fieldWidth + padding;
     }
+    if (index != nullptr)
+        *index = currentIndex;
     return changed;
 }
 
-bool uFloatVecField(const char* label, Vector2f pos, float* valArr, int N, float minVal, float maxVal, float dragSpeed)
+bool uFloatVecField(const char* label, Vector2f pos, float* vecPtr, int N, int* index, float minVal, float maxVal, float dragSpeed)
 {
+    AX_ASSUME(N <= 8);
     Vector2f labelSize = Label(label, pos);
     const float fieldWidth = uGetFloat(ufFieldWidth);
     const float padding = fieldWidth * 0.07f;
@@ -1316,17 +1308,12 @@ bool uFloatVecField(const char* label, Vector2f pos, float* valArr, int N, float
     const int Nmin1 = N - 1;
     pos.x -= fieldWidth * Nmin1 + (padding * Nmin1);
 
-    if (!mIndexMap.Contains((void*)valArr)) {
-        mIndexMap[(void*)valArr] = 0;
-    }
-
-    int currentIndex = mIndexMap[(void*)valArr];
-    if (GetKeyPressed(Key_TAB)) {
-        // todo go to next element when index go out
-        mIndexMap[(void*)valArr] = currentIndex < N-1 ? currentIndex+1 : currentIndex;
-    }
-
     bool elementFocused = uGetElementFocused();
+
+    int currentIndex = index != nullptr ? *index : 0;
+    if (currentIndex > N - 1) currentIndex = 0;
+    currentIndex += elementFocused && GetKeyPressed(Key_TAB);
+
     bool changed = 0;
     FieldRes fieldRes;
 
@@ -1334,58 +1321,52 @@ bool uFloatVecField(const char* label, Vector2f pos, float* valArr, int N, float
     {
         bool fieldFocused = i == currentIndex && elementFocused;
         uSetElementFocused(fieldFocused);
-        fieldRes = uFloatField(nullptr, pos, valArr + i, minVal, maxVal, dragSpeed);
+        fieldRes = uFloatField(nullptr, pos, vecPtr + i, minVal, maxVal, dragSpeed);
         if (!!(fieldRes & FieldRes_Clicked))
-            mIndexMap[(void*)valArr] = i;
+            currentIndex = i;
         changed |= fieldRes > 0;
         pos.x += fieldWidth + padding;
     }
+    if (index != nullptr)
+        *index = currentIndex;
     return changed;
 }
 
-void uBegin()
-{
-    mAnyTextEdited = false;
-}
 //------------------------------------------------------------------------
 // Rendering
 
-static void uRenderQuads()
+static void uRenderQuads(Vector2i windowSize)
 {
-    Vector2i windowSize = GetWindowSize();
     rBindShader(mQuadShader);
 
-    rUpdateTexture(mQuadPosTex, mQuadPositions);
     rUpdateTexture(mQuadDataTex, mQuadData);
-
-    rSetTexture(mQuadPosTex , 0, posTexLocQuad);
-    rSetTexture(mQuadDataTex, 1, dataTexLocQuad);
+    rSetTexture(mQuadDataTex, 0, dataTexLocQuad);
     
     rSetShaderValue(&mWindowRatio.x, uScaleLocQuad, GraphicType_Vector2f);
     rSetShaderValue(&windowSize.x, uScrSizeLocQuad, GraphicType_Vector2i);
 
     rRenderMeshNoVertex(6 * mQuadIndex); // 6 index for each char
-
     mQuadIndex = 0;
 }
 
-static void uRenderTexts()
+static void uRenderTexts(Vector2i windowSize)
 {
     rBindShader(mFontShader);
 
-    {
-        rUpdateTexture(mPosTex, mTextPositions);
-        rUpdateTexture(mDataTex, mTextData);
-        rSetTexture(mPosTex , 0, posTexLoc);
-        rSetTexture(mDataTex, 1, dataTexLoc);
-        rSetTexture(mCurrentFontAtlas->textureHandle, 3, atlasLoc);
-    }
+    rUpdateTexture(mTextDataTex, mTextData);
+    rSetTexture(mTextDataTex, 0, dataTexLoc);
+    rSetTexture(mCurrentFontAtlas->textureHandle, 1, atlasLoc);
 
-    Vector2i windowSize = GetWindowSize();
     rSetShaderValue(&windowSize.x, uScrSizeLoc, GraphicType_Vector2i);
 
     rRenderMeshNoVertex(6 * mNumChars); // 6 index for each char
     mNumChars = 0;
+}
+
+void uBegin()
+{
+    mAnyTextEdited = false;
+    mAnyFloatEdited = false;
 }
 
 void uRender()
@@ -1397,12 +1378,15 @@ void uRender()
     rUnpackAlignment(4);
     rClearDepth();
 
-    uRenderQuads();
-    uRenderTexts();
+    Vector2i windowSize = GetWindowSize();
+    uRenderQuads(windowSize);
+    uRenderTexts(windowSize);
 
-    if (!mAnyTextEdited) {
+    if (!mAnyTextEdited) 
         mCurrText.Editing = false;
-    }
+
+    if (!mAnyFloatEdited)
+        mLastFloatWriting = false, mFloatDigits = 3;
 
     rSetBlending(false);
     GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
@@ -1413,8 +1397,7 @@ void uDestroy()
     if (!mInitialized) 
         return;
     rDeleteShader(mFontShader);
-    rDeleteTexture(mPosTex);
-    rDeleteTexture(mDataTex);
+    rDeleteTexture(mTextDataTex);
 
     for (int i = 0; i < mNumFontAtlas; i++) {
         Texture fakeTex;
@@ -1423,6 +1406,5 @@ void uDestroy()
     }
 
     rDeleteShader(mQuadShader);
-    rDeleteTexture(mQuadPosTex);
     rDeleteTexture(mQuadDataTex);
 }

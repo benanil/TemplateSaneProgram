@@ -93,14 +93,13 @@ static void PauseMenu()
 static void OptionsMenu()
 {
     Vector2f bgPos;
-    Vector2f bgScale = { 800.0f, 600.0f };
+    Vector2f bgScale = { 1000.0f, 666.0f };
     bgPos.x = (1920.0f / 2.0f) - (bgScale.x / 2.0f);
     bgPos.y = (1080.0f / 2.0f) - (bgScale.y / 2.0f);
     Vector2f pos = bgPos;
 
     const float textPadding      = 13.0f;
     const float settingsXStart   = 18.0f;
-    const float squareButtonSize = 30.0f;
     float elementScale = !IsAndroid() ? 0.8f : 1.25f;
     Vector2f zero2 = { 0.0f, 0.0f };
     
@@ -137,9 +136,6 @@ static void OptionsMenu()
 
     static int CurrElement = 0;
     const int numElements = 10; // number of options plus back button
-    const int backIndex = numElements - 1;
-    float elementsYStart = pos.y - (textSize.y * 0.42f);
-    float elementsXStart = pos.x;
     
     uPushFloat(ufTextScale, elementScale);
     uSetElementFocused(CurrElement == 0);
@@ -197,34 +193,27 @@ static void OptionsMenu()
     }
 
     static Vector2i Resolution = { 1920, 1080 };
+    static int vecIndex = 0;
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 8);
-    if (uIntVecField("Resolution", pos, Resolution.arr, 2)) {
+    if (uIntVecField("Resolution", pos, Resolution.arr, 2, &vecIndex)) {
         CurrElement = 8;
     }
+    if (vecIndex == 2) CurrElement = 9; // pressed tab
 
     pos = bgPos + bgScale - MakeVec2(100.0f, 100.0f);
     // draw border only if we selected or it is android
     uSetElementFocused(CurrElement == 9);
     uButtonOptions buttonOpt = uButtonOpt_Border | (CurrElement == 9 ? uButtonOpt_Hovered : 0);
+    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
     if (uButton("Back", pos, zero2, buttonOpt)) {
         menuState = MenuState_PauseMenu;
     }
     uPopFloat(ufTextScale);
-    uPopFloat(ufContentStart);
- 
-    // draw selection Border
-    Vector2f borderPos = {elementsXStart, elementsYStart + 
-                                          textSize.y * CurrElement + 
-                                          textPadding * CurrElement};
     
-    if (!IsAndroid() && CurrElement != backIndex)
-    {
-        float borderspace = uGetFloat(ufButtonSpace) * 0.8f;
-        borderPos -= borderspace;
-        uBorder(borderPos, MakeVec2(settingElementWidth + borderspace, textSize.y) + borderspace);
-    } 
-
+    uPopFloat(ufTextScale);
+    uPopFloat(ufContentStart);
+    
     bool tabPressed = GetKeyPressed(Key_TAB) && CurrElement != 8; // if we are at int field we don't want to increase current element instead we want to go next element in vector field
     if (GetKeyPressed(Key_UP))
         CurrElement = CurrElement == 0 ? numElements - 1 : CurrElement - 1;
@@ -257,7 +246,7 @@ void ShowMenu()
     ShowFPS();
 
     if (IsAndroid() && menuState == MenuState_Gameplay) {
-        uSetFloat(ufTextScale, 1.2f);
+        uSetFloat(ufTextScale, 1.125f);
         if (uButton(IC_PAUSE, MakeVec2(1880.0f, 30.0f), Vector2f::Zero(), uButtonOpt_Border))
         {
             menuState = MenuState_PauseMenu;

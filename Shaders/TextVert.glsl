@@ -1,9 +1,7 @@
 
-// per character textures
-uniform highp sampler2D posTex;  // vec2 fp32
+// per character texture
 // x = half2:size, y = character: uint8, depth: uint8, scale: half
 uniform highp usampler2D dataTex; 
-
 uniform ivec2 uScrSize;
 
 out mediump vec2 vTexCoord;
@@ -14,18 +12,19 @@ void main()
     int quadID   = gl_VertexID / 6;
     int vertexID = gl_VertexID % 6;
 
-    // ----    Create Vertex    ----
-    vec2 pos = texelFetch(posTex , ivec2(quadID, 0), 0).rg;
-   
     // read per quad data
     highp uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
     // unpack per quad data
     lowp uint depth     = (data.y >> 8) & 0xFFu; // unused for now
     lowp uint character = data.y & 0xFFu; // corresponds to ascii character, used for atlas indexing
+    vec2 size = vec2(float((data.x >> 0u)  & 0xFFFFu),
+                     float((data.x >> 16u) & 0xFFFFu));
+
+    vec2 pos = vec2(float((data.w >> 0) & 0xFFFFu),
+                    float((data.w >> 16) & 0xFFFFu));
+
     float scale = unpackHalf2x16(data.y).y;
-    vec2 size   = vec2(float((data.x >> 0u)  & 0xFFFFu),
-                       float((data.x >> 16u) & 0xFFFFu));
-    vColor      = unpackUnorm4x8(data.z);
+    vColor = unpackUnorm4x8(data.z);
 
     // ----    Create Vertex    ----
     vec2 scrSize = vec2(uScrSize);

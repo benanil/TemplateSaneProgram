@@ -1,6 +1,5 @@
 
 // per character textures
-uniform highp sampler2D  posTex;  // vec2 fp32
 uniform highp usampler2D dataTex; // ivec2 uint32 = half2:size, rgba8:color
 
 uniform ivec2 uScrSize;
@@ -15,16 +14,15 @@ void main()
     int vertexID = gl_VertexID % 6;
 
     // unpack per quad data
-    highp uvec3 data = texelFetch(dataTex, ivec2(quadID, 0), 0).rgb;
-    lowp uint depth = data.z & 0xFF;
-    vec2 size  = vec2(float(data.x >> 0u  & 0xFFFFu),
-                      float(data.x >> 16u & 0xFFFFu)) * uScale;
+    highp uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
+    lowp uint depth = data.z & 0xFFu;
+    vec2 size = vec2(float(data.x >> 0u  & 0xFFFFu),
+                     float(data.x >> 16u & 0xFFFFu)) * uScale;
     vColor = unpackUnorm4x8(data.y);
-    
+    vec2 pos  = vec2(float((data.w >> 0) & 0xFFFFu),
+                     float((data.w >> 16) & 0xFFFFu));
     // ----    Create Vertex    ----
-    vec2 pos = texelFetch(posTex, ivec2(quadID, 0), 0).rg;
     vec2 scrSize = vec2(uScrSize);
-
     vec2 vertices[6];
     vertices[0] = vec2(pos.x         , scrSize.y - (pos.y         ));
     vertices[1] = vec2(pos.x         , scrSize.y - (pos.y + size.y));
