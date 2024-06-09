@@ -135,7 +135,7 @@ static void OptionsMenu()
     pos.y += textSize.y + textPadding;
 
     static int CurrElement = 0;
-    const int numElements = 10; // number of options plus back button
+    const int numElements = 11; // number of options plus back button
     
     uPushFloat(ufTextScale, elementScale);
     uSetElementFocused(CurrElement == 0);
@@ -200,11 +200,18 @@ static void OptionsMenu()
         CurrElement = 8;
     }
     if (vecIndex == 2) CurrElement = 9; // pressed tab
+    
+    uSetElementFocused(CurrElement == 9);
+    pos.y += textSize.y + textPadding;
+    static uint color = 0xFFC58A44u;
+    if (uColorField("Color", pos, &color)) {
+        CurrElement = 9;
+    }
 
     pos = bgPos + bgScale - MakeVec2(100.0f, 100.0f);
     // draw border only if we selected or it is android
-    uSetElementFocused(CurrElement == 9);
-    uButtonOptions buttonOpt = uButtonOpt_Border | (CurrElement == 9 ? uButtonOpt_Hovered : 0);
+    uSetElementFocused(CurrElement == 10);
+    uButtonOptions buttonOpt = uButtonOpt_Border | (CurrElement == 10 ? uButtonOpt_Hovered : 0);
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
     if (uButton("Back", pos, zero2, buttonOpt)) {
         menuState = MenuState_PauseMenu;

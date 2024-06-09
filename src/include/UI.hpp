@@ -129,6 +129,12 @@ bool uFloatVecField(const char* label,
                     float maxVal = 99999.0f, 
                     float dragSpeed = 1.0f);
 
+bool uColorField(const char* label, Vector2f pos, uint* color);
+
+bool uColorField3(const char* label, Vector2f pos, float* colorPtr);
+
+bool uColorField4(const char* label, Vector2f pos, float* colorPtr);
+
 // it will look like this: <  option  >
 // current is the current index of elements.
 // returns new index if value changed.

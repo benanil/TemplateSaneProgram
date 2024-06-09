@@ -69,8 +69,8 @@ struct TextData
     uint8 character, depth;
     half scale;
     uint color;
-    short posX;
-    short posY;
+    ushort posX;
+    ushort posY;
 };
 
 struct QuadData
@@ -79,7 +79,7 @@ struct QuadData
     uint color;
     uint8 depth;
     uint8 padding[3]; // we might want to add aditional data here
-    short posX, posY;
+    ushort posX, posY;
 };
 
 namespace
@@ -93,7 +93,7 @@ namespace
 
     Vector2f mMouseOld;
     bool mWasHovered = false; // last button was hovered?
-
+    bool mAnyElementClicked = false;
     int mNumChars = 0; // textLen without spaces, or undefined characters    
     bool mInitialized = false;
     bool mElementFocused[8] = {};
@@ -115,6 +115,17 @@ namespace
 
     int mQuadIndex = 0;
     int dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad; // uniform locations
+
+    struct ColorPick
+    {
+        Shader shader;
+        Vector2f size;
+        Vector2f pos;
+        Vector3f hsv;
+        float alpha;
+        bool isOpen;
+    };
+    ColorPick mColorPick;
 
     //------------------------------------------------------------------------
     // TextBox
@@ -157,7 +168,7 @@ namespace
     int mColorStackCnt[NumColors] = { };
 
     float mFloats[] = {
-        1.82f  , // line thickness  
+        1.5f  , // line thickness  
         160.0f, // ufContentStart
         12.0f , // ButtonSpace
         1.0f  , // TextScale,
@@ -175,18 +186,25 @@ namespace
 void uWindowResizeCallback(int width, int height)
 {
     mWindowRatio = { width / 1920.0f, height / 1080.0f };
-    mUIScale = MIN(mWindowRatio.x, mWindowRatio.y);
+    mUIScale = (mWindowRatio.x + mWindowRatio.y) * 0.5f; // min(ratio.x, ratio.y)
+    // ultra wide
+    if (MAX(mWindowRatio.x, mWindowRatio.y) - MIN(mWindowRatio.x, mWindowRatio.y) > 0.6f) 
+    {
+        mUIScale = MIN(mWindowRatio.x, mWindowRatio.y);
+    }
 }
 
 void uInitialize()
 {
-    ScopedText fontVert = ReadAllText("Shaders/TextVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    ScopedText fontFrag = ReadAllText("Shaders/TextFrag.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    mFontShader = rCreateShader(fontVert.text, fontFrag.text);
-    
+    mFontShader = rImportShader("Shaders/TextVert.glsl", "Shaders/TextFrag.glsl");
+    mQuadShader = rImportShader("Shaders/QuadBatch.glsl", "Shaders/QuadFrag.glsl");
+    mColorPick.shader = rImportShader("Shaders/ColorPickVert.glsl", "Shaders/ColorPickFrag.glsl");
+    mColorPick.hsv = { 0.0f, 1.0f, 1.0f };
+    mColorPick.alpha = 1.0f;
     // per character textures
     // we will store mTextData array in this texture
     mTextDataTex = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
+    mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
     
     rBindShader(mFontShader);
     dataTexLoc    = rGetUniformLocation("dataTex");
@@ -195,18 +213,10 @@ void uInitialize()
     mInitialized  = true;
     mCurrentFontAtlas = nullptr;
     
-    ScopedText quadVert = ReadAllText("Shaders/QuadBatch.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    ScopedText quadFrag = ReadAllText("Shaders/QuadFrag.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    mQuadShader = rCreateShader(quadVert.text, quadFrag.text);
-    
-    // per character textures
-    mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
-    
     rBindShader(mQuadShader);
     dataTexLocQuad  = rGetUniformLocation("dataTex");
     uScrSizeLocQuad = rGetUniformLocation("uScrSize");
     uScaleLocQuad   = rGetUniformLocation("uScale");
-    
     GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
 }
 
@@ -583,7 +593,7 @@ void uText(const char* text, Vector2f position)
     position *= mWindowRatio;
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
     float scale = uGetFloat(ufTextScale);
-    scale *= MAX(mWindowRatio.x, mWindowRatio.y); // mUIScale;
+    scale *= mUIScale;
     half scalef16 = ConvertFloatToHalf(scale);
     uint color = uGetColor(uColorText);
 
@@ -614,11 +624,11 @@ void uText(const char* text, Vector2f position)
         pos.x += float(character.xoff) * scale;
         pos.y += float(character.yoff) * scale;
 
-        mTextData[mNumChars].posX = (ushort)pos.x;
-        mTextData[mNumChars].posY = (ushort)pos.y;
+        mTextData[mNumChars].posX = ushort(Ceil(pos.x));
+        mTextData[mNumChars].posY = ushort(Ceil(pos.y));
 
-        mTextData[mNumChars].size  = uint32_t(size.x + 1.0f);
-        mTextData[mNumChars].size |= uint32_t(size.y + 1.0f) << 16;
+        mTextData[mNumChars].size  = uint32_t(size.x + 0.5f);
+        mTextData[mNumChars].size |= uint32_t(size.y + 0.5f) << 16;
 
         mTextData[mNumChars].character = chr;  
         mTextData[mNumChars].depth = currentDepth;
@@ -673,11 +683,11 @@ void uQuad(Vector2f position, Vector2f scale, uint color)
     if (mQuadIndex >= MaxQuads) return;
 
     position *= mWindowRatio;
-    mQuadData[mQuadIndex].posX = (short)position.x;
-    mQuadData[mQuadIndex].posY = (short)position.y;
+    mQuadData[mQuadIndex].posX = ushort(position.x);
+    mQuadData[mQuadIndex].posY = ushort(position.y);
 
-    mQuadData[mQuadIndex].size  = uint32_t(scale.x + 1.0f); 
-    mQuadData[mQuadIndex].size |= uint32_t(scale.y + 1.0f) << 16;
+    mQuadData[mQuadIndex].size  = uint32_t(scale.x + 0.7f); // ugly code
+    mQuadData[mQuadIndex].size |= uint32_t(scale.y + 0.6f) << 16;
     
     uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
     mQuadData[mQuadIndex].color = color;
@@ -703,13 +713,14 @@ static bool ClickCheck(Vector2f pos, Vector2f scale, CheckOpt flags = 0)
 
     Vector2f scaledPos = pos * mWindowRatio;
     Vector2f scaledScale = scale * mWindowRatio;
+    bool released = GetMouseReleased(MouseButton_Left);
     mWasHovered = PointBoxIntersection(scaledPos, scaledPos + scaledScale, mousePos);
-    
+    mAnyElementClicked |= mWasHovered && released;
+
     if (!!(flags & CheckOpt_WhileMouseDown) && 
         GetMouseDown(MouseButton_Left)) 
         return mWasHovered;
 
-    bool released = GetMouseReleased(MouseButton_Left);
     return mWasHovered && released;
 }
 
@@ -788,7 +799,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
     }
     else if (enabled && cubeCheckMark)
     {
-        Vector2f slightScale = boxScale * 0.13f;
+        Vector2f slightScale = boxScale * 0.17f;
         uint color = uGetColor(uColorSliderInside);
         float lineThickness = uGetFloat(ufLineThickness);
         uQuad(pos + slightScale + lineThickness, boxScale - (slightScale * 2.0f)-lineThickness, color);
@@ -991,8 +1002,9 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     // fix: doesn't work with different scales
     if (edited && elementFocused) {
         Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
-        mousePos -= pos;
-        *val = Remap(mousePos.x, 0.0f, size.x, 0.0f, 1.0f);
+        mousePos -= pos * mWindowRatio;
+        mousePos = Max(mousePos, Vector2f::Zero());
+        *val = Remap(mousePos.x, 0.0f, size.x * mWindowRatio.x, 0.0f, 1.0f);
     }
 
     if (elementFocused && GetKeyReleased(Key_LEFT))  
@@ -1123,7 +1135,7 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int ma
         *val = value;
     }
     
-    float offset = size.y * 0.1f;
+    float offset = size.y * 0.2f;
     pos.y += size.y - offset;
     pos.x += offset;
 
@@ -1239,7 +1251,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
         *valPtr = value;
     }
 
-    float offset = size.y * 0.1f;
+    float offset = size.y * 0.20f;
     pos.y += size.y - offset;
     pos.x += offset;
 
@@ -1332,6 +1344,191 @@ bool uFloatVecField(const char* label, Vector2f pos, float* vecPtr, int N, int* 
     return changed;
 }
 
+// https://gist.github.com/983/e170a24ae8eba2cd174f
+inline Vector3f RGBToHSV(float* rgb)
+{
+    const vec_t K = VecSetR(0.0f, -1.0f / 3.0f, 2.0f / 3.0f, -1.0f);
+    const vec_t zero = VecZero(), one = VecOne();
+
+    vec_t c = VecLoadA(rgb);
+    vec_t a = VecShuffleR(c, K, 2, 1, 3, 2); // vec4(c.bg, K.wz);
+    vec_t b = VecShuffleR(c, K, 1, 2, 0, 1); // vec4(c.gb, K.xy);
+    vec_t p = VecBlend(a, b, VecCmpGt(VecSplatZ(c), VecSplatY(c))); // step(c.b, c.g)
+    
+    a = VecSwizzle(p, 0, 1, 3, 0); // vec4(p.xyw, c.r)
+    b = VecSwizzle(p, 0, 1, 2, 0); // vec4(c.r, p.yzx)
+    
+    vec_t cr = VecSplatX(c);
+    float cx = VecGetX(cr);
+    a = VecSetW(a, cx);
+    b = VecSetX(b, cx);
+    p = VecBlend(a, b, VecCmpGt(VecSplatX(p), cr)); // step(c.b, c.g)
+    alignas(16) struct Q { float x, y, z, w; } q;
+    VecStore((float*)&q.x, p);
+
+    float d = q.x - MIN(q.w, q.y);
+    const float e = 1.0e-10f;
+    return { Abs(q.z + (q.w - q.y) / (6.0f * d + e)), d / (q.x + e), q.x };
+}
+
+inline void HSVToRGB(Vector3f hsv, float* dst)
+{
+    const vec_t K = VecSetR(1.0f, 2.0f / 3.0f, 1.0f / 3.0f, 3.0f);
+    vec_t p  = VecFabs(VecSub(VecMul(VecFract(VecAdd(VecSet1(hsv.x), K)), VecSet1(6.0f)), VecSet1(3.0f)));
+    vec_t kx = VecSplatX(K);
+    vec_t rv = VecMul(VecLerp(kx, VecClamp01(VecSub(p, kx)), hsv.y), VecSet1(hsv.z));
+    Vec3Store(dst, rv);
+}
+
+inline Vector3f hue2rgb(float h) {
+    float r = Clamp01(Abs(h * 6.0f - 3.0f) - 1.0f);
+    float g = Clamp01(2.0f - Abs(h * 6.0f - 2.0f));
+    float b = Clamp01(2.0f - Abs(h * 6.0f - 4.0f));
+    return { r, g, b };
+}
+
+bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
+{
+    Vector2f labelSize = Label(label, pos);
+    Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
+    size.y = labelSize.y; // maybe change: y scale using label height is weierd 
+
+    float contentStart = uGetFloat(ufContentStart);
+    pos.x += contentStart - size.x;
+    pos.y -= size.y;
+
+    bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
+    uQuad(pos, size, *colorPtr);
+
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+        uBorder(pos, size);
+    uPopColor(uColorBorder);
+    
+    bool edited = false;
+    clicked |= GetKeyPressed(Key_ENTER) & elementFocused;
+    if (clicked && elementFocused)
+    {
+        mColorPick.isOpen ^= 1; // change the open value
+    }
+    
+    if (GetKeyPressed(Key_ESCAPE) || GetKeyPressed(Key_TAB))
+    {
+        mColorPick.isOpen = false;
+    }
+
+    if (mColorPick.isOpen) {
+        float lineThickness = uGetFloat(ufLineThickness) * 2.0f;
+
+        mColorPick.pos = pos;
+        mColorPick.size = MakeVec2(300.0f, 200.0f);
+        mColorPick.pos.y -= mColorPick.size.y + lineThickness;
+        mColorPick.pos.x += size.x + lineThickness; // field width
+
+        uPushColor(uColorBorder, 0xFFFFFFFFu);
+        uPushFloat(ufLineThickness, lineThickness);
+        mColorPick.pos -= lineThickness * 0.8f;
+            uBorder(mColorPick.pos, mColorPick.size + lineThickness);
+        mColorPick.pos += lineThickness * 0.8f;
+        uPopFloat(ufLineThickness);
+        uPopColor(uColorBorder);
+        
+        Vector2f mousePos; 
+        GetMouseWindowPos(&mousePos.x, &mousePos.y);
+
+        Vector2f alphaPos  = mColorPick.pos;
+        Vector2f alphaSize = mColorPick.size;
+        alphaPos.x  += alphaSize.x * 0.88f;
+        alphaSize.x *= 0.12f;
+        alphaSize.y *= 0.88f;
+
+        if (ClickCheck(alphaPos, alphaSize, CheckOpt_WhileMouseDown))
+        {
+            edited = true;
+            mousePos -= alphaPos * mWindowRatio; 
+            mousePos = Max(mousePos, Vector2f::Zero());
+            mColorPick.alpha = 1.0f - Remap(mousePos.y, 0.0f, alphaSize.y * mWindowRatio.y, 0.0f, 1.0f);
+        }
+
+        uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.8f);
+        uPushColor(uColorLine, 0xFF000000u);
+            alphaPos.y += alphaSize.y * (1.0f-mColorPick.alpha);
+            uLineHorizontal(alphaPos, alphaSize.x); // alpha black indicator line 
+        uPopColor(uColorLine);
+        uPopFloat(ufDepth);
+
+        // sv = saturation, vibrance
+        Vector2f svPosition = mColorPick.pos;
+        Vector2f svSize = mColorPick.size;
+        svSize *= 0.88f;
+
+        if (ClickCheck(svPosition, svSize, CheckOpt_WhileMouseDown))
+        {
+            edited = true;
+            mousePos -= svPosition * mWindowRatio; 
+            mousePos = Max(mousePos, Vector2f::Zero());
+            mColorPick.hsv.y = Remap(mousePos.x, 0.0f, svSize.x * mWindowRatio.x, 0.0f, 1.0f);
+            mColorPick.hsv.z = 1.0f - Remap(mousePos.y, 0.0f, svSize.y * mWindowRatio.y, 0.0f, 1.0f);
+        }
+
+        // hue control is at the bottom of the color picker, its height is colorpick.size.y * 0.22
+        Vector2f huePosition = mColorPick.pos;
+        Vector2f hueSize = mColorPick.size;
+        hueSize.y *= 0.12f;
+        huePosition.y += mColorPick.size.y - hueSize.y; // start of hue select
+
+        if (ClickCheck(huePosition, hueSize, CheckOpt_WhileMouseDown))
+        {
+            edited = true;
+            mousePos -= huePosition * mWindowRatio;
+            mousePos = Max(mousePos, Vector2f::Zero());
+            mColorPick.hsv.x = Remap(mousePos.x, 0.0f, hueSize.x * mWindowRatio.x, 0.0f, 1.0f);
+        }
+
+        float dt = (float)GetDeltaTime();
+        bool left = GetKeyDown(Key_LEFT), right = GetKeyDown(Key_RIGHT);
+        const float dragSpeed = 0.5f;
+        mColorPick.hsv.x -= left * dt * dragSpeed;
+        mColorPick.hsv.x += right * dt * dragSpeed;
+        mColorPick.hsv.x = Clamp01(mColorPick.hsv.x);
+        edited |= left | right;
+
+        if (edited) {
+            float color[4];
+            HSVToRGB(mColorPick.hsv, color);
+            color[3] = mColorPick.alpha;
+            *colorPtr = PackColorRGBAU32(color);
+        }
+
+        huePosition.x += hueSize.x * mColorPick.hsv.x;
+
+        uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.8f);
+        uPushColor(uColorLine, 0xFF000000u);
+            uLineVertical(huePosition, hueSize.y); // hue black indicator line 
+        uPopColor(uColorLine);
+        uPopFloat(ufDepth);
+    }
+
+    return clicked || edited;
+}
+
+bool uColorField3(const char* label, Vector2f pos, float* colorPtr)
+{
+    uint ucolor = PackColorRGBU32(colorPtr);
+    bool res = uColorField(label, pos, &ucolor);
+    UnpackColorRGBf(ucolor, colorPtr);
+    return res;
+}
+
+bool uColorField4(const char* label, Vector2f pos, float* colorPtr)
+{
+    uint ucolor = PackColorRGBAU32(colorPtr);
+    bool res = uColorField(label, pos, &ucolor);
+    UnpackColorRGBAf(ucolor, colorPtr);
+    return res;
+}
+
 //------------------------------------------------------------------------
 // Rendering
 
@@ -1363,10 +1560,38 @@ static void uRenderTexts(Vector2i windowSize)
     mNumChars = 0;
 }
 
+static void uRenderColorPicker(Vector2i windowSize)
+{
+    if (!mColorPick.isOpen) return;
+
+    static bool first = true;
+    static int hueLoc, sizeLoc, posLoc, scrSizeLoc;
+    
+    rBindShader(mColorPick.shader);
+
+    if (first) {
+        first = false;
+        hueLoc = rGetUniformLocation("uHSV");
+        posLoc = rGetUniformLocation("uPos");
+        sizeLoc = rGetUniformLocation("uSize");
+        scrSizeLoc = rGetUniformLocation("uScrSize");
+    }
+    
+    Vector2f size = mColorPick.size * mWindowRatio;
+    Vector2f pos  = mColorPick.pos * mWindowRatio;
+    rSetShaderValue(mColorPick.hsv.arr , hueLoc    , GraphicType_Vector3f);
+    rSetShaderValue(pos.arr            , posLoc    , GraphicType_Vector2f);
+    rSetShaderValue(size.arr           , sizeLoc   , GraphicType_Vector2f);
+    rSetShaderValue(windowSize.arr     , scrSizeLoc, GraphicType_Vector2i);
+
+    rRenderMeshNoVertex(6);
+}
+
 void uBegin()
 {
     mAnyTextEdited = false;
     mAnyFloatEdited = false;
+    mAnyElementClicked = false;
 }
 
 void uRender()
@@ -1381,12 +1606,25 @@ void uRender()
     Vector2i windowSize = GetWindowSize();
     uRenderQuads(windowSize);
     uRenderTexts(windowSize);
+    uRenderColorPicker(windowSize);
 
     if (!mAnyTextEdited) 
         mCurrText.Editing = false;
 
     if (!mAnyFloatEdited)
         mLastFloatWriting = false, mFloatDigits = 3;
+
+    bool released = GetMouseReleased(1);
+    if (mColorPick.isOpen && released && !ClickCheck(mColorPick.pos, mColorPick.size, CheckOpt_BigColission))
+    {
+        mColorPick.isOpen = false;
+    }
+
+    if (released && !mAnyElementClicked) // mouse is released at empty space
+    {
+        mCurrText.Editing = false;
+        mLastFloatWriting = false, mFloatDigits = 3;
+    }
 
     rSetBlending(false);
     GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
@@ -1396,8 +1634,10 @@ void uDestroy()
 {
     if (!mInitialized) 
         return;
+
     rDeleteShader(mFontShader);
-    rDeleteTexture(mTextDataTex);
+    rDeleteShader(mQuadShader);
+    rDeleteShader(mColorPick.shader);
 
     for (int i = 0; i < mNumFontAtlas; i++) {
         Texture fakeTex;
@@ -1405,6 +1645,6 @@ void uDestroy()
         rDeleteTexture(fakeTex);
     }
 
-    rDeleteShader(mQuadShader);
+    rDeleteTexture(mTextDataTex);
     rDeleteTexture(mQuadDataTex);
 }
