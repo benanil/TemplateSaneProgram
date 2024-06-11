@@ -18,6 +18,14 @@
 #include <game-activity/GameActivity.cpp>
 #include <game-text-input/gametextinput.cpp>
 
+#define MINIAUDIO_IMPLEMENTATION
+#define MA_ENABLE_ONLY_SPECIFIC_BACKENDS
+#define MA_NO_ENCODING /* read audio files only, for now */
+#define MA_NO_GENERATION
+#define MA_ENABLE_AAUDIO
+
+#include "../External/miniaudio.h"
+
 #define USE_SWAPPY
 #ifdef USE_SWAPPY
     #include "../External/swappyGL.h"
@@ -289,9 +297,18 @@ bool motion_event_filter_func(const GameActivityMotionEvent *motionEvent)
 
 static void HandleInput();
 
+ma_engine maEngine;
+ma_engine* GetMAEngine() {
+    return &maEngine; 
+}
+
 /* This the main entry point for a native activity */
 void android_main(android_app *pApp)
 {
+    if (ma_engine_init(NULL, &maEngine) != MA_SUCCESS) {
+        AX_ERROR("mini audio init failed!");
+        return;
+    }
     // Register an event handler for Android events
     pApp->onAppCmd = HandleCMD;
     // Set input event filters (set it to NULL if the app wants to process all inputs).

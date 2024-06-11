@@ -18,6 +18,7 @@
 		<RunCommand></RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
 		<DebugCommand>C:\Work\raddbg</DebugCommand>
+		<DebugArguments></DebugArguments>
 		<ExePathCommand>C:\Work\TemplateSaneProgram</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>

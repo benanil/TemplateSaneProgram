@@ -7,6 +7,7 @@
 #include "include/Renderer.hpp"
 #include "include/Platform.hpp"
 #include "include/Camera.hpp"
+#include "include/UI.hpp"
 
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
@@ -384,7 +385,7 @@ static void PrepareSkybox()
     };
     
     const InputLayout layout = { 3, GraphicType_Float };
-    const InputLayoutDesc desc = { 1, sizeof(Vector3f), &layout };
+    const InputLayoutDesc desc = { 1, sizeof(Vector3f), &layout, false };
 
     m_BoxMesh = rCreateMesh(vertices, triangles, ArraySize(vertices), ArraySize(triangles), GraphicType_UnsignedShort, &desc);
     m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");

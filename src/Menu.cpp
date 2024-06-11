@@ -71,15 +71,18 @@ static void PauseMenu()
 
     if (GetKeyPressed('W') || GetKeyPressed(Key_UP)) {
         currentHover = currentHover == 0 ? 2 : currentHover-1;
+        PlayButtonHoverSound();
     }
 
     if (GetKeyPressed('S') || GetKeyPressed(Key_DOWN)) {
         currentHover = currentHover == 2 ? 0 : currentHover + 1;
+        PlayButtonHoverSound();
     }
 
     if (GetKeyPressed(Key_ENTER)) {
         menuState = targetMenus[currentHover];
         clickedButton = currentHover;
+        PlayButtonClickSound();
     }
 
     // clickedQuit
@@ -223,9 +226,9 @@ static void OptionsMenu()
     
     bool tabPressed = GetKeyPressed(Key_TAB) && CurrElement != 8; // if we are at int field we don't want to increase current element instead we want to go next element in vector field
     if (GetKeyPressed(Key_UP))
-        CurrElement = CurrElement == 0 ? numElements - 1 : CurrElement - 1;
+        CurrElement = CurrElement == 0 ? numElements - 1 : CurrElement - 1, PlayButtonHoverSound();
     else if (GetKeyPressed(Key_DOWN) || tabPressed)
-        CurrElement = CurrElement == numElements - 1 ? 0 : CurrElement + 1;
+        CurrElement = CurrElement == numElements - 1 ? 0 : CurrElement + 1, PlayButtonHoverSound();
 }
 
 static void ShowFPS()
@@ -249,6 +252,21 @@ static void ShowFPS()
 void ShowMenu()
 {
     uBegin();
+
+    Vector2f circlePos = MakeVec2(1620.0f, 780.0f);
+    static uint8 cutStart = 0, even = 0;
+    even ^= 1;
+    if (even) cutStart++;
+    uSetCutStart(cutStart);
+    uSetTriangleEffect(uTriEffect_Cut);
+    uCircle(circlePos, 25.0f, 0xFF4444FDu, 13);
+    circlePos.y += 45.0f;
+    uSetCutStart(255-cutStart);
+    uSetTriangleEffect(uTriEffect_Cut);
+    uCapsule(circlePos, 15.0f, 200.0f, 0xFF008CFAu, 13);
+    circlePos.y += 45.0f;
+    uSetTriangleEffect(uTriEffect_Fade);
+    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), 0xFFFD4444u);
 
     ShowFPS();
 

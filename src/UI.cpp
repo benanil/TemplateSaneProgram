@@ -16,13 +16,17 @@
 #if AX_GAME_BUILD == 0 // we don't need to create sdf fonts at runtime when playing game
     #define STB_TRUETYPE_IMPLEMENTATION  
     #include "../External/stb_truetype.h"
-// #define STB_IMAGE_WRITE_IMPLEMENTATION // you might want to see atlas
-// #include "../External/stb_image_write.h"
+    #define STB_IMAGE_WRITE_IMPLEMENTATION // you might want to see atlas
+    #include "../External/stb_image_write.h"
 #endif
 
+#include "../External/miniaudio.h"
+
 #include "../ASTL/String.hpp"
+#include "../ASTL/Array.hpp"
 #include "../ASTL/IO.hpp"
-#include "../ASTL/Math/Matrix.hpp"
+#include "../ASTL/Math/Vector.hpp"
+#include "../ASTL/Math/SIMDVectorMath.hpp"
 #include "../ASTL/Random.hpp"
 
 #include "include/UI.hpp"
@@ -39,7 +43,7 @@ static const int AtlasVersion = 1;
 // SDF Settings
 static const int SDFPadding = 3;
 static const unsigned char OnedgeValue = 128;
-static const float PixelDistScale = 18.0f;
+static const float PixelDistScale = 18.5f;//18.0f;
 
 struct FontChar
 {
@@ -115,7 +119,9 @@ namespace
 
     int mQuadIndex = 0;
     int dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad; // uniform locations
-
+    
+    //------------------------------------------------------------------------
+    // Color Pick
     struct ColorPick
     {
         Shader shader;
@@ -151,7 +157,7 @@ namespace
     // configuration
     uint mColors[] = { 
         0xFFE1E1E1u, // uColorText
-        0x8C000000u, // uColorQuad
+        0xFF111111u, // uColorQuad
         0x8CFFFFFFu, // uColorHover
         0xFFDEDEDEu, // uColorLine
         0xFF484848u, // uColorBorder
@@ -181,6 +187,67 @@ namespace
     // stack for pushed floats
     float mFloatStack[NumFloats][StackSize];
     int mFloatStackCnt[NumFloats] = { };
+    
+    //------------------------------------------------------------------------
+    // Sound
+    ma_sound mButtonClickSound;
+    ma_sound mButtonHoverSound;
+ 
+    //------------------------------------------------------------------------
+    // Sprite
+    struct Sprite
+    {
+        Vector2f pos, scale;
+        int handle;
+    };
+    const int MaxSprites = 16;
+    int mNumSprites = 0;
+    Sprite mSprites[16];
+    Shader mTextureDrawShader;
+    
+    //------------------------------------------------------------------------
+    // Triangle Renderer
+    
+    struct TriangleVert
+    {
+        ushort posX, posY;
+        uint8 fade;
+        uint8 depth;
+        uint8 cutStart;
+        uint8 effect; 
+        uint  color;
+        uint8 fadeMult;
+        uint8  padding[3];
+    };
+
+    GPUMesh mTriangleMesh;
+    Array<TriangleVert> mTriangles={};
+    int mCurrentTriangle = 0;
+    Shader mTriangleShader;
+    uint8 mCurrentEffect = 0;
+    uint8 mCutStart = 220;
+}
+
+void uSetTriangleEffect(uTriEffect effect) {
+    mCurrentEffect = effect;
+}
+
+void uSetCutStart(uint8 cutStart) {
+    mCutStart = cutStart;
+}
+
+void PlayButtonClickSound() {
+    ma_sound* sound = &mButtonClickSound;
+    if (ma_sound_is_playing(sound))
+        ma_sound_seek_to_pcm_frame(sound, 0);
+    ma_sound_start(&mButtonClickSound);
+}
+
+void PlayButtonHoverSound() {
+    ma_sound* sound = &mButtonHoverSound;
+    if (ma_sound_is_playing(sound))
+        ma_sound_seek_to_pcm_frame(sound, 0);
+    ma_sound_start(&mButtonHoverSound);
 }
 
 void uWindowResizeCallback(int width, int height)
@@ -194,13 +261,60 @@ void uWindowResizeCallback(int width, int height)
     }
 }
 
-void uInitialize()
+static void ImportShaders()
 {
+    mTriangleShader = rImportShader("Shaders/UITriangleVert.glsl", "Shaders/UITriangleFrag.glsl");
     mFontShader = rImportShader("Shaders/TextVert.glsl", "Shaders/TextFrag.glsl");
     mQuadShader = rImportShader("Shaders/QuadBatch.glsl", "Shaders/QuadFrag.glsl");
-    mColorPick.shader = rImportShader("Shaders/ColorPickVert.glsl", "Shaders/ColorPickFrag.glsl");
-    mColorPick.hsv = { 0.0f, 1.0f, 1.0f };
+    mColorPick.shader = rImportShader("Shaders/SingleQuadVert.glsl", "Shaders/ColorPickFrag.glsl");
     mColorPick.alpha = 1.0f;
+
+    ScopedText textureDrawVertTxt   = ReadAllText("Shaders/SingleQuadVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    const char* textureDrawFragTxt = AX_SHADER_VERSION_PRECISION() R"(
+    in vec2 vTexCoord; out vec4 color; uniform sampler2D tex;
+    void main() {
+        color = texture(tex, vTexCoord);
+    })";
+    mTextureDrawShader = rCreateShader(textureDrawVertTxt.text, textureDrawFragTxt);
+}
+
+static void InitSounds()
+{
+    uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
+    ma_sound_init_from_file(GetMAEngine(), "Audio/button-click.wav", soundFlag, nullptr, nullptr, &mButtonClickSound);
+    ma_sound_init_from_file(GetMAEngine(), "Audio/pluck_001.ogg", soundFlag, nullptr, nullptr, &mButtonHoverSound);
+    ma_sound_set_volume(&mButtonClickSound, 0.5f);
+    ma_sound_set_volume(&mButtonHoverSound, 0.5f);
+}
+
+void CreateTriangleMesh(int size)
+{
+    if (mTriangles.Size() != 0)
+        rDeleteMesh(mTriangleMesh);
+
+    const InputLayout inputLayout[] = 
+    {
+        { 1, GraphicType_UnsignedInt     }, // 
+        { 1, GraphicType_UnsignedInt     }, // < fade, depth, effect, cutStart
+        { 4, GraphicType_UnsignedByte | GraphicType_NormalizeBit },
+        { 1, GraphicType_UnsignedInt     } // padding
+    };
+    InputLayoutDesc description;
+    description.numLayout = ArraySize(inputLayout);
+    description.stride = sizeof(TriangleVert);
+    description.layout = inputLayout;
+    description.dynamic = true;
+
+    mTriangles.Resize(size);
+    mTriangleMesh = rCreateMesh(nullptr, nullptr, mTriangles.Size(), 0, 0, &description);
+}
+
+void uInitialize()
+{
+    InitSounds();
+    ImportShaders();
+    CreateTriangleMesh(2048);
+
     // per character textures
     // we will store mTextData array in this texture
     mTextDataTex = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
@@ -306,7 +420,7 @@ FontHandle uLoadFont(const char* file)
         }
     }
 #if AX_GAME_BUILD == 0
-    // .otf or .ttf there are two types of font file
+    // .otf or .ttf there are two types of true type font file
     bool wasOTF = FileHasExtension(file, pathLen, ".otf"); 
     ChangeExtension(path, pathLen, wasOTF ? "otf" : "ttf");
 
@@ -317,7 +431,7 @@ FontHandle uLoadFont(const char* file)
     
     stbtt_fontinfo info = {};
     int res = stbtt_InitFont(&info, data.ptr, 0);
-    ASSERT(res != 0);
+    ASSERTR(res != 0, return 0);
     
     currentAtlas = &mFontAtlases[mNumFontAtlas++];
     currentAtlas->cellCount = CellCount;
@@ -339,7 +453,7 @@ FontHandle uLoadFont(const char* file)
                                        SDFPadding, OnedgeValue, PixelDistScale,
                                        &width, &height,
                                        &xoff, &yoff);
-        ASSERT(sdf != nullptr);
+        ASSERTR(sdf != nullptr, return);
         character.xoff = (short)xoff, character.width  = (short)width;
         character.yoff = (short)yoff, character.height = (short)height;
 
@@ -354,7 +468,7 @@ FontHandle uLoadFont(const char* file)
     {
         addUnicodeGlyphFn(i, i);
     }
-
+    
     // unicode data taken from here: https://www.compart.com/en/unicode/
     // Turkish and European characters.
     const int europeanChars[] = {
@@ -367,10 +481,10 @@ FontHandle uLoadFont(const char* file)
         /* Ä */0x00C4, /* ẞ */0x1E9E, /* Ñ */0x00D1, /* Å */0x00C5, /* Â */0x00C2, 
         /* Á */0x00C1, /* Æ */0x00C6, /* Ê */0x00CA, /* Ł */0x0141, /* Ć */0x0106, 0x00D8 /* Ø */
     };
-
+    
     constexpr int europeanGlyphCount = ArraySize(europeanChars);
     static_assert(europeanGlyphCount <= 33);
-
+    
     for (int i = 0; i < europeanGlyphCount; i++)
     {
         addUnicodeGlyphFn(europeanChars[i], i);
@@ -381,19 +495,19 @@ FontHandle uLoadFont(const char* file)
         0x23F4, 0x23F5, 0x23F6, 0x23F7, // <, >, ^, v,
         0x23F8, 0X23F9, 0X23FA,         // ||, square, O 
         0x21BA, 0x23F0, //  ↺ anticlockwise arrow, alarm
-        0x2605, 0x2764, 0x2714, 0x0130 // Star, hearth, speaker, İ
+        0x2605, 0x2764, 0x2714, 0x0130 // Star, hearth, checkmark, İ
     };
-
+    
     constexpr int aditionalCharCount = ArraySize(aditionalCharacters);
     // we can add 17 more characters for filling 144 char restriction
     static_assert(aditionalCharCount + 127 < 144); // if you want more you have to make bigger atlas than 12x12
-
+    
     for (int i = 127; i < 127 + aditionalCharCount; i++)
     {
         addUnicodeGlyphFn(aditionalCharacters[i-127], i);
     }
 
-    // stbi_write_png("atlas.png", AtlasWidth, AtlasWidth, 1, image, AtlasWidth);
+    stbi_write_png("atlas.png", AtlasWidth, AtlasWidth, 1, image, AtlasWidth);
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     mCurrentFontAtlas = currentAtlas;
     currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
@@ -543,13 +657,13 @@ void uSetTheme(uint* colors) {
 
 void uPushColor(uColor color, uint val) {
     int& index = mColorStackCnt[color];
-    ASSERT(index < StackSize);
+    ASSERTR(index < StackSize, return);
     mColorStack[color][index++] = val;
 }
 
 void uPushFloat(uFloat what, float val) {
     int& index = mFloatStackCnt[what];
-    ASSERT(index < StackSize);
+    ASSERTR(index < StackSize, return);
     mFloatStack[what][index++] = val;    
 }
 
@@ -568,10 +682,18 @@ void uPopFloat(uFloat what) {
 bool uIsHovered() {
     return mWasHovered;
 }
+
+// maximum supported number is: 6553.5 (16 bit unsigned number last digit used as fraction)
+// it overflows for 8k monitors which is 7680px wide so we have to make the viewport width 1000px smaller, 
+// using lower resolution framebuffers are not going to be noticable and it will improve performance. but if we are designing our software for that monitors we can change this code :=)
+// it works like this: 123.4 * 10 = 1234.0 -> 1234 when we unpacking we devide by 10: 1234.0/10= 123.4
+inline ushort MakeFixed(float f)
+{
+    return ushort(MIN(uint(f * 10.0f), 0xFFFFu));
+}
+
 // reference resolution is always 1920x1080,
 // we will remap input position and scale according to current window size
-
-// todo: allow different scales 
 void uText(const char* text, Vector2f position)
 {
     ASSERTR(mInitialized == true, return);
@@ -624,11 +746,11 @@ void uText(const char* text, Vector2f position)
         pos.x += float(character.xoff) * scale;
         pos.y += float(character.yoff) * scale;
 
-        mTextData[mNumChars].posX = ushort(Ceil(pos.x));
-        mTextData[mNumChars].posY = ushort(Ceil(pos.y));
+        mTextData[mNumChars].posX = MakeFixed(pos.x);
+        mTextData[mNumChars].posY = MakeFixed(pos.y);
 
-        mTextData[mNumChars].size  = uint32_t(size.x + 0.5f);
-        mTextData[mNumChars].size |= uint32_t(size.y + 0.5f) << 16;
+        mTextData[mNumChars].size  = uint32_t(MakeFixed(size.x + 0.5f));
+        mTextData[mNumChars].size |= uint32_t(MakeFixed(size.y + 0.5f)) << 16;
 
         mTextData[mNumChars].character = chr;  
         mTextData[mNumChars].depth = currentDepth;
@@ -680,14 +802,12 @@ Vector2f uCalcTextSize(const char* text)
 void uQuad(Vector2f position, Vector2f scale, uint color)
 {
     ASSERTR(mQuadIndex < MaxQuads, return);
-    if (mQuadIndex >= MaxQuads) return;
-
     position *= mWindowRatio;
-    mQuadData[mQuadIndex].posX = ushort(position.x);
-    mQuadData[mQuadIndex].posY = ushort(position.y);
+    mQuadData[mQuadIndex].posX = MakeFixed(position.x);
+    mQuadData[mQuadIndex].posY = MakeFixed(position.y);
 
-    mQuadData[mQuadIndex].size  = uint32_t(scale.x + 0.7f); // ugly code
-    mQuadData[mQuadIndex].size |= uint32_t(scale.y + 0.6f) << 16;
+    mQuadData[mQuadIndex].size  = uint32_t(MakeFixed(scale.x));
+    mQuadData[mQuadIndex].size |= uint32_t(MakeFixed(scale.y)) << 16;
     
     uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
     mQuadData[mQuadIndex].color = color;
@@ -737,6 +857,7 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     bool elementFocused = uGetElementFocused();
     bool entered = elementFocused && GetKeyPressed(Key_ENTER);
     bool pressed = entered || ClickCheck(pos, scale);
+    if (pressed) PlayButtonClickSound();
 
     uint quadColor = uGetColor(uColorQuad);
     if (mWasHovered || !!(opt & uButtonOpt_Hovered))
@@ -788,6 +909,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
     bool entered = elementFocused && GetKeyPressed(Key_ENTER);
     if (entered || ClickCheck(pos, boxScale, CheckOpt_BigColission)) {
         enabled = !enabled;
+        PlayButtonClickSound();
     }
 
     if (enabled && !cubeCheckMark) {
@@ -1008,9 +1130,9 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     }
 
     if (elementFocused && GetKeyReleased(Key_LEFT))  
-        *val -= 0.1f,  edited = true;
+        *val -= 0.1f,  edited = true, PlayButtonHoverSound();
     if (elementFocused && GetKeyReleased(Key_RIGHT)) 
-        *val += 0.1f,  edited = true;
+        *val += 0.1f,  edited = true, PlayButtonHoverSound();
 
     *val = Clamp(*val, 0.0f, 1.0f);
     
@@ -1051,28 +1173,32 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     pos.x -= centerOffset + arrowSize.x;
 
     bool elementFocused = uGetElementFocused();
-    uint iconColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorText);
-    uPushColor(uColorText, iconColor);
-    uText(IC_LEFT_TRIANGLE, pos);
     pos.y -= size.y;
+    pos.y -= size.y * 0.1f; // < move triangles little bit up
+
     const CheckOpt chkOpt = CheckOpt_BigColission;
     bool goLeft = elementFocused && GetKeyPressed(Key_LEFT);
     if (ClickCheck(pos, arrowSize, chkOpt) || goLeft)
     {
+        PlayButtonHoverSound();
         if (current > 0) current--;
         else current = numNames - 1;
     }
+
+    uint iconColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorText);
+    uHorizontalTriangle(pos, labelSize.y * 0.8f, -0.8f, iconColor);
     pos = startPos;
     pos.x += size.x;
-    uText(IC_RIGHT_TRIANGLE, pos);
     pos.y -= size.y;
+    uHorizontalTriangle(pos, labelSize.y * 0.8f, 0.8f, iconColor);
+    
     bool goRight = elementFocused && GetKeyPressed(Key_RIGHT);
     if (ClickCheck(pos, arrowSize, chkOpt) || goRight)
     {
+        PlayButtonHoverSound();
         if (current < numNames-1) current++;
         else current = 0;
     }
-    uPopColor(uColorText);
     return current;
 }
 
@@ -1344,31 +1470,25 @@ bool uFloatVecField(const char* label, Vector2f pos, float* vecPtr, int N, int* 
     return changed;
 }
 
-// https://gist.github.com/983/e170a24ae8eba2cd174f
-inline Vector3f RGBToHSV(float* rgb)
+inline Vector3f RGBToHSV(Vector3f rgb)
 {
-    const vec_t K = VecSetR(0.0f, -1.0f / 3.0f, 2.0f / 3.0f, -1.0f);
-    const vec_t zero = VecZero(), one = VecOne();
+    float r = rgb.x, g = rgb.y, b = rgb.z;
+    float K = 0.0f;
+    if (g < b) {
+        Swap(g, b);
+        K = -1.0f;
+    }
 
-    vec_t c = VecLoadA(rgb);
-    vec_t a = VecShuffleR(c, K, 2, 1, 3, 2); // vec4(c.bg, K.wz);
-    vec_t b = VecShuffleR(c, K, 1, 2, 0, 1); // vec4(c.gb, K.xy);
-    vec_t p = VecBlend(a, b, VecCmpGt(VecSplatZ(c), VecSplatY(c))); // step(c.b, c.g)
-    
-    a = VecSwizzle(p, 0, 1, 3, 0); // vec4(p.xyw, c.r)
-    b = VecSwizzle(p, 0, 1, 2, 0); // vec4(c.r, p.yzx)
-    
-    vec_t cr = VecSplatX(c);
-    float cx = VecGetX(cr);
-    a = VecSetW(a, cx);
-    b = VecSetX(b, cx);
-    p = VecBlend(a, b, VecCmpGt(VecSplatX(p), cr)); // step(c.b, c.g)
-    alignas(16) struct Q { float x, y, z, w; } q;
-    VecStore((float*)&q.x, p);
-
-    float d = q.x - MIN(q.w, q.y);
-    const float e = 1.0e-10f;
-    return { Abs(q.z + (q.w - q.y) / (6.0f * d + e)), d / (q.x + e), q.x };
+    if (r < g) {
+        Swap(r, g);
+        K = -2.0f / 6.0f - K;
+    }
+    const float chroma = r - (g < b ? g : b);
+    return {
+        Abs(K + (g - b) / (6.0f * chroma + 1e-20f)),
+        chroma / (r + 1e-20f),
+        r
+    };
 }
 
 inline void HSVToRGB(Vector3f hsv, float* dst)
@@ -1380,6 +1500,7 @@ inline void HSVToRGB(Vector3f hsv, float* dst)
     Vec3Store(dst, rv);
 }
 
+// unused, maybe use in feature
 inline Vector3f hue2rgb(float h) {
     float r = Clamp01(Abs(h * 6.0f - 3.0f) - 1.0f);
     float g = Clamp01(2.0f - Abs(h * 6.0f - 2.0f));
@@ -1410,6 +1531,10 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     clicked |= GetKeyPressed(Key_ENTER) & elementFocused;
     if (clicked && elementFocused)
     {
+        PlayButtonClickSound();
+        Vector3f colorf; 
+        UnpackColorRGBf(*colorPtr, colorf.arr);
+        mColorPick.hsv = RGBToHSV(colorf);
         mColorPick.isOpen ^= 1; // change the open value
     }
     
@@ -1420,7 +1545,6 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 
     if (mColorPick.isOpen) {
         float lineThickness = uGetFloat(ufLineThickness) * 2.0f;
-
         mColorPick.pos = pos;
         mColorPick.size = MakeVec2(300.0f, 200.0f);
         mColorPick.pos.y -= mColorPick.size.y + lineThickness;
@@ -1529,8 +1653,169 @@ bool uColorField4(const char* label, Vector2f pos, float* colorPtr)
     return res;
 }
 
+void uSprite(Vector2f pos, Vector2f scale, Texture* texturePtr)
+{
+    ASSERTR(mNumSprites < MaxSprites, return);
+    mSprites[mNumSprites].pos    = pos;
+    mSprites[mNumSprites].scale  = scale;
+    mSprites[mNumSprites].handle = texturePtr->handle;
+    mNumSprites++;
+}
+
+//------------------------------------------------------------------------
+// Triangle Tendering
+void uVertex(Vector2f pos, uint8 fade, uint color)
+{
+    TriangleVert& vert = mTriangles[mCurrentTriangle++];
+    pos *= mWindowRatio; // multiply on gpu?
+    vert.posX   = MakeFixed(pos.x); 
+    vert.posY   = MakeFixed(pos.y); 
+    vert.fade   = fade;
+    vert.depth  = uint8(uGetFloat(ufDepth) * 255.0f);
+    vert.cutStart = mCutStart;
+    vert.effect = (uint8)mCurrentEffect;
+    vert.color  = color;
+}
+
+void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color)
+{
+    if (axis > 0.0f) {
+        uVertex(pos, 255, color); pos.y += size;
+        uVertex(pos, 255, color); pos.y -= size * 0.5f; pos.x += axis * size;
+        uVertex(pos, 0, color);
+    }
+    else {
+        pos.y += size;
+        uVertex(pos, 255, color); 
+        pos.y -= size;
+        uVertex(pos, 255, color);
+        pos.y += size * 0.5f; pos.x += axis * size;
+        uVertex(pos, 0, color);        
+    }
+}
+
+void uVerticalTriangle(Vector2f pos, float size, float axis, uint color)
+{
+    if (axis > 0.0f) {
+        uVertex(pos, 255, color); pos.x += size;
+        uVertex(pos, 255, color); pos.x -= size * 0.5f; pos.y += axis * size;
+        uVertex(pos, 0, color);
+    }
+    else {
+        pos.x += size;
+        uVertex(pos, 255, color); 
+        pos.x -= size;
+        uVertex(pos, 255, color);
+        pos.x += size * 0.5f; pos.y += axis * size;
+        uVertex(pos, 0, color);        
+    }
+}
+
+void uCircle(Vector2f center, float radius, uint color, int numSegments)
+{
+    if (numSegments != 0)
+        numSegments *= 2;
+    else
+        numSegments = (int)(10.0f / (radius / 30.0f)) * 2; // < auto detect
+
+    Vector2f p0  = { center.x, center.y - radius};
+    uint8    fade0 = 0;
+
+    for (float i = 1.0f; i < (float)numSegments + 1.0f; i += 1.0f)
+    {
+        float t = TwoPI * (i / float(numSegments));
+        Vector2f p1 = { -Sin(t), -Cos(t) };
+        uint8 fade1 = uint8((t / TwoPI) * 255.0f);
+        p1 *= radius;
+        p1 += center;
+        uVertex(center, fade1, color);
+        uVertex(p0, fade0, color);
+        uVertex(p1, fade1, color);
+        p0 = p1;
+        fade0 = fade1;
+    }
+}
+
+void uCapsule(Vector2f center, float radius, float width, uint color, uint8 numSegments)
+{
+    if (numSegments == 0) 
+        numSegments = (uint8)(10.0f / (radius / 30.0f));
+
+    Vector2f p0         = { center.x, center.y - radius};
+    float fadeCenterf32 = radius / width;
+    uint8 fadeCenter    = 0; // int8(fadeCenterf32 * 255.0f);
+    // left half
+    for (float i = 1.0f; i < (float)numSegments + 1.0; i += 1.0f)
+    {
+        float t = PI * (i / float(numSegments));
+        uVertex(center, fadeCenter, color);
+        uVertex(p0, 0, color);
+        Vector2f p1 = { -Sin0pi(t) * radius, -Cos0pi(t) * radius};
+        p1 += center;
+        uVertex(p1, 0, color);
+        p0 = p1;
+    }
+    // draw connecting quad
+    uTriangleQuad(center + MakeVec2(0.0f, radius), MakeVec2(width, radius * 2.0f), color);
+
+    center.x += width;
+    p0  = { center.x, center.y + radius};
+    fadeCenterf32 = 1.0f - fadeCenterf32;
+    fadeCenter = 255; // uint8(fadeCenterf32 * 255.0f);
+    // right half
+    for (float i = 1.0f; i < (float)numSegments + 1.0; i += 1.0f)
+    {
+        float t = PI * (i / float(numSegments));
+        uVertex(center, fadeCenter, color);
+        uVertex(p0, 255, color);
+        Vector2f p1 = { Sin0pi(t) * radius, Cos0pi(t) * radius };
+        p1 += center;
+        uVertex(p1, 255, color);
+        p0 = p1;
+    }   
+}
+
+void uTriangleQuad(Vector2f pos, Vector2f scale, uint color)
+{
+    pos.y -= scale.y;
+    uVertex(pos, 0, color);
+    pos.y += scale.y;
+    uVertex(pos, 0, color);
+    pos.x += scale.x;
+    uVertex(pos, 255, color);
+    // second triangle
+    uVertex(pos, 255, color);
+    pos.y -= scale.y;
+    uVertex(pos, 255, color);
+    pos.x -= scale.x;
+    uVertex(pos, 0, color);
+}
+
+void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
+{
+    uVertex(pos0, 0, color);
+    uVertex(pos1, 0, color);
+    uVertex(pos2, 0, color);
+}
+
 //------------------------------------------------------------------------
 // Rendering
+
+static void uRenderTriangles(Vector2i windowSize)
+{
+    if (mCurrentTriangle <= 0) return;
+    static int scrSizeLoc = INT32_MAX;
+    rBindShader(mTriangleShader);
+    if (scrSizeLoc == INT32_MAX) {
+        scrSizeLoc = rGetUniformLocation(mTriangleShader, "uScrSize"); // to calculate projection matrix
+    }
+    
+    rBindMesh(mTriangleMesh);
+    rUpdateMesh(&mTriangleMesh, mTriangles.Data(), mCurrentTriangle * sizeof(TriangleVert));
+    rSetShaderValue(&windowSize.x, scrSizeLoc, GraphicType_Vector2i);
+    rRenderMesh(mCurrentTriangle);
+    mCurrentTriangle = 0;   
+}
 
 static void uRenderQuads(Vector2i windowSize)
 {
@@ -1587,6 +1872,36 @@ static void uRenderColorPicker(Vector2i windowSize)
     rRenderMeshNoVertex(6);
 }
 
+static void uRenderSprites(Vector2i windowSize)
+{
+    if (mNumSprites <= 0) return;
+
+    static bool first = true;
+    static int texLoc, sizeLoc, posLoc, scrSizeLoc;
+    rBindShader(mTextureDrawShader);
+
+    if (first) {
+        first = false;
+        texLoc = rGetUniformLocation("tex");
+        posLoc = rGetUniformLocation("uPos");
+        sizeLoc = rGetUniformLocation("uSize");
+        scrSizeLoc = rGetUniformLocation("uScrSize");
+    }
+    
+    rSetShaderValue(windowSize.arr, scrSizeLoc, GraphicType_Vector2i);
+    
+    for (int i = 0; i < mNumSprites; i++)
+    {
+        Vector2f size = mSprites[i].scale * mWindowRatio;
+        Vector2f pos  = mSprites[i].pos * mWindowRatio;
+        rSetShaderValue(pos.arr  , posLoc    , GraphicType_Vector2f);
+        rSetShaderValue(size.arr , sizeLoc   , GraphicType_Vector2f);
+        rSetTexture(mSprites[i].handle, 0, texLoc);
+        rRenderMeshNoVertex(6);
+    }
+    mNumSprites = 0;
+}
+
 void uBegin()
 {
     mAnyTextEdited = false;
@@ -1607,6 +1922,8 @@ void uRender()
     uRenderQuads(windowSize);
     uRenderTexts(windowSize);
     uRenderColorPicker(windowSize);
+    uRenderSprites(windowSize);
+    uRenderTriangles(windowSize);
 
     if (!mAnyTextEdited) 
         mCurrText.Editing = false;
@@ -1638,6 +1955,7 @@ void uDestroy()
     rDeleteShader(mFontShader);
     rDeleteShader(mQuadShader);
     rDeleteShader(mColorPick.shader);
+    rDeleteShader(mTextureDrawShader);
 
     for (int i = 0; i < mNumFontAtlas; i++) {
         Texture fakeTex;
@@ -1647,4 +1965,7 @@ void uDestroy()
 
     rDeleteTexture(mTextDataTex);
     rDeleteTexture(mQuadDataTex);
+
+    ma_sound_uninit(&mButtonClickSound);
+    ma_sound_uninit(&mButtonHoverSound);
 }

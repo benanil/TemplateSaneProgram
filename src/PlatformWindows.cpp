@@ -12,8 +12,12 @@
 #  define VC_EXTRALEAN
 #endif
 
-#define VMEM_OVERRIDE_NEW_DELETE
-#define VMEM_DEBUG_LEVEL 0 
+#define MINIAUDIO_IMPLEMENTATION
+#define MA_ENABLE_ONLY_SPECIFIC_BACKENDS
+#define MA_NO_ENCODING /* read audio files only, for now */
+#define MA_NO_GENERATION
+#define MA_ENABLE_WASAPI
+#include "../External/miniaudio.h"
 
 #include <Windows.h>
 #include <bitset>
@@ -493,9 +497,18 @@ extern void rDestroyRenderer();
 extern void rInitRenderer();
 extern void rSetViewportSize(int x, int y);
 
+ma_engine maEngine;
+ma_engine* GetMAEngine() {
+    return &maEngine; 
+}
+
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {
     // VMem::Initialise();
+    if (ma_engine_init(NULL, &maEngine) != MA_SUCCESS) {
+        FatalError("mini audio init failed!");
+        return 1;
+    }
     MemsetZero(&PlatformCtx, sizeof(PlatformContextWin));
     AXInit();
     
@@ -522,7 +535,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     PlatformCtx.Frequency   = frequency.QuadPart;
 
     if (AXStart() == 0)
-	return 1; // user defined startup failed
+	    return 1; // user defined startup failed
 
     while (!PlatformCtx.ShouldClose)
     {   
@@ -572,6 +585,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
             delete[] PlatformCtx.ClipboardString;
     }
     // VMem::Destroy();
+    ma_engine_uninit(&maEngine);
 
     return 0;
 }

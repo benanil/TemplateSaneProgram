@@ -75,7 +75,7 @@ void wRequestQuit();
 
 const char* wGetClipboardString();
 bool wSetClipboardString(const char* str); // returns true if success
-
+struct ma_engine* GetMAEngine();
 
 ////////                Keyboard             ////////
 

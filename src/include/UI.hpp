@@ -131,9 +131,17 @@ bool uFloatVecField(const char* label,
 
 bool uColorField(const char* label, Vector2f pos, uint* color);
 
-bool uColorField3(const char* label, Vector2f pos, float* colorPtr);
+bool uColorField3(const char* label, Vector2f pos, float* color3Ptr); // rgb32f color
 
-bool uColorField4(const char* label, Vector2f pos, float* colorPtr);
+bool uColorField4(const char* label, Vector2f pos, float* color4Ptr); // rgba32f color
+
+// basically draws the texture to the specified position and scale
+// can be used for debugging. (easy and useful)
+// each uSprite call makes an draw call so
+// if you want to make an menu with thumbnails preferably you should resize all of the textures to 64x64 
+// and use sprite atlas like in font rendering
+// be aware that this works after scene rendering done, whenever you call this function, it will show the content when it is rendered(uRender function)
+void uSprite(Vector2f pos, Vector2f scale, struct Texture* texturePtr);
 
 // it will look like this: <  option  >
 // current is the current index of elements.
@@ -153,6 +161,36 @@ void uLineHorizontal(Vector2f begin, float size);
 void uBorder(Vector2f begin, Vector2f scale);
 
 //------------------------------------------------------------------------
+// Triangle Tendering
+enum uTriEffect_
+{
+    uTriEffect_Fade = 1, 
+    uTriEffect_Cut  = 2
+};
+typedef int uTriEffect;
+
+void uSetTriangleEffect(uTriEffect effect);
+void uSetCutStart(uint8 cutStart);
+
+// ads a vertex for triangle drawing
+void uVertex(Vector2f pos, uint8 fade, uint color = 0);
+
+void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
+
+void uTriangleQuad(Vector2f pos, Vector2f scale, uint color);
+
+// axis is -1 or 1, you may want to scale it as well (ie: 2x)
+void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
+
+// axis is -1 or 1, you may want to scale it as well (ie: 2x)
+void uVerticalTriangle(Vector2f pos, float size, float axis, uint color);
+
+// num segments are number of triangles in circle. define it 0 for automatic
+void uCircle(Vector2f center, float radius, uint color, int numSegments = 8);
+
+void uCapsule(Vector2f center, float radius, float width, uint color, uint8 numSegments = 8);
+
+//------------------------------------------------------------------------
 Vector2f uCalcTextSize(const char* text);
 
 void uBegin();
@@ -160,3 +198,7 @@ void uBegin();
 void uRender();
 
 void uDestroy();
+
+void PlayButtonClickSound();
+
+void PlayButtonHoverSound();

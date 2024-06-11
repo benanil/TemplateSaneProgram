@@ -9,7 +9,7 @@
 #include "include/Camera.hpp"
 #include "include/UI.hpp"
 
-#include <stdio.h>
+#include "../ASTL/String.hpp"
 
 static PrefabID GLTFPrefab = 0;
 static PrefabID AnimatedPrefab = 0;
@@ -57,7 +57,7 @@ int AXStart()
 
     uInitialize();
     // very good font that has lots of icons: http://www.quivira-font.com/
-    uLoadFont("Fonts/Quivira.otf");
+    uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
 
     MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();

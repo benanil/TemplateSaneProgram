@@ -14,25 +14,24 @@ void main()
     int vertexID = gl_VertexID % 6;
 
     // unpack per quad data
-    highp uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
-    lowp uint depth = data.z & 0xFFu;
-    vec2 size = vec2(float(data.x >> 0u  & 0xFFFFu),
-                     float(data.x >> 16u & 0xFFFFu)) * uScale;
-    vColor = unpackUnorm4x8(data.y);
-    vec2 pos  = vec2(float((data.w >> 0) & 0xFFFFu),
-                     float((data.w >> 16) & 0xFFFFu));
+    highp uvec4 data    = texelFetch(dataTex, ivec2(quadID, 0), 0);
+                vColor  = unpackUnorm4x8(data.y);
+    lowp  uint  depth   = data.z & 0xFFu;
+    vec4  sizePos = vec4((data.xxww >> uvec4(0u, 16u, 0u, 16u)) & 0xFFFFu) / 10.0f;
+    vec2  size   = sizePos.xy * uScale;
+    vec2  pos    = sizePos.zw;
     // ----    Create Vertex    ----
-    vec2 scrSize = vec2(uScrSize);
     vec2 vertices[6];
-    vertices[0] = vec2(pos.x         , scrSize.y - (pos.y         ));
-    vertices[1] = vec2(pos.x         , scrSize.y - (pos.y + size.y));
-    vertices[2] = vec2(pos.x + size.x, scrSize.y - (pos.y         ));
-    vertices[4] = vec2(pos.x + size.x, scrSize.y - (pos.y + size.y));
+    vertices[0] = vec2(pos.x         , pos.y         );
+    vertices[1] = vec2(pos.x         , pos.y + size.y);
+    vertices[2] = vec2(pos.x + size.x, pos.y         );
+    vertices[4] = vec2(pos.x + size.x, pos.y + size.y);
     vertices[5] = vertices[2]; // reuse vertex 2
     vertices[3] = vertices[1]; // reuse vertex 1 
 
-    vec2 proj = 2.0 / scrSize;
+    vec2 proj = 2.0 / vec2(uScrSize);
     vec2 translate = proj * vertices[vertexID] - 1.0;
+    translate.y = -translate.y;
     gl_Position = vec4(translate, (float(depth) / 255.0), 1.0);
 
     // ----    Create UV    ----

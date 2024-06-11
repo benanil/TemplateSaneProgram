@@ -90,6 +90,7 @@ struct InputLayoutDesc
     int numLayout;
     int stride;
     const InputLayout* layout; 
+    bool dynamic;
 };
 
 // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
@@ -118,6 +119,8 @@ struct alignas(16) ASkinedVertex
 // only uint32 indices accepted, indexbuffer can be null if you want only vertex rendering
 GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVertex, int numIndex, GraphicType indexType, const InputLayoutDesc* layoutDesc);
 
+void rUpdateMesh(GPUMesh* mesh, void* data, size_t size);
+
 void rDeleteMesh(GPUMesh mesh);
 
 void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined);
@@ -126,7 +129,7 @@ void rBindMesh(GPUMesh mesh);
 
 void rRenderMeshIndexed(GPUMesh mesh);
 
-void rRenderMesh(GPUMesh mesh);
+void rRenderMesh(int numVertex);
 
 void rRenderMeshNoVertex(int numIndex);
 

@@ -458,11 +458,12 @@ GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVe
 {
     GPUMesh mesh;
     mesh.indexHandle = -1;
+    int bufferUsage = !layoutDesc->dynamic ? GL_STATIC_DRAW : GL_DYNAMIC_DRAW;
     // generate vertex buffer
     {
         glGenBuffers(1, &mesh.vertexHandle);
         glBindBuffer(GL_ARRAY_BUFFER, mesh.vertexHandle);
-        glBufferData(GL_ARRAY_BUFFER, (uint64)layoutDesc->stride * numVertex, vertexBuffer, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, (uint64)layoutDesc->stride * numVertex, vertexBuffer, bufferUsage);
         CHECK_GL_ERROR();
     }
 
@@ -471,7 +472,7 @@ GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVe
     {
         glGenBuffers(1, &mesh.indexHandle);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.indexHandle);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GraphicsTypeToSize(indexType), indexBuffer, GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndex * GraphicsTypeToSize(indexType), indexBuffer, bufferUsage);
         CHECK_GL_ERROR();
     }
     
@@ -512,6 +513,12 @@ GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVe
     return mesh;
 }
 
+void rUpdateMesh(GPUMesh* mesh, void* data, size_t size)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, mesh->vertexHandle);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+}
+
 void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined)
 {
     InputLayoutDesc desc;
@@ -530,7 +537,7 @@ void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined)
     desc.layout = inputLayout;
     desc.stride = skined ? sizeof(ASkinedVertex) : sizeof(AVertex); 
     desc.numLayout = skined ? ArraySize(inputLayout) : ArraySize(inputLayout) - 2;
-
+    desc.dynamic = false;
     *mesh = rCreateMesh(primitive->vertices, primitive->indices, primitive->numVertices, primitive->numIndices, primitive->indexType, &desc);
 }
 
@@ -553,9 +560,9 @@ void rRenderMeshIndexed(GPUMesh mesh)
     CHECK_GL_ERROR();
 }
 
-void rRenderMesh(GPUMesh mesh)
+void rRenderMesh(int numVertex)
 {
-    glDrawArrays(GL_TRIANGLES, 0, mesh.numVertex);
+    glDrawArrays(GL_TRIANGLES, 0, numVertex);
     CHECK_GL_ERROR();
 }
 
@@ -914,24 +921,17 @@ void rDrawLine(Vector3f start, Vector3f end, uint color)
 
 void rDrawAllLines(float* viewProj)
 {
+    if (numLines <= 0) return;
     // Todo: android does not support glMapBuffer
-#ifndef __ANDROID__
     glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
 
-    LineVertex* bufferData = (LineVertex*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-    if (!bufferData) {
-        glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind VBO
-        return;
-    }
+    glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, numLines * sizeof(LineVertex), lineVertices);
 
-    SmallMemCpy(bufferData, lineVertices, numLines * sizeof(LineVertex));
-
-    glUnmapBuffer(GL_ARRAY_BUFFER);
     rBindShader(lineShader);
     rSetShaderValue(viewProj, 0, GraphicType_Matrix4);
     glBindVertexArray(lineVao);
     glDrawArrays(GL_LINES, 0, numLines);
-#endif
     numLines = 0;
 }
 
