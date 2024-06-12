@@ -91,11 +91,13 @@ bool uIsHovered(); // last button was hovered?
 // text is an utf8 string
 void uText(const char* text, Vector2f position);
 
+Vector2f uCalcTextSize(const char* text);
+
 // returns true if clicked, make scale [0.0,0.0] if you want to scale the button according to text
 bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt = 0);
 
 // quad shaped 
-void uQuad(Vector2f position, Vector2f scale, uint color);
+void uQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0);
 
 // returns true if changed
 // if cubeCheckMark is true, selected checkbox will look like square instead of checkmark
@@ -154,30 +156,48 @@ int uChoice(const char* label, Vector2f pos, const char** elements, int numEleme
 
 bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text);
 
-void uLineVertical(Vector2f begin, float size);
+void uLineVertical(Vector2f begin, float size, uint properties = 0);
 
-void uLineHorizontal(Vector2f begin, float size);
+void uLineHorizontal(Vector2f begin, float size, uint properties = 0);
 
 void uBorder(Vector2f begin, Vector2f scale);
 
 //------------------------------------------------------------------------
 // Triangle Tendering
-enum uTriEffect_
-{
-    uTriEffect_Fade = 1, 
-    uTriEffect_Cut  = 2
-};
-typedef int uTriEffect;
 
-void uSetTriangleEffect(uTriEffect effect);
-void uSetCutStart(uint8 cutStart);
+// uEmptyInside: if you want an circle fades like center is black the outer area is white set this true
+//               otherwise it will work like clock looking fade: counter clockwise fade 0 to 1
+enum uTriEffect_ {
+    uFadeBit = 1, // makes Fade effect
+    uCutBit  = 2, // discards rendering pixel if fade value is below CutStart
+    uFadeInvertBit  = 4,  // inverts the per vertex fade value
+    uEmptyInsideBit = 8,  // whatever the shape is this will set the center fade value to 0
+    uIntenseFade    = 16, // in fragment shader it will multiply fade value by 2.0
+    uCenterFade     = 32  // maps fade value between [0.0f, 1.0f, 0.0f] instead of [0.0f, 1.0f] so center is white other areas are dark(left right)
+};
+typedef uint uTriEffect;
+
+// we are using uint properties to describe the effects
+// first 8 bit: uTriEffect bitmask
+// next 8 bit: cutStart, normalized 8bit integer for this effect, think of it like [0, 255], [0.0f, 1.0f]
+// next 8 bit: are number of triangles in circle or capsule. define it 0 for automatic
+inline uint MakeTriProperty(uTriEffect effect, uint cutStart, uint numSegments)
+{
+    return effect | (cutStart << 8) | (numSegments << 16);
+}
 
 // ads a vertex for triangle drawing
-void uVertex(Vector2f pos, uint8 fade, uint color = 0);
+// properties: leave it as zero if you don't want any effects, otherwise use the instructsions above
+void uVertex(Vector2f pos, uint8 fade, uint color = ~0, uint properties = 0);
+
+void uTriangleQuad(Vector2f pos, Vector2f scale, uint color, uint properties = 0);
+
+
+void uCircle(Vector2f center, float radius, uint color, uint properties = 0);
+
+void uCapsule(Vector2f center, float radius, float width, uint color, uint properties = 0);
 
 void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
-
-void uTriangleQuad(Vector2f pos, Vector2f scale, uint color);
 
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
 void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
@@ -185,13 +205,7 @@ void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
 void uVerticalTriangle(Vector2f pos, float size, float axis, uint color);
 
-// num segments are number of triangles in circle. define it 0 for automatic
-void uCircle(Vector2f center, float radius, uint color, int numSegments = 8);
-
-void uCapsule(Vector2f center, float radius, float width, uint color, uint8 numSegments = 8);
-
 //------------------------------------------------------------------------
-Vector2f uCalcTextSize(const char* text);
 
 void uBegin();
 

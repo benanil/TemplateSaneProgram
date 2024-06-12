@@ -129,7 +129,7 @@ static void OptionsMenu()
 
     uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
     uPushFloat(ufLineThickness, uGetFloat(ufLineThickness) * 0.62f);
-        uLineHorizontal(pos, lineLength);
+        uLineHorizontal(pos, lineLength, uFadeBit | uCenterFade | uIntenseFade);
     uPopFloat(ufLineThickness);
     uPopColor(uColorLine);
 
@@ -249,24 +249,59 @@ static void ShowFPS()
     uText(fpsTxt, MakeVec2(15.0f, 85.0f));
 }
 
+static void TriangleTest()
+{
+    const uint color0 = 0xFF4444FDu, color1 = 0xFF008CFAu, color2 = 0xFF44FD44u;
+    static uint8 cutStart = 0, even = 0;
+    Vector2f circlePos = MakeVec2(1620.0f, 780.0f);
+
+    even ^= 1;
+    if (even) cutStart++;
+
+    const uint numSegments = 0;
+    uint properties = MakeTriProperty(uCutBit, cutStart, numSegments);
+    uCircle(circlePos, 25.0f, color0, properties); circlePos.x += 55.0f;
+
+    properties |= uEmptyInsideBit;                           
+    uCircle(circlePos, 25.0f, color0, properties); circlePos.x += 55.0f;
+    
+    properties |= uFadeInvertBit;          
+    uCircle(circlePos, 25.0f, color0, properties);
+    circlePos.x -= 55.0f * 3.0f;
+    
+    circlePos.y += 45.0f;
+    uCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
+
+    properties &= ~0xFF; // remove tri effect bits
+    properties |= uFadeBit; // add fade bit
+    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties); circlePos.y += 45.0f;
+    
+    properties |= uIntenseFade; // add fade bit
+    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties);  circlePos.y += 45.0f;
+    
+    properties |= uCenterFade; // add fade bit
+    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties);  circlePos.y += 45.0f;
+
+    // test with uquad
+    circlePos.y -= 45.0f * 3.0f + 15.0f;
+    circlePos.x -= 220.0f;
+
+    properties &= ~0xFF; // remove tri effect bits
+    properties |= uFadeBit; // add fade bit
+    uQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties); circlePos.y += 45.0f;
+    
+    properties |= uIntenseFade; // add fade bit
+    uQuad(circlePos, MakeVec2(200.0f, 15.0f), color1, properties);  circlePos.y += 45.0f;
+    
+    properties |= uCenterFade; // add fade bit
+    uQuad(circlePos, MakeVec2(200.0f, 15.0f), color0, properties);  circlePos.y += 45.0f;
+}
+
 void ShowMenu()
 {
     uBegin();
-
-    Vector2f circlePos = MakeVec2(1620.0f, 780.0f);
-    static uint8 cutStart = 0, even = 0;
-    even ^= 1;
-    if (even) cutStart++;
-    uSetCutStart(cutStart);
-    uSetTriangleEffect(uTriEffect_Cut);
-    uCircle(circlePos, 25.0f, 0xFF4444FDu, 13);
-    circlePos.y += 45.0f;
-    uSetCutStart(255-cutStart);
-    uSetTriangleEffect(uTriEffect_Cut);
-    uCapsule(circlePos, 15.0f, 200.0f, 0xFF008CFAu, 13);
-    circlePos.y += 45.0f;
-    uSetTriangleEffect(uTriEffect_Fade);
-    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), 0xFFFD4444u);
+    
+    TriangleTest();
 
     ShowFPS();
 

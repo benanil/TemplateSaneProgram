@@ -82,7 +82,9 @@ struct QuadData
     uint size;
     uint color;
     uint8 depth;
-    uint8 padding[3]; // we might want to add aditional data here
+    uint8 cutStart;
+    uint8 padding;
+    uint8 effect; 
     ushort posX, posY;
 };
 
@@ -216,24 +218,13 @@ namespace
         uint8 cutStart;
         uint8 effect; 
         uint  color;
-        uint8 fadeMult;
-        uint8  padding[3];
+        uint8  padding[4];
     };
 
     GPUMesh mTriangleMesh;
     Array<TriangleVert> mTriangles={};
     int mCurrentTriangle = 0;
     Shader mTriangleShader;
-    uint8 mCurrentEffect = 0;
-    uint8 mCutStart = 220;
-}
-
-void uSetTriangleEffect(uTriEffect effect) {
-    mCurrentEffect = effect;
-}
-
-void uSetCutStart(uint8 cutStart) {
-    mCutStart = cutStart;
 }
 
 void PlayButtonClickSound() {
@@ -292,8 +283,7 @@ void CreateTriangleMesh(int size)
     if (mTriangles.Size() != 0)
         rDeleteMesh(mTriangleMesh);
 
-    const InputLayout inputLayout[] = 
-    {
+    const InputLayout inputLayout[] = {
         { 1, GraphicType_UnsignedInt     }, // 
         { 1, GraphicType_UnsignedInt     }, // < fade, depth, effect, cutStart
         { 4, GraphicType_UnsignedByte | GraphicType_NormalizeBit },
@@ -608,13 +598,6 @@ inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
     return '-';
 }
 
-static inline Vector2i GetWindowSize()
-{
-    Vector2i windowSize;
-    wGetWindowSize(&windowSize.x, &windowSize.y);
-    return windowSize;
-}
-
 void uSetElementFocused(bool val) {
     ASSERTR(mElementFocusedIndex < 8, return);
     mElementFocused[mElementFocusedIndex++] = val;
@@ -799,7 +782,7 @@ Vector2f uCalcTextSize(const char* text)
 
 //------------------------------------------------------------------------
 // Quad Drawing
-void uQuad(Vector2f position, Vector2f scale, uint color)
+void uQuad(Vector2f position, Vector2f scale, uint color, uint properties)
 {
     ASSERTR(mQuadIndex < MaxQuads, return);
     position *= mWindowRatio;
@@ -812,6 +795,8 @@ void uQuad(Vector2f position, Vector2f scale, uint color)
     uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
     mQuadData[mQuadIndex].color = color;
     mQuadData[mQuadIndex].depth = currentDepth;
+    mQuadData[mQuadIndex].effect = 0xFF & properties;
+    mQuadData[mQuadIndex].cutStart = 0xFF & (properties >> 8);
     mQuadIndex++;
 }
 
@@ -939,14 +924,14 @@ inline LineThicknesBorderColor GetLineData()
     return { uGetFloat(ufLineThickness), uGetColor(uColorLine) };
 }
 
-void uLineVertical(Vector2f begin, float size) {
+void uLineVertical(Vector2f begin, float size, uint properties) {
     LineThicknesBorderColor data = GetLineData();
-    uQuad(begin, MakeVec2(data.thickness, size), data.color);
+    uQuad(begin, MakeVec2(data.thickness, size), data.color, properties);
 }
 
-void uLineHorizontal(Vector2f begin, float size) {
+void uLineHorizontal(Vector2f begin, float size, uint properties) {
     LineThicknesBorderColor data = GetLineData();
-    uQuad(begin, MakeVec2(size, data.thickness), data.color);
+    uQuad(begin, MakeVec2(size, data.thickness), data.color, properties);
 }
 
 void uBorder(Vector2f begin, Vector2f scale)
@@ -1664,7 +1649,7 @@ void uSprite(Vector2f pos, Vector2f scale, Texture* texturePtr)
 
 //------------------------------------------------------------------------
 // Triangle Tendering
-void uVertex(Vector2f pos, uint8 fade, uint color)
+void uVertex(Vector2f pos, uint8 fade, uint color, uint32 properties)
 {
     TriangleVert& vert = mTriangles[mCurrentTriangle++];
     pos *= mWindowRatio; // multiply on gpu?
@@ -1672,8 +1657,8 @@ void uVertex(Vector2f pos, uint8 fade, uint color)
     vert.posY   = MakeFixed(pos.y); 
     vert.fade   = fade;
     vert.depth  = uint8(uGetFloat(ufDepth) * 255.0f);
-    vert.cutStart = mCutStart;
-    vert.effect = (uint8)mCurrentEffect;
+    vert.cutStart = 0xFF & (properties >> 8);
+    vert.effect = 0xFF & properties;
     vert.color  = color;
 }
 
@@ -1682,7 +1667,7 @@ void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color)
     if (axis > 0.0f) {
         uVertex(pos, 255, color); pos.y += size;
         uVertex(pos, 255, color); pos.y -= size * 0.5f; pos.x += axis * size;
-        uVertex(pos, 0, color);
+        uVertex(pos, 255, color);
     }
     else {
         pos.y += size;
@@ -1690,7 +1675,7 @@ void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color)
         pos.y -= size;
         uVertex(pos, 255, color);
         pos.y += size * 0.5f; pos.x += axis * size;
-        uVertex(pos, 0, color);        
+        uVertex(pos,  255, color);        
     }
 }
 
@@ -1699,7 +1684,7 @@ void uVerticalTriangle(Vector2f pos, float size, float axis, uint color)
     if (axis > 0.0f) {
         uVertex(pos, 255, color); pos.x += size;
         uVertex(pos, 255, color); pos.x -= size * 0.5f; pos.y += axis * size;
-        uVertex(pos, 0, color);
+        uVertex(pos, 255, color);
     }
     else {
         pos.x += size;
@@ -1707,95 +1692,109 @@ void uVerticalTriangle(Vector2f pos, float size, float axis, uint color)
         pos.x -= size;
         uVertex(pos, 255, color);
         pos.x += size * 0.5f; pos.y += axis * size;
-        uVertex(pos, 0, color);        
+        uVertex(pos, 255, color);        
     }
 }
 
-void uCircle(Vector2f center, float radius, uint color, int numSegments)
+void uCircle(Vector2f center, float radius, uint color, uint32 properties)
 {
-    if (numSegments != 0)
+    uint numSegments = 0xFFu & (properties >> 16); // skip TriEffect and CutStart bytes
+     if (numSegments != 0)
         numSegments *= 2;
     else
         numSegments = (int)(10.0f / (radius / 30.0f)) * 2; // < auto detect
 
-    Vector2f p0  = { center.x, center.y - radius};
-    uint8    fade0 = 0;
+    Vector2f posPrev  = { center.x, center.y - radius};
+    uint8 hasInvertFade = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
+    uint8    fadePrev = hasInvertFade;
 
     for (float i = 1.0f; i < (float)numSegments + 1.0f; i += 1.0f)
     {
         float t = TwoPI * (i / float(numSegments));
-        Vector2f p1 = { -Sin(t), -Cos(t) };
-        uint8 fade1 = uint8((t / TwoPI) * 255.0f);
-        p1 *= radius;
-        p1 += center;
-        uVertex(center, fade1, color);
-        uVertex(p0, fade0, color);
-        uVertex(p1, fade1, color);
-        p0 = p1;
-        fade0 = fade1;
+        Vector2f posNew = { -Sin(t), -Cos(t) };
+        uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
+        posNew *= radius;
+        posNew += center;
+        if (properties & uEmptyInsideBit) {
+            uVertex(center ,  hasInvertFade, color, properties);
+            uVertex(posPrev, ~hasInvertFade, color, properties);
+            uVertex(posNew , ~hasInvertFade, color, properties);
+        }
+        else
+        {
+            fadeNew = hasInvertFade ? 255-fadeNew : fadeNew;
+            uVertex(center , fadeNew, color, properties);
+            uVertex(posPrev, fadePrev, color, properties);
+            uVertex(posNew , fadeNew, color, properties);
+        }
+        posPrev = posNew;
+        fadePrev = fadeNew;
     }
 }
 
-void uCapsule(Vector2f center, float radius, float width, uint color, uint8 numSegments)
+void uCapsule(Vector2f center, float radius, float width, uint color, uint32 properties)
 {
+    uint numSegments = 0xFFu & (properties >> 16); // skip TriEffect and CutStart bytes
     if (numSegments == 0) 
         numSegments = (uint8)(10.0f / (radius / 30.0f));
 
-    Vector2f p0         = { center.x, center.y - radius};
-    float fadeCenterf32 = radius / width;
-    uint8 fadeCenter    = 0; // int8(fadeCenterf32 * 255.0f);
+    Vector2f p0 = { center.x, center.y - radius};
+    uint8 hasInvertFade = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
     // left half
     for (float i = 1.0f; i < (float)numSegments + 1.0; i += 1.0f)
     {
         float t = PI * (i / float(numSegments));
-        uVertex(center, fadeCenter, color);
-        uVertex(p0, 0, color);
         Vector2f p1 = { -Sin0pi(t) * radius, -Cos0pi(t) * radius};
         p1 += center;
-        uVertex(p1, 0, color);
+        uVertex(center, hasInvertFade, color, properties);
+        uVertex(p0, hasInvertFade, color, properties);
+        uVertex(p1, hasInvertFade, color, properties);
         p0 = p1;
     }
+    uint hasInvert = properties & uFadeInvertBit;
+    properties ^= hasInvert; // invert hasInvert bit because triangleQuad using it too
     // draw connecting quad
-    uTriangleQuad(center + MakeVec2(0.0f, radius), MakeVec2(width, radius * 2.0f), color);
+    uTriangleQuad(center + MakeVec2(0.0f, radius), MakeVec2(width, radius * 2.0f), color, properties);
+    properties |= hasInvert; // replace the invert bit
 
     center.x += width;
     p0  = { center.x, center.y + radius};
-    fadeCenterf32 = 1.0f - fadeCenterf32;
-    fadeCenter = 255; // uint8(fadeCenterf32 * 255.0f);
+    hasInvertFade = ~hasInvertFade;
     // right half
     for (float i = 1.0f; i < (float)numSegments + 1.0; i += 1.0f)
     {
         float t = PI * (i / float(numSegments));
-        uVertex(center, fadeCenter, color);
-        uVertex(p0, 255, color);
         Vector2f p1 = { Sin0pi(t) * radius, Cos0pi(t) * radius };
         p1 += center;
-        uVertex(p1, 255, color);
+        uVertex(center, hasInvertFade, color, properties);
+        uVertex(p0, hasInvertFade, color, properties);
+        uVertex(p1, hasInvertFade, color, properties);
         p0 = p1;
     }   
 }
 
-void uTriangleQuad(Vector2f pos, Vector2f scale, uint color)
+void uTriangleQuad(Vector2f pos, Vector2f scale, uint color, uint properties)
 {
+    uint8 hasInvert = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
     pos.y -= scale.y;
-    uVertex(pos, 0, color);
+    uVertex(pos, ~hasInvert, color, properties);
     pos.y += scale.y;
-    uVertex(pos, 0, color);
+    uVertex(pos, ~hasInvert, color, properties);
     pos.x += scale.x;
-    uVertex(pos, 255, color);
+    uVertex(pos, hasInvert, color, properties);
     // second triangle
-    uVertex(pos, 255, color);
+    uVertex(pos, hasInvert, color, properties);
     pos.y -= scale.y;
-    uVertex(pos, 255, color);
+    uVertex(pos, hasInvert, color, properties);
     pos.x -= scale.x;
-    uVertex(pos, 0, color);
+    uVertex(pos, ~hasInvert, color, properties);
 }
 
 void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
 {
-    uVertex(pos0, 0, color);
-    uVertex(pos1, 0, color);
-    uVertex(pos2, 0, color);
+    uVertex(pos0, 255, color);
+    uVertex(pos1, 255, color);
+    uVertex(pos2, 255, color);
 }
 
 //------------------------------------------------------------------------
@@ -1918,7 +1917,8 @@ void uRender()
     rUnpackAlignment(4);
     rClearDepth();
 
-    Vector2i windowSize = GetWindowSize();
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
     uRenderQuads(windowSize);
     uRenderTexts(windowSize);
     uRenderColorPicker(windowSize);

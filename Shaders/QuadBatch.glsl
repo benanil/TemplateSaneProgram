@@ -5,8 +5,12 @@ uniform highp usampler2D dataTex; // ivec2 uint32 = half2:size, rgba8:color
 uniform ivec2 uScrSize;
 uniform vec2 uScale;
 
-out mediump vec2 vTexCoord;
-out lowp vec4 vColor;
+out   mediump vec2 vTexCoord;
+out      lowp vec4 vColor;
+
+out      lowp float oFade;
+out flat lowp uint  oEffect;
+out flat lowp float oCutStart;
 
 void main() 
 {
@@ -16,7 +20,8 @@ void main()
     // unpack per quad data
     highp uvec4 data    = texelFetch(dataTex, ivec2(quadID, 0), 0);
                 vColor  = unpackUnorm4x8(data.y);
-    lowp  uint  depth   = data.z & 0xFFu;
+    
+    lowp vec2 depthCutStart = unpackUnorm4x8(data.z).xy;
     vec4  sizePos = vec4((data.xxww >> uvec4(0u, 16u, 0u, 16u)) & 0xFFFFu) / 10.0f;
     vec2  size   = sizePos.xy * uScale;
     vec2  pos    = sizePos.zw;
@@ -32,7 +37,8 @@ void main()
     vec2 proj = 2.0 / vec2(uScrSize);
     vec2 translate = proj * vertices[vertexID] - 1.0;
     translate.y = -translate.y;
-    gl_Position = vec4(translate, (float(depth) / 255.0), 1.0);
+    lowp float depth = depthCutStart.x;
+    gl_Position = vec4(translate, depth, 1.0);
 
     // ----    Create UV    ----
     const mediump vec2 uvs[6] = vec2[6](
@@ -45,4 +51,11 @@ void main()
     );
 
     vTexCoord = uvs[vertexID];
+
+    const lowp float fades[6] = float[](
+        1.0, 1.0, 0.0, 1.0, 0.0, 0.0
+    );
+    oFade = fades[vertexID];
+    oCutStart = depthCutStart.y;
+    oEffect = 0xFFu & (data.z >> 24u);
 }
