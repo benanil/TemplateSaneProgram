@@ -44,7 +44,8 @@ inline constexpr const char* GetFileName(const char* path)
     return path + length;
 }
 
-////////                Window               ////////
+//------------------------------------------------------------------------
+//  Window
 
 #ifndef __ANDROID__
 void wSetWindowSize(int width, int height);
@@ -62,6 +63,12 @@ bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight);
 bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight);
 
 void wSetVSync(bool active);
+
+inline void wShowKeyboard(bool value) { }
+#else
+
+void wShowKeyboard(bool value);
+
 #endif
 
 void wSetFocusChangedCallback(void(*callback)(bool focused));
@@ -75,12 +82,21 @@ void wRequestQuit();
 
 const char* wGetClipboardString();
 bool wSetClipboardString(const char* str); // returns true if success
-struct ma_engine* GetMAEngine();
 
-////////                Keyboard             ////////
+//------------------------------------------------------------------------
+//  Audio
 
-// use enum KeyboardKey or asci char 'X'
+typedef int ASound;
+int LoadSound(const char* path);
+void SoundPlay(ASound sound);
+void SoundRewind(ASound sound); // seeks to beginning of the sound
+void SoundSetVolume(ASound sound, float volume);
+void SoundDestroy(ASound sound);
 
+//------------------------------------------------------------------------
+//  Keyboard 
+
+// use enum Key_... or asci char 'X'
 bool GetKeyDown(char c);
 
 bool GetKeyPressed(char c);
@@ -89,10 +105,10 @@ bool GetKeyReleased(char c);
 
 bool AnyKeyDown();
 
+//------------------------------------------------------------------------
+//  Mouse
 
-////////                Mouse                ////////
-// Mouse is finger in Android, and MouseButton is finger id.
-
+//  Mouse is finger in Android, and MouseButton is finger id.
 enum MouseButton_
 {
     MouseButton_Left   = 1, /* same -> */ MouseButton_Touch0 = 1,
@@ -138,7 +154,9 @@ inline int NumTouchPressing() {
     return (int)GetMouseDown(0) + (int)GetMouseDown(1); 
 }
 #endif
-////////                TIME                 ////////
+
+//------------------------------------------------------------------------
+//  TIME
 
 double GetDeltaTime();
 double TimeSinceStartup();
@@ -224,7 +242,6 @@ typedef int KeyboardKey;
 // These functions are not used in android code, we are inlining here
 // this way compiler will not use this functions
 #ifdef __ANDROID__
-
 inline void wSetWindowSize(int width, int height) {}
 inline void wSetWindowPosition(int x, int y) {}
 inline void wSetWindowMoveCallback(void(*callback)(int, int)) {}

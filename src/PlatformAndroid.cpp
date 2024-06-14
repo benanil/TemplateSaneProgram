@@ -7,8 +7,11 @@
 
 #include "include/Platform.hpp"
 #include "include/Renderer.hpp"
+
+#include "../ASTL/Array.hpp"
 #include "../ASTL/Memory.hpp"
 #include "../ASTL/Algorithms.hpp" // IntToString
+#include "../ASTL/IO.hpp" // IntToString
 
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
@@ -69,6 +72,8 @@ struct PlatformContextAndroid
     int FingerPressed;
 } PlatformCtx={};
 
+StackArray<ma_sound, 16> mSounds={};
+
 void wSetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback;}
 void wSetKeyPressCallback(void(*callback)(unsigned))         { PlatformCtx.KeyPressCallback     = callback; }
@@ -76,10 +81,6 @@ void wSetMouseMoveCallback(void(*callback)(float, float))    { PlatformCtx.Mouse
 
 void wGetWindowSize(int* x, int* y)           { *x = PlatformCtx.WindowWidth;  *y = PlatformCtx.WindowHeight; }
 void wGetMonitorSize(int* width, int* height) { *width = PlatformCtx.WindowWidth; *height = PlatformCtx.WindowHeight; }
-
-void wRequestQuit() {
-    PlatformCtx.ShouldClose = true;
-}
 
 const char* wGetClipboardString() {
     return nullptr;
@@ -95,6 +96,60 @@ bool AnyNumberPressed() {
 
 int GetPressedNumber() {
     return -1;
+}
+
+//------------------------------------------------------------------------
+// Audio
+extern "C" android_app* g_android_app;
+
+ma_engine maEngine;
+
+ma_engine* GetMAEngine() {
+    return &maEngine;
+}
+
+int LoadSound(const char* path)
+{
+    mSounds.AddUninitialized(1);
+    uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
+    // in order to work with miniaudio, we have to use fopen,
+    // that's why  we have to extract audio files from aasset manager to internal path
+    const char* internalDataPath = g_android_app->activity->internalDataPath;
+    char internalPath[512] = {};
+    int internalPathSize = StringLength(internalDataPath);
+    int pathSize = StringLength(path);
+    SmallMemCpy(internalPath, internalDataPath, internalPathSize);
+    internalPath[internalPathSize++] = '/';
+    SmallMemCpy(internalPath + internalPathSize, path, pathSize);
+
+    ScopedPtr<char> soundFile = ReadAllFile(path);
+    FILE* file = fopen(internalPath, "wb");
+    fwrite(soundFile.ptr, 1, FileSize(path), file);
+    fclose(file);
+    [[maybe_unused]] int result = ma_sound_init_from_file(GetMAEngine(), internalPath, soundFlag, nullptr, nullptr, mSounds.Data() + (mSounds.Size()-1));
+    return mSounds.Size()-1;
+}
+
+void SoundPlay(ASound sound)
+{
+    ma_sound_start(&mSounds[sound]);
+}
+
+void SoundRewind(ASound sound)
+{
+    ma_sound* soundPtr = &mSounds[sound];
+    if (ma_sound_is_playing(soundPtr))
+    ma_sound_seek_to_pcm_frame(soundPtr, 0);
+}
+
+void SoundSetVolume(ASound sound, float volume)
+{
+    ma_sound_set_volume(&mSounds[sound], volume);
+}
+
+void SoundDestroy(ASound sound)
+{
+    ma_sound_uninit(&mSounds[sound]);
 }
 
 void UpdateRenderArea()
@@ -161,6 +216,7 @@ extern "C" {
 #include <game-activity/native_app_glue/android_native_app_glue.c>
 
 android_app* g_android_app = nullptr;
+
 
 static void CreateSurface()
 {    // create the proper window surface
@@ -297,10 +353,42 @@ bool motion_event_filter_func(const GameActivityMotionEvent *motionEvent)
 
 static void HandleInput();
 
-ma_engine maEngine;
-ma_engine* GetMAEngine() {
-    return &maEngine; 
+void GameTextInputGetStateCB(void *ctx, const GameTextInputState* state) {
+    
+    static GameTextInputState* lastState = nullptr;
+    static int32_t lastSize = 0;
+    static unsigned int lastCharacter = 0;
+    if (!state) return;
+    
+    if (state != lastState) {
+        lastSize = 0, lastCharacter = 0;
+    }
+
+    lastState = (GameTextInputState*)(size_t)state;
+    int32_t text_length = state->text_length;
+    if (text_length > lastSize)
+    {
+        unsigned int character = 0;
+        int32_t unicodeSize = MAX(text_length - lastSize, 0);
+        SmallMemCpy(&character, state->text_UTF8 + lastSize, unicodeSize);
+        if (unicodeSize == 2) {
+            // swap first two bytes
+            character = (character >> 8u) | (0xFFFFu & (character << 8u));
+        }
+        else if (unicodeSize > 2) {
+            #ifdef DEBUG
+            AX_WARN("unicode Key contains more than 2 byte, we only handle 2byte unicodes for now");
+            #endif
+            return;
+        }
+
+        if (PlatformCtx.KeyPressCallback && character != lastCharacter)
+            PlatformCtx.KeyPressCallback(character), lastCharacter = character;
+    }
+    lastSize = text_length;
+    LOGI("UserInputText: %s", state->text_UTF8);
 }
+
 
 /* This the main entry point for a native activity */
 void android_main(android_app *pApp)
@@ -309,6 +397,7 @@ void android_main(android_app *pApp)
         AX_ERROR("mini audio init failed!");
         return;
     }
+
     // Register an event handler for Android events
     pApp->onAppCmd = HandleCMD;
     // Set input event filters (set it to NULL if the app wants to process all inputs).
@@ -323,7 +412,7 @@ void android_main(android_app *pApp)
 
     // use swappy to avoid tearing and lag. https://developer.android.com/games/sdk/frame-pacing
 #ifdef USE_SWAPPY
-    bool swappyFine = SwappyGL_init(mAppJniEnv, pApp->activity->javaGameActivity);
+    [[maybe_unused]] bool swappyFine = SwappyGL_init(mAppJniEnv, pApp->activity->javaGameActivity);
     ASSERT(swappyFine);
     // SwappyGL_setSwapIntervalNS(1000000000L / PreferredFrameRateInHz);
 #endif
@@ -344,6 +433,9 @@ void android_main(android_app *pApp)
             if (pApp->destroyRequested) {
                 goto end_loop;
             }
+        }
+        if (pApp->textInputState) {
+            GameActivity_getTextInputState(g_android_app->activity, GameTextInputGetStateCB, nullptr);
         }
 
         // Check if any user data is associated. This is assigned in handle_cmd
@@ -377,6 +469,38 @@ void android_main(android_app *pApp)
         AXExit();
         TerminateWindow();
     };
+}
+
+inline uint MapAndroidKeyToWindowsKey(uint key)
+{
+    if (key >= AKEYCODE_A && key <= AKEYCODE_Z)
+        return key - AKEYCODE_A + 'A';
+    
+    if (key >= AKEYCODE_0 && key <= AKEYCODE_9)
+        return key - AKEYCODE_0 + '0';
+
+    switch (key) {
+        case AKEYCODE_DEL:    return Key_BACK;
+        case AKEYCODE_ENTER:  return Key_ENTER;
+        case AKEYCODE_ESCAPE: return Key_ESCAPE;
+        case AKEYCODE_TAB:    return Key_TAB;
+        case AKEYCODE_DPAD_LEFT:  return Key_LEFT;
+        case AKEYCODE_DPAD_RIGHT: return Key_RIGHT;
+        case AKEYCODE_DPAD_UP:    return Key_UP;
+        case AKEYCODE_DPAD_DOWN:  return Key_DOWN;
+        case AKEYCODE_AT: return '@';
+        case AKEYCODE_PERIOD: return '.';
+    }
+
+    if (key >= AKEYCODE_NUMPAD_0 && key <= AKEYCODE_NUMPAD_9)
+        return key - AKEYCODE_NUMPAD_0 + Key_NUMPAD0;
+
+    if (key >= AKEYCODE_F1 && key <= AKEYCODE_12)
+        return key - AKEYCODE_F1 + Key_F1;
+    #ifdef DEBUG
+    AX_WARN("Key is not recognised");
+    #endif
+    return 0;
 }
 
 static void HandleInput()
@@ -442,16 +566,24 @@ static void HandleInput()
     // clear the motion input count in this buffer for main thread to re-use.
     android_app_clear_motion_events(inputBuffer);
 
-    /*
     // handle input key events.
     for (auto i = 0; i < inputBuffer->keyEventsCount; i++)
     {
-        auto& keyEvent = inputBuffer->keyEvents[i];
+        GameActivityKeyEvent& keyEvent = inputBuffer->keyEvents[i];
         AX_LOG("Key: %i ", keyEvent.keyCode);
+        uint key = 0;
         switch (keyEvent.action)
         {
-            case AKEY_EVENT_ACTION_DOWN: AX_LOG("Key Down %i\n", keyEvent.action); break;
-            case AKEY_EVENT_ACTION_UP:   AX_LOG("Key Up %i\n", keyEvent.action); break;
+            case AKEY_EVENT_ACTION_DOWN:
+                AX_LOG("Key Down %i\n", keyEvent.action);
+                break;
+            case AKEY_EVENT_ACTION_UP:
+                AX_LOG("Key Up %i\n", keyEvent.action);
+                key = MapAndroidKeyToWindowsKey(keyEvent.keyCode);
+
+                if (PlatformCtx.KeyPressCallback && key != 0) // enter etc. comes here
+                    PlatformCtx.KeyPressCallback(key);
+                break;
             case AKEY_EVENT_ACTION_MULTIPLE:
                 // Deprecated since Android API level 29.
                 AX_LOG("Multiple Key Actions %i\n", keyEvent.action);
@@ -460,12 +592,21 @@ static void HandleInput()
                 AX_LOG("Unknown KeyEvent Action: %i \n", keyEvent.action);
         }
     }
-    */
 
     // clear the key input count too.
     android_app_clear_key_events(inputBuffer);
 }
 
 } // extern C end
+
+void wRequestQuit() {
+    PlatformCtx.ShouldClose = true;
+    GameActivity_finish(g_android_app->activity);
+}
+
+void wShowKeyboard(bool value)
+{
+    GameActivity_showSoftInput(g_android_app->activity, 0);
+}
 
 #endif // ifdef __ANDROID__

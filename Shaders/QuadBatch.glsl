@@ -5,7 +5,7 @@ uniform highp usampler2D dataTex; // ivec2 uint32 = half2:size, rgba8:color
 uniform ivec2 uScrSize;
 uniform vec2 uScale;
 
-out   mediump vec2 vTexCoord;
+out      lowp vec2 vTexCoord;
 out      lowp vec4 vColor;
 
 out      lowp float oFade;
@@ -41,7 +41,7 @@ void main()
     gl_Position = vec4(translate, depth, 1.0);
 
     // ----    Create UV    ----
-    const mediump vec2 uvs[6] = vec2[6](
+    const lowp vec2 uvs[6] = vec2[6](
         vec2(0.0, 0.0),            
         vec2(0.0, 1.0),
         vec2(1.0, 0.0),
@@ -55,7 +55,7 @@ void main()
     const lowp float fades[6] = float[](
         1.0, 1.0, 0.0, 1.0, 0.0, 0.0
     );
+    oEffect = 0xFFu & (data.z >> 24u);
     oFade = fades[vertexID];
     oCutStart = depthCutStart.y;
-    oEffect = 0xFFu & (data.z >> 24u);
 }

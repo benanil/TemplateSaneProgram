@@ -57,7 +57,7 @@ int AXStart()
 
     uInitialize();
     // very good font that has lots of icons: http://www.quivira-font.com/
-    uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
+    uLoadFont("Fonts/Quivira.otf"); // "Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
 
     MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();

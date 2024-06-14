@@ -12,7 +12,7 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build)
 # if true, reduces exe size and you will have faster compile times.
 # it doesn't build astc encoder and ufbx. also it uses zstddeclib instead of entire zstd. (only decompression in game builds)
 # look at Scene.cpp first lines, you can change it over there.
-set(AX_GAME_BUILD TRUE)
+set(AX_GAME_BUILD FALSE)
 
 # Add your source files here
 set(SOURCES

@@ -450,7 +450,8 @@ inline char GLTFFilterToOGLFilter(char filter) {
 
 inline unsigned int GLTFWrapToOGLWrap(int wrap) {
     unsigned int values[] = { 0x2901, 0x812F, 0x812D, 0x8370 }; // GL_REPEAT GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT
-    ASSERT(wrap < 5 && "wrong or undefined sampler type!"); 
+    ASSERTR(wrap < 5 && "wrong or undefined sampler type!", return values[0]);
+    AX_ASSUME(wrap < 5);
     return values[wrap];
 }
 

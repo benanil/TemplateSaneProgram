@@ -22,6 +22,7 @@
 #include <Windows.h>
 #include <bitset>
 
+#include "../ASTL/Array.hpp"
 #include "../ASTL/Common.hpp"
 #include "../ASTL/Algorithms.hpp"
 #include "../External/glad.hpp"
@@ -65,8 +66,9 @@ struct PlatformContextWin
     bool VSyncActive;
     bool ShouldClose;
     char* ClipboardString;
-} PlatformCtx;
+} PlatformCtx;  
 
+StackArray<ma_sound, 16> mSounds={};
 static char WindowName[64] = { 'S', 'a', 'n', 'e', 'E', 'n', 'g', 'i', 'n', 'e' };
 
 void wSetFocusChangedCallback(void(*callback)(bool))         { PlatformCtx.FocusChangedCallback = callback; }
@@ -119,6 +121,43 @@ void wGetMonitorSize(int* width, int* height)
 void wSetVSync(bool active)
 {
     PlatformCtx.VSyncActive = active; 
+}
+
+//------------------------------------------------------------------------
+// Audio
+
+ma_engine maEngine;
+ma_engine* GetMAEngine() {
+    return &maEngine; 
+}
+int LoadSound(const char* path)
+{
+    mSounds.AddUninitialized(1);
+    uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
+    ma_sound_init_from_file(GetMAEngine(), path, soundFlag, nullptr, nullptr, &mSounds.Back());
+    return mSounds.Size()-1;
+}
+
+void SoundPlay(int sound)
+{
+    ma_sound_start(&mSounds[sound]);
+}
+
+void SoundRewind(ASound sound)
+{
+    ma_sound* soundPtr = &mSounds[sound];
+    if (ma_sound_is_playing(soundPtr))
+        ma_sound_seek_to_pcm_frame(soundPtr, 0);
+}
+
+void SoundSetVolume(ASound sound, float volume)
+{
+    ma_sound_set_volume(&mSounds[sound], volume);
+}
+
+void SoundDestroy(ASound sound)
+{
+    ma_sound_uninit(&mSounds[sound]);
 }
 
 /********************************************************************************/
@@ -496,11 +535,6 @@ extern void AXExit();
 extern void rDestroyRenderer();
 extern void rInitRenderer();
 extern void rSetViewportSize(int x, int y);
-
-ma_engine maEngine;
-ma_engine* GetMAEngine() {
-    return &maEngine; 
-}
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 {

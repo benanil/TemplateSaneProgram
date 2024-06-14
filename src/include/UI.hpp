@@ -37,9 +37,22 @@ enum uColor_{
     uColorSelectedBorder, // < selected field, slider, textbox, checkbox...
 };
 
+// uEmptyInside: if you want an circle fades like center is black the outer area is white set this true
+//               otherwise it will work like clock looking fade: counter clockwise fade 0 to 1
+enum uTriEffect_ {
+    uTriEffect_None = 0,
+    uFadeBit = 1, // makes Fade effect
+    uCutBit  = 2, // discards rendering pixel if fade value is below CutStart
+    uFadeInvertBit  = 4,  // inverts the per vertex fade value
+    uEmptyInsideBit = 8,  // whatever the shape is this will set the center fade value to 0
+    uIntenseFadeBit    = 16, // in fragment shader it will multiply fade value by 2.0
+    uCenterFadeBit     = 32  // maps fade value between [0.0f, 1.0f, 0.0f] instead of [0.0f, 1.0f] so center is white other areas are dark(left right)
+};
+
 enum uButtonOpt_ { // bitmask
-    uButtonOpt_Hovered = 1,
-    uButtonOpt_Border  = 2
+    // all of the uTriEffect_.. is valid
+    uButtonOpt_Hovered = 256,
+    uButtonOpt_Border  = 512
 };
 
 enum uFloat_ {
@@ -55,10 +68,11 @@ enum uFloat_ {
     ufFieldWidth  , // < width of float or int fields
 };
 
-typedef int FontHandle;
-typedef int uColor;
-typedef int uButtonOptions;
-typedef int uFloat;
+typedef uint FontHandle;
+typedef uint uColor;
+typedef uint uButtonOptions;
+typedef uint uFloat;
+typedef uint uTriEffect;
 //------------------------------------------------------------------------
 // also sets the current font to the loaded font
 FontHandle uLoadFont(const char* file);
@@ -165,18 +179,6 @@ void uBorder(Vector2f begin, Vector2f scale);
 //------------------------------------------------------------------------
 // Triangle Tendering
 
-// uEmptyInside: if you want an circle fades like center is black the outer area is white set this true
-//               otherwise it will work like clock looking fade: counter clockwise fade 0 to 1
-enum uTriEffect_ {
-    uFadeBit = 1, // makes Fade effect
-    uCutBit  = 2, // discards rendering pixel if fade value is below CutStart
-    uFadeInvertBit  = 4,  // inverts the per vertex fade value
-    uEmptyInsideBit = 8,  // whatever the shape is this will set the center fade value to 0
-    uIntenseFade    = 16, // in fragment shader it will multiply fade value by 2.0
-    uCenterFade     = 32  // maps fade value between [0.0f, 1.0f, 0.0f] instead of [0.0f, 1.0f] so center is white other areas are dark(left right)
-};
-typedef uint uTriEffect;
-
 // we are using uint properties to describe the effects
 // first 8 bit: uTriEffect bitmask
 // next 8 bit: cutStart, normalized 8bit integer for this effect, think of it like [0, 255], [0.0f, 1.0f]
@@ -190,12 +192,11 @@ inline uint MakeTriProperty(uTriEffect effect, uint cutStart, uint numSegments)
 // properties: leave it as zero if you don't want any effects, otherwise use the instructsions above
 void uVertex(Vector2f pos, uint8 fade, uint color = ~0, uint properties = 0);
 
-void uTriangleQuad(Vector2f pos, Vector2f scale, uint color, uint properties = 0);
-
-
 void uCircle(Vector2f center, float radius, uint color, uint properties = 0);
 
 void uCapsule(Vector2f center, float radius, float width, uint color, uint properties = 0);
+
+void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties);
 
 void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
 

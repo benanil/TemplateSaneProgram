@@ -90,6 +90,17 @@ def AndroidMoveFontFiles():
     copy_files(sourcePath, destPath, ".bft")
 
 
+def AndroidMoveAudioFiles():
+    print("Moving Font files to Android path..")
+    workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
+    sourcePath = os.path.join(workspacePath, "Audio")
+    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Audio")
+    ensure_directory_exists(destPath)
+    copy_files(sourcePath, destPath, ".mp3")
+    copy_files(sourcePath, destPath, ".wav")
+    copy_files(sourcePath, destPath, ".ogg")
+
+
 def AndroidMoveMeshes():
     print("Moving mesh and astc files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
@@ -101,6 +112,13 @@ def AndroidMoveMeshes():
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".abm")
     copy_files(sourcePath, destPath, ".astc")
+
+
+def AndroidMoveAllAssets():
+    AndroidMoveShaders()
+    AndroidMoveFontFiles()
+    AndroidMoveAudioFiles()
+    AndroidMoveMeshes()
 
 #------------------------------------------------------------------------
 # you have to install android studio to run this
@@ -131,8 +149,7 @@ def main():
     elif args.action == 'move_shaders':
         AndroidMoveShaders()
     elif args.action == 'move_assets':
-        AndroidMoveShaders()
-        AndroidMoveMeshes()
+        AndroidMoveAllAssets()
 
 if __name__ == '__main__':
     main()

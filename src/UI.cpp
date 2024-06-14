@@ -192,8 +192,8 @@ namespace
     
     //------------------------------------------------------------------------
     // Sound
-    ma_sound mButtonClickSound;
-    ma_sound mButtonHoverSound;
+    ASound mButtonClickSound;
+    ASound mButtonHoverSound;
  
     //------------------------------------------------------------------------
     // Sprite
@@ -228,17 +228,13 @@ namespace
 }
 
 void PlayButtonClickSound() {
-    ma_sound* sound = &mButtonClickSound;
-    if (ma_sound_is_playing(sound))
-        ma_sound_seek_to_pcm_frame(sound, 0);
-    ma_sound_start(&mButtonClickSound);
+    SoundRewind(mButtonClickSound);
+    SoundPlay(mButtonClickSound);
 }
 
 void PlayButtonHoverSound() {
-    ma_sound* sound = &mButtonHoverSound;
-    if (ma_sound_is_playing(sound))
-        ma_sound_seek_to_pcm_frame(sound, 0);
-    ma_sound_start(&mButtonHoverSound);
+    SoundRewind(mButtonHoverSound);
+    SoundPlay(mButtonHoverSound);
 }
 
 void uWindowResizeCallback(int width, int height)
@@ -271,11 +267,10 @@ static void ImportShaders()
 
 static void InitSounds()
 {
-    uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
-    ma_sound_init_from_file(GetMAEngine(), "Audio/button-click.wav", soundFlag, nullptr, nullptr, &mButtonClickSound);
-    ma_sound_init_from_file(GetMAEngine(), "Audio/pluck_001.ogg", soundFlag, nullptr, nullptr, &mButtonHoverSound);
-    ma_sound_set_volume(&mButtonClickSound, 0.5f);
-    ma_sound_set_volume(&mButtonHoverSound, 0.5f);
+    mButtonClickSound = LoadSound("Audio/button-click.wav");
+    mButtonHoverSound = LoadSound("Audio/pluck_001.ogg");
+    SoundSetVolume(mButtonClickSound, 0.5f);
+    SoundSetVolume(mButtonHoverSound, 0.5f);
 }
 
 void CreateTriangleMesh(int size)
@@ -554,29 +549,29 @@ struct UTF8Table
 // https://en.wikipedia.org/wiki/Slovak_orthography
 inline unsigned int UnicodeToAtlasIndex(unsigned int unicode)
 {
-    if (unicode < 256)
-    {
+    if (unicode < 256)     {
         static constexpr UTF8Table table{};
         return table.map[unicode];
     }
     
     switch (unicode) {
-        case 0x011Fu: return 3;  // ğ
-        case 0x015Fu: return 4;  // ş
-        case 0x0131u: return 5;  // ı
-        case 0x0142u: return 14; // ł 
-        case 0x0107u: return 15; // ć 
-        case 0x011Eu: return 20; // Ğ 
-        case 0x015Eu: return 21; // Ş 
-        case 0x1E9Eu: return 23; // ẞ 
-        case 0x0141u: return 30; // Ł 
-        case 0x0106u: return 31; // Ć 
+        case 0x011Fu: case 0xC49F: return 3;  // ğ
+        case 0x015Fu: case 0xC59F: return 4;  // ş
+        case 0x0131u: case 0xC4B1: return 5;  // ı
+        case 0x0142u: case 0xC582: return 14; // ł 
+        case 0x0107u: case 0xC487: return 15; // ć 
+        case 0x011Eu: case 0xC49E: return 20; // Ğ 
+        case 0x015Eu: case 0xC59E: return 21; // Ş 
+        case 0x0130u: case 0xC4B0: return 140; // İ
+        case 0x0141u: case 0xC581: return 30; // Ł
+        case 0x0106u: case 0xC486: return 31; // Ć 
+        case 0x1E9Eu: return 23; // ẞ
+        case 0xC3BC:  return 0; // ü
         case 0x21BAu: return 135; // ↺ anticlockwise arrow
         case 0x23F0u: return 136; // alarm
         case 0x2605u: return 137; // Star
         case 0x2764u: return 138; // hearth
         case 0x2714u: return 139; // checkmark
-        case 0x0130u: return 140; // İ
     };
 
     // subsequent icons, 0x23F3u -> 0x23FAu
@@ -848,7 +843,7 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     if (mWasHovered || !!(opt & uButtonOpt_Hovered))
         quadColor = mColors[uColorHovered];
 
-    uQuad(pos, scale, quadColor);
+    uQuad(pos, scale, quadColor, opt & 0xFF);
     if (!!(opt & uButtonOpt_Border)) {
         uBorder(pos, scale);
     }
@@ -966,12 +961,12 @@ void uKeyPressCallback(unsigned unicode)
     }
 
     if (!mCurrText.Editing || GetKeyDown(Key_CONTROL) 
-        || unicode == 13 // enter
-        || unicode == 27 // escape
-        || unicode == 9) /* tab */ return; 
+        || unicode == Key_ENTER // enter
+        || unicode == Key_ESCAPE // escape
+        || unicode == Key_TAB) /* tab */ return; 
 
     bool hasSpace = mCurrText.Pos < mCurrText.MaxLen;
-    bool isBackspace = unicode == 8;
+    bool isBackspace = unicode == Key_BACK;
 
     if (!isBackspace && hasSpace) 
     {
@@ -1024,6 +1019,10 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     uPushColor(uColorBorder, borderColor);
         uBorder(pos, size);
     uPopColor(uColorBorder);
+
+    if (clicked) {
+        wShowKeyboard(true);
+    }
 
     // todo: add cursor movement
     // set text position
@@ -1485,14 +1484,6 @@ inline void HSVToRGB(Vector3f hsv, float* dst)
     Vec3Store(dst, rv);
 }
 
-// unused, maybe use in feature
-inline Vector3f hue2rgb(float h) {
-    float r = Clamp01(Abs(h * 6.0f - 3.0f) - 1.0f);
-    float g = Clamp01(2.0f - Abs(h * 6.0f - 2.0f));
-    float b = Clamp01(2.0f - Abs(h * 6.0f - 4.0f));
-    return { r, g, b };
-}
-
 bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 {
     Vector2f labelSize = Label(label, pos);
@@ -1531,21 +1522,24 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     if (mColorPick.isOpen) {
         float lineThickness = uGetFloat(ufLineThickness) * 2.0f;
         mColorPick.pos = pos;
-        mColorPick.size = MakeVec2(300.0f, 200.0f);
+        mColorPick.size = MakeVec2(300.0f, 200.0f) * (1.0f + IsAndroid());
         mColorPick.pos.y -= mColorPick.size.y + lineThickness;
         mColorPick.pos.x += size.x + lineThickness; // field width
 
         uPushColor(uColorBorder, 0xFFFFFFFFu);
         uPushFloat(ufLineThickness, lineThickness);
-        mColorPick.pos -= lineThickness * 0.8f;
+        mColorPick.pos -= lineThickness * 0.9f;
             uBorder(mColorPick.pos, mColorPick.size + lineThickness);
-        mColorPick.pos += lineThickness * 0.8f;
+        mColorPick.pos += lineThickness * 0.9f;
         uPopFloat(ufLineThickness);
         uPopColor(uColorBorder);
         
         Vector2f mousePos; 
         GetMouseWindowPos(&mousePos.x, &mousePos.y);
 
+        // Warning: width of the alpha selection area and hue selection area 
+        //          is %88 smaller than color field, that's why you are seeing 0.88f and 0.12f. 
+        //          if you change these you have to change in shader too, same values have been used in shader for visualization
         Vector2f alphaPos  = mColorPick.pos;
         Vector2f alphaSize = mColorPick.size;
         alphaPos.x  += alphaSize.x * 0.88f;
@@ -1738,6 +1732,8 @@ void uCapsule(Vector2f center, float radius, float width, uint color, uint32 pro
     if (numSegments == 0) 
         numSegments = (uint8)(10.0f / (radius / 30.0f));
 
+    center.x += radius; // go right for left half of the circle
+    width -= radius * 2.0f; // we have to reduce the width because we are adding 2 radius from left and right
     Vector2f p0 = { center.x, center.y - radius};
     uint8 hasInvertFade = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
     // left half
@@ -1754,7 +1750,7 @@ void uCapsule(Vector2f center, float radius, float width, uint color, uint32 pro
     uint hasInvert = properties & uFadeInvertBit;
     properties ^= hasInvert; // invert hasInvert bit because triangleQuad using it too
     // draw connecting quad
-    uTriangleQuad(center + MakeVec2(0.0f, radius), MakeVec2(width, radius * 2.0f), color, properties);
+    uQuad(center + MakeVec2(0.0f, -radius), MakeVec2(width, radius * 2.0f), color, properties);
     properties |= hasInvert; // replace the invert bit
 
     center.x += width;
@@ -1773,21 +1769,104 @@ void uCapsule(Vector2f center, float radius, float width, uint color, uint32 pro
     }   
 }
 
-void uTriangleQuad(Vector2f pos, Vector2f scale, uint color, uint properties)
+void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties)
 {
-    uint8 hasInvert = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
-    pos.y -= scale.y;
-    uVertex(pos, ~hasInvert, color, properties);
-    pos.y += scale.y;
-    uVertex(pos, ~hasInvert, color, properties);
-    pos.x += scale.x;
-    uVertex(pos, hasInvert, color, properties);
-    // second triangle
-    uVertex(pos, hasInvert, color, properties);
-    pos.y -= scale.y;
-    uVertex(pos, hasInvert, color, properties);
-    pos.x -= scale.x;
-    uVertex(pos, ~hasInvert, color, properties);
+    const int numSegments = 8;
+    const float roundRatio = 0.15f, invRoundRatio = 1.0f - roundRatio;
+    float radius = MIN(width, height) * roundRatio;
+    // width *= invRoundRatio;
+    height *= invRoundRatio;
+
+    uint8 hasInvertFade = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
+    uint8      fadePrev = hasInvertFade;
+    Vector2f center = pos + MakeVec2(width * 0.5f + radius * 0.5f, height * 0.5f + radius * 0.5f);
+    Vector2f triPos = {pos.x, pos.y + radius};
+
+    uVertex(center, hasInvertFade, color, properties); // left triangle
+    uVertex(triPos, ~hasInvertFade, color, properties);
+    triPos.y += height * invRoundRatio;
+    uVertex(triPos, ~hasInvertFade, color, properties);
+
+    triPos += radius;
+    uVertex(center, hasInvertFade, color, properties); // bottom triangle
+    uVertex(triPos, ~hasInvertFade, color, properties);
+    triPos.x += width * invRoundRatio;
+    uVertex(triPos, ~hasInvertFade, color, properties);
+
+    triPos.y -= radius;
+    triPos.x += radius;
+    uVertex(center, hasInvertFade, color, properties); // right triangle
+    uVertex(triPos, ~hasInvertFade, color, properties);
+    triPos.y -= height * invRoundRatio ;
+    uVertex(triPos, ~hasInvertFade, color, properties);
+    
+    triPos -= radius;
+    uVertex(center, hasInvertFade, color, properties); // up triangle
+    uVertex(triPos, ~hasInvertFade, color, properties);
+    triPos.x -= width * invRoundRatio;
+    uVertex(triPos, ~hasInvertFade, color, properties);
+    
+    Vector2f samplePos  = { pos.x + radius, pos.y + radius };
+    Vector2f posPrev = { samplePos.x, samplePos.y - radius};
+
+    for (float i = 1.0f; i < (float)numSegments + 1.0f; i += 1.0f)
+    {
+        float t = HalfPI * (i / float(numSegments));
+        Vector2f posNew = { -Sin0pi(t*1.001f), -Cos0pi(t*1.001f) };
+        uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
+        posNew *= radius;
+        posNew += samplePos;
+        uVertex(center ,  hasInvertFade, color, properties);
+        uVertex(posPrev, ~hasInvertFade, color, properties);
+        uVertex(posNew , ~hasInvertFade, color, properties);
+        posPrev = posNew;
+        fadePrev = fadeNew;
+    }
+    samplePos.y += height * invRoundRatio;
+    posPrev = { samplePos.x - radius, samplePos.y };
+    for (float i = 1.0f; i < (float)numSegments + 1.0f; i += 1.0f)
+    {
+        float t = HalfPI * (i / float(numSegments));
+        Vector2f posNew = { -Sin0pi(HalfPI + t), -Cos0pi(HalfPI + t) };
+        uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
+        posNew *= radius;
+        posNew += samplePos;
+        uVertex(center,  hasInvertFade, color, properties);
+        uVertex(posPrev, ~hasInvertFade, color, properties);
+        uVertex(posNew , ~hasInvertFade, color, properties);
+        posPrev = posNew;
+        fadePrev = fadeNew;
+    }
+    samplePos.x += width * invRoundRatio;
+    posPrev = { samplePos.x, samplePos.y + radius };
+    for (float i = 1.0f; i < (float)numSegments + 1.0f; i += 1.0f)
+    {
+        float t = HalfPI * (i / float(numSegments));
+        Vector2f posNew = { -Sin(PI + t * 1.001f), -Cos(PI + t* 1.001f) };
+        uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
+        posNew *= radius;
+        posNew += samplePos;
+        uVertex(center,  hasInvertFade, color, properties);
+        uVertex(posPrev, ~hasInvertFade, color, properties);
+        uVertex(posNew , ~hasInvertFade, color, properties);
+        posPrev = posNew;
+        fadePrev = fadeNew;
+    }
+    samplePos.y -= height * invRoundRatio;
+    posPrev = { samplePos.x + radius, samplePos.y };
+    for (float i = 1.0f; i < (float)numSegments + 1.0f; i += 1.0f)
+    {
+        float t = HalfPI * (i / float(numSegments));
+        Vector2f posNew = { -Sin(PI + HalfPI + t), -Cos(PI + HalfPI + t) };
+        uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
+        posNew *= radius;
+        posNew += samplePos;
+        uVertex(center,  hasInvertFade, color, properties);
+        uVertex(posPrev, ~hasInvertFade, color, properties);
+        uVertex(posNew , ~hasInvertFade, color, properties);
+        posPrev = posNew;
+        fadePrev = fadeNew;
+    }
 }
 
 void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
@@ -1966,6 +2045,6 @@ void uDestroy()
     rDeleteTexture(mTextDataTex);
     rDeleteTexture(mQuadDataTex);
 
-    ma_sound_uninit(&mButtonClickSound);
-    ma_sound_uninit(&mButtonHoverSound);
+    SoundDestroy(mButtonClickSound);
+    SoundDestroy(mButtonHoverSound);
 }

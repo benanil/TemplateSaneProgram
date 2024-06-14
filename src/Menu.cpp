@@ -15,11 +15,13 @@ static char logText[32] = {};
 static bool wasHovered = false;
 static bool isVsyncEnabled = true;
 static bool showFPS = true;
-static bool showLocation = true; // shows the scene name
+static bool showDetails = false; // shows the scene name
 
 static int currentHover = 0;
 static bool isAnyHovered = false;
 static bool hoveredButtons[3] = {};
+
+static const uint ButtonEffects = uFadeBit | uCenterFadeBit | uFadeInvertBit;
 
 static inline void SetLogText(const char* txt, int size)
 {
@@ -59,7 +61,7 @@ static void PauseMenu()
     for (int i = 0; i < numButtons; i++)
     {
         buttonOpt = !isAnyHovered && currentHover == i ? uButtonOpt_Hovered : 0;
-        buttonOpt |= uButtonOpt_Border;
+        buttonOpt |= uButtonOpt_Border | ButtonEffects;
         if (uButton(buttonNames[i], buttonPosition, buttonSize, buttonOpt))
         {
             menuState = targetMenus[i];
@@ -96,17 +98,16 @@ static void PauseMenu()
 static void OptionsMenu()
 {
     Vector2f bgPos;
-    Vector2f bgScale = { 1000.0f, 666.0f };
+    Vector2f bgScale = { 940.0f, 766.0f };
     bgPos.x = (1920.0f / 2.0f) - (bgScale.x / 2.0f);
     bgPos.y = (1080.0f / 2.0f) - (bgScale.y / 2.0f);
     Vector2f pos = bgPos;
 
     const float textPadding      = 13.0f;
-    const float settingsXStart   = 18.0f;
     float elementScale = !IsAndroid() ? 0.8f : 1.25f;
     Vector2f zero2 = { 0.0f, 0.0f };
     
-    float settingElementWidth = bgScale.x / 1.25f;
+    float settingElementWidth = bgScale.x / 1.4f;
     float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
 
     uPushFloat(ufContentStart, settingElementWidth);
@@ -116,6 +117,7 @@ static void OptionsMenu()
 
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.2f);
     Vector2f textSize = uCalcTextSize("Settings");
+    float settingsXStart = (bgScale.x/2.0f) - (textSize.x/2.0f);
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
     uText("Settings", pos);
@@ -128,9 +130,7 @@ static void OptionsMenu()
     pos.x -= settingsXStart;
 
     uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
-    uPushFloat(ufLineThickness, uGetFloat(ufLineThickness) * 0.62f);
-        uLineHorizontal(pos, lineLength, uFadeBit | uCenterFade | uIntenseFade);
-    uPopFloat(ufLineThickness);
+        uLineHorizontal(pos, lineLength, uFadeBit | uCenterFadeBit | uIntenseFadeBit);
     uPopColor(uColorLine);
 
     pos.x -= xoffset;
@@ -154,7 +154,7 @@ static void OptionsMenu()
     
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 2);
-    uCheckBox("Show Location", &showLocation, pos, true);
+    uCheckBox("Show Details", &showDetails, pos, true);
     
     pos.y += textSize.y + textPadding;
     static char name[128] = {};
@@ -251,9 +251,12 @@ static void ShowFPS()
 
 static void TriangleTest()
 {
+    if (!showDetails)
+        return;
+
     const uint color0 = 0xFF4444FDu, color1 = 0xFF008CFAu, color2 = 0xFF44FD44u;
     static uint8 cutStart = 0, even = 0;
-    Vector2f circlePos = MakeVec2(1620.0f, 780.0f);
+    Vector2f circlePos = MakeVec2(1520.0f, 540.0f);
 
     even ^= 1;
     if (even) cutStart++;
@@ -272,29 +275,27 @@ static void TriangleTest()
     circlePos.y += 45.0f;
     uCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
 
-    properties &= ~0xFF; // remove tri effect bits
-    properties |= uFadeBit; // add fade bit
-    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties); circlePos.y += 45.0f;
-    
-    properties |= uIntenseFade; // add fade bit
-    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties);  circlePos.y += 45.0f;
-    
-    properties |= uCenterFade; // add fade bit
-    uTriangleQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties);  circlePos.y += 45.0f;
-
+    Vector2f quadPos = circlePos;
+    Vector2f quadSize = MakeVec2(200.0f, 15.0f);
     // test with uquad
-    circlePos.y -= 45.0f * 3.0f + 15.0f;
-    circlePos.x -= 220.0f;
-
+    uint color = MakeColorRGBAU32(35, 181, 30, 255);
+    uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uTriEffect_None);
+    quadPos.x += 60.0f;
+    uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uFadeBit);
+    quadPos.x += 60.0f;
+    uRoundedRectangle(quadPos, 50.0f, 50.0f, ~0u, uFadeBit | uFadeInvertBit);
+    quadPos.x -= 60.0f * 2.0;
+    quadPos.y += 65.0f;
+    
     properties &= ~0xFF; // remove tri effect bits
-    properties |= uFadeBit; // add fade bit
-    uQuad(circlePos, MakeVec2(200.0f, 15.0f), color2, properties); circlePos.y += 45.0f;
+    float width3 = 60 * 3.0f;
+    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.0f), uTriEffect_None);
     
-    properties |= uIntenseFade; // add fade bit
-    uQuad(circlePos, MakeVec2(200.0f, 15.0f), color1, properties);  circlePos.y += 45.0f;
+    quadPos.y += 75.0f;
+    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.2f), uFadeBit);
     
-    properties |= uCenterFade; // add fade bit
-    uQuad(circlePos, MakeVec2(200.0f, 15.0f), color0, properties);  circlePos.y += 45.0f;
+    quadPos.y += 100.0f;
+    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
 }
 
 void ShowMenu()
@@ -313,7 +314,7 @@ void ShowMenu()
         }
     }
 
-    if (showLocation) {
+    if (showDetails) {
         // write to left bottom side of the screen
         uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
     }

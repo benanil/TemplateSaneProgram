@@ -1,17 +1,17 @@
 
 out lowp vec4 OutColor;
 
-in lowp      float oFade;
-in lowp      vec4  oColor;
+in      lowp float oFade;
+in      lowp vec4  oColor;
 in flat lowp uint  oEffect;
 in flat lowp float oCutStart;
 
 void main()
 {
-    bool hasFade = bool(oEffect & 1);
-    bool hasCut  = bool((oEffect & 2) >> 1);
-    bool hasIntenseFade = bool((oEffect & 16) >> 4);
-    bool hasCenterFade  = bool((oEffect & 32) >> 5);
+    bool hasFade = bool(oEffect & 1u);
+    bool hasCut  = bool((oEffect & 2u) >> 1u);
+    bool hasIntenseFade = bool((oEffect & 16u) >> 4u);
+    bool hasCenterFade  = bool((oEffect & 32u) >> 5u);
     
     lowp float fade = oFade;
     lowp float centerFade = 1.0f - abs(2.0 * fade - 1.0);
