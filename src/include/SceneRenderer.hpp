@@ -26,7 +26,7 @@ namespace SceneRenderer
 
     void RenderPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem = nullptr);
     
-    void EndRendering();
+    void EndRendering(bool renderToBackBuffer);
 
     void PostProcessPass();
 
@@ -34,6 +34,9 @@ namespace SceneRenderer
     void SetCharacterPos(float x, float y, float z);
 
     Camera* GetCamera();
+
+    // we call this when we are using pause menu
+    void DrawLastRenderedFrame();
 
 // Lights
     void BeginUpdateLights();

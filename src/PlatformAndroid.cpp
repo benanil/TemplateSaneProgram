@@ -28,14 +28,7 @@
 #define MA_ENABLE_AAUDIO
 
 #include "../External/miniaudio.h"
-
-#define USE_SWAPPY
-#ifdef USE_SWAPPY
-    #include "../External/swappyGL.h"
-    #define ASwapBuffers(display, surface) SwappyGL_swap(display, surface)
-#else
-    #define ASwapBuffers(display, surface) eglSwapBuffers(display, surface)
-#endif
+#include "../External/swappyGL.h"
 
 constexpr int NumTouch = 4;
 
@@ -73,6 +66,7 @@ struct PlatformContextAndroid
 } PlatformCtx={};
 
 StackArray<ma_sound, 16> mSounds={};
+JNIEnv* mAppJniEnv = nullptr;
 
 void wSetFocusChangedCallback(void(*callback)(bool focused)) { PlatformCtx.FocusChangedCallback = callback; }
 void wSetWindowResizeCallback(void(*callback)(int, int))     { PlatformCtx.WindowResizeCallback = callback;}
@@ -98,10 +92,52 @@ int GetPressedNumber() {
     return -1;
 }
 
+void wSetVSync(bool active)
+{
+    PlatformCtx.VSyncActive = active;
+}
+
+void wOpenURL(const char* url)
+{
+    JNIEnv* env = mAppJniEnv;
+    jstring urlString = (env)->NewStringUTF(url);
+    jclass uriClass = (env)->FindClass("android/net/Uri");
+    jmethodID uriParse = (env)->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    jobject uri = (env)->CallStaticObjectMethod(uriClass, uriParse, urlString);
+
+    jclass intentClass = (env)->FindClass("android/content/Intent");
+    jfieldID actionViewId = (env)->GetStaticFieldID(intentClass, "ACTION_VIEW", "Ljava/lang/String;");
+    jobject actionView = (env)->GetStaticObjectField(intentClass, actionViewId);
+    jmethodID newIntent = (env)->GetMethodID(intentClass, "<init>", "(Ljava/lang/String;Landroid/net/Uri;)V");
+    jobject intent = (env)->AllocObject(intentClass);
+
+    (env)->CallVoidMethod(intent, newIntent, actionView, uri);
+    jclass activityClass = (env)->FindClass("android/app/Activity");
+    jmethodID startActivity = (env)->GetMethodID(activityClass, "startActivity", "(Landroid/content/Intent;)V");
+    jobject mainActivityClass = g_android_app->activity->javaGameActivity;
+    (env)->CallVoidMethod(mainActivityClass, startActivity, intent);
+}
+
+void wVibrate(long miliseconds)
+{
+    JNIEnv* env = mAppJniEnv;
+    // Get the class object for MainActivity
+    jclass mainActivityClass = env->GetObjectClass(g_android_app->activity->javaGameActivity);
+    jmethodID vibrateMethod = env->GetMethodID(mainActivityClass, "vibrate", "(J)V");
+    if (vibrateMethod == nullptr) return;
+
+    jobject javaGameActivity = g_android_app->activity->javaGameActivity;
+    env->CallVoidMethod(javaGameActivity, vibrateMethod, miliseconds);
+}
+
+__forceinline bool SwapBuffers(EGLDisplay display, EGLSurface surface)
+{
+    if (PlatformCtx.VSyncActive) return SwappyGL_swap(display, surface);
+    else /* no vsync */          return eglSwapBuffers(display, surface);
+}
+
 //------------------------------------------------------------------------
 // Audio
-extern "C" android_app* g_android_app;
-
 ma_engine maEngine;
 
 ma_engine* GetMAEngine() {
@@ -139,7 +175,7 @@ void SoundRewind(ASound sound)
 {
     ma_sound* soundPtr = &mSounds[sound];
     if (ma_sound_is_playing(soundPtr))
-    ma_sound_seek_to_pcm_frame(soundPtr, 0);
+        ma_sound_seek_to_pcm_frame(soundPtr, 0);
 }
 
 void SoundSetVolume(ASound sound, float volume)
@@ -320,10 +356,10 @@ void HandleCMD(android_app *pApp, int32_t cmd)
                 SetContext();
                 UpdateRenderArea();
             }
-#ifdef USE_SWAPPY
+
             if (pApp->window != NULL)
                 SwappyGL_setWindow(pApp->window);
-#endif
+
             PlatformCtx.ShouldRender = true;
             break;
         case APP_CMD_GAINED_FOCUS:
@@ -407,15 +443,12 @@ void android_main(android_app *pApp)
     // This sets up a typical game/event loop. It will run until the app is destroyed.
     int events;
     android_poll_source *pSource;
-    JNIEnv* mAppJniEnv = nullptr;
     pApp->activity->vm->AttachCurrentThread(&mAppJniEnv, NULL);
 
     // use swappy to avoid tearing and lag. https://developer.android.com/games/sdk/frame-pacing
-#ifdef USE_SWAPPY
     [[maybe_unused]] bool swappyFine = SwappyGL_init(mAppJniEnv, pApp->activity->javaGameActivity);
     ASSERT(swappyFine);
     // SwappyGL_setSwapIntervalNS(1000000000L / PreferredFrameRateInHz);
-#endif
     uint64 currentTime    = PerformanceCounter();
     uint64 prevTime       = currentTime;
     PlatformCtx.StartTime = currentTime;
@@ -451,10 +484,8 @@ void android_main(android_app *pApp)
 
             if (PlatformCtx.ShouldRender)
             {
-                bool swapped = false;
-                swapped = ASwapBuffers(PlatformCtx.Display, PlatformCtx.Surface);
+                [[maybe_unused]] bool swapped = SwapBuffers(PlatformCtx.Display, PlatformCtx.Surface);
                 ASSERT(swapped);
-
                 glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // | GL_STENCIL_BUFFER_BIT
             }
@@ -468,6 +499,7 @@ void android_main(android_app *pApp)
     {
         AXExit();
         TerminateWindow();
+        SwappyGL_destroy();
     };
 }
 

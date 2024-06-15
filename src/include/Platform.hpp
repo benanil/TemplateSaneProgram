@@ -62,14 +62,33 @@ bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight);
 // Go back to full screen Mode
 bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight);
 
-void wSetVSync(bool active);
+bool wOpenFolder(const char* folderPath);
 
+// android only functions
 inline void wShowKeyboard(bool value) { }
+inline void wVibrate(long miliseconds){ }
+
 #else
+// These functions are not used in android code, we are inlining here
+// this way compiler will not use this functions
+// desktop device only functions
+inline void wSetWindowSize(int width, int height) {}
+inline void wSetWindowPosition(int x, int y) {}
+inline void wSetWindowMoveCallback(void(*callback)(int, int)) {}
+inline void wSetWindowName(const char* name) {}
+inline void wGetWindowPos(int* x, int* y) { *x=0; *y=0;}
+inline bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight) { return false; }
+inline bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) { return false; }
+inline void SetMousePos(float x, float y) {}
+inline void SetMouseWindowPos(float x, float y) {}
+inline bool wOpenFolder(const char* folderPath) { return false; } // < not implemented
 
-void wShowKeyboard(bool value);
-
+void wShowKeyboard(bool value); // shows keyboard on android devices
+void wVibrate(long miliseconds);
 #endif
+
+void wOpenURL(const char* url);
+void wSetVSync(bool active);
 
 void wSetFocusChangedCallback(void(*callback)(bool focused));
 void wSetWindowResizeCallback(void(*callback)(int, int));
@@ -239,22 +258,3 @@ enum KeyboardKey_
 };
 typedef int KeyboardKey;
 
-// These functions are not used in android code, we are inlining here
-// this way compiler will not use this functions
-#ifdef __ANDROID__
-inline void wSetWindowSize(int width, int height) {}
-inline void wSetWindowPosition(int x, int y) {}
-inline void wSetWindowMoveCallback(void(*callback)(int, int)) {}
-inline void wSetWindowName(const char* name) {}
-inline void wGetWindowPos(int* x, int* y) { *x=0; *y=0;}
-
-inline bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight) { return false; }
-
-inline bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight) { return false; }
-
-inline void wSetVSync(bool active) {}
-
-inline void SetMousePos(float x, float y) {}
-
-inline void SetMouseWindowPos(float x, float y) {}
-#endif

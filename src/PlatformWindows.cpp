@@ -32,6 +32,7 @@
 #pragma comment (lib, "gdi32.lib")
 #pragma comment (lib, "user32.lib")
 #pragma comment (lib, "opengl32.lib")
+#pragma comment (lib, "Shell32.lib")
 
 struct PlatformContextWin
 {
@@ -121,6 +122,34 @@ void wGetMonitorSize(int* width, int* height)
 void wSetVSync(bool active)
 {
     PlatformCtx.VSyncActive = active; 
+}
+
+// Forward declaration of ShellExecuteA function
+extern "C" {
+    typedef struct HWND__* HWND;
+    typedef const char* LPCSTR;
+    typedef int INT;
+
+    __declspec(dllimport) HINSTANCE __stdcall ShellExecuteA(
+        HWND hwnd,
+        LPCSTR lpOperation,
+        LPCSTR lpFile,
+        LPCSTR lpParameters,
+        LPCSTR lpDirectory,
+        INT nShowCmd
+    );
+}
+
+void wOpenURL(const char* url)
+{
+    ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+}
+
+bool wOpenFolder(const char* folderPath) 
+{
+    if ((size_t)ShellExecuteA(nullptr, "open", folderPath, nullptr, nullptr, SW_SHOWNORMAL) <= 32) 
+        return false;
+    return true;
 }
 
 //------------------------------------------------------------------------

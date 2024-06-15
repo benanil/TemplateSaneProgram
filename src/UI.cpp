@@ -62,11 +62,11 @@ struct FontAtlas
     float maxCharWidth; // width of @
 };
 
-// we will store this in RGBA32u texture, efficient than storing for each vertex
-// 16 byte per quad: 4 byte for each vertex, we even have empty padding =)
-// x = half2:size,
-// y = character: uint8, depth: uint8, scale: half
-// z = rgba8 color, w = empty
+// we will store this in RGBA32u texture
+// x = fixed16x2: size
+// y = fixed16x2: position
+// z = character: char, depth: uint8, scale: half
+// w = rgba8 color
 struct TextData
 {
     uint size;
@@ -1147,18 +1147,19 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     Vector2f startPos = pos;
     // write centered text
     Vector2f nameSize  = uCalcTextSize(names[current]);
-    Vector2f arrowSize = MakeVec2(mCurrentFontAtlas->maxCharWidth);
+    Vector2f arrowSize = MakeVec2(mCurrentFontAtlas->maxCharWidth * 1.65f);
     float centerOffset = (size.x - nameSize.x) / 2.0f;
     
     pos.x += centerOffset;
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
-        uText(names[current], pos);    
+        uText(names[current], pos);
     uPopFloat(ufTextScale);
     pos.x -= centerOffset + arrowSize.x;
 
     bool elementFocused = uGetElementFocused();
     pos.y -= size.y;
-    pos.y -= size.y * 0.1f; // < move triangles little bit up
+    //pos.y -= size.y * 0.1f; // < move triangles little bit up
+    pos.x += arrowSize.x * 0.41f;
 
     const CheckOpt chkOpt = CheckOpt_BigColission;
     bool goLeft = elementFocused && GetKeyPressed(Key_LEFT);
@@ -1170,11 +1171,10 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     }
 
     uint iconColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorText);
-    uHorizontalTriangle(pos, labelSize.y * 0.8f, -0.8f, iconColor);
-    pos = startPos;
+    uHorizontalTriangle(pos, arrowSize.x * 0.82f, -0.8f, iconColor);
     pos.x += size.x;
-    pos.y -= size.y;
-    uHorizontalTriangle(pos, labelSize.y * 0.8f, 0.8f, iconColor);
+    pos.x += arrowSize.x;
+    uHorizontalTriangle(pos, arrowSize.x * 0.82f, 0.8f, iconColor);
     
     bool goRight = elementFocused && GetKeyPressed(Key_RIGHT);
     if (ClickCheck(pos, arrowSize, chkOpt) || goRight)
@@ -1882,6 +1882,7 @@ void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
 static void uRenderTriangles(Vector2i windowSize)
 {
     if (mCurrentTriangle <= 0) return;
+
     static int scrSizeLoc = INT32_MAX;
     rBindShader(mTriangleShader);
     if (scrSizeLoc == INT32_MAX) {
@@ -1897,6 +1898,8 @@ static void uRenderTriangles(Vector2i windowSize)
 
 static void uRenderQuads(Vector2i windowSize)
 {
+    if (mQuadIndex < 0) return;
+    
     rBindShader(mQuadShader);
 
     rUpdateTexture(mQuadDataTex, mQuadData);
@@ -1911,6 +1914,8 @@ static void uRenderQuads(Vector2i windowSize)
 
 static void uRenderTexts(Vector2i windowSize)
 {
+    if (mNumChars < 0) return;
+
     rBindShader(mFontShader);
 
     rUpdateTexture(mTextDataTex, mTextData);

@@ -248,6 +248,7 @@ struct FrameBuffer {
     unsigned int handle;
 };
 
+// don't forget to bind framebuffer after you create it
 FrameBuffer rCreateFrameBuffer();
 
 void rDeleteFrameBuffer(FrameBuffer frameBuffer);

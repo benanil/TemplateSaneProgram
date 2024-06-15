@@ -1,14 +1,9 @@
 
+#include "include/Menu.hpp"
 #include "include/UI.hpp"
-#include "../ASTL/Algorithms.hpp"
 #include "include/Platform.hpp"
 
-enum MenuState_ {
-    MenuState_Gameplay,
-    MenuState_PauseMenu,
-    MenuState_Options
-};
-typedef int MenuState;
+#include "../ASTL/Algorithms.hpp"
 
 static MenuState menuState = MenuState_Gameplay;
 static char logText[32] = {};
@@ -22,6 +17,11 @@ static bool isAnyHovered = false;
 static bool hoveredButtons[3] = {};
 
 static const uint ButtonEffects = uFadeBit | uCenterFadeBit | uFadeInvertBit;
+
+MenuState GetMenuState()
+{
+    return menuState;
+}
 
 static inline void SetLogText(const char* txt, int size)
 {
@@ -298,7 +298,7 @@ static void TriangleTest()
     uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
 }
 
-void ShowMenu()
+bool ShowMenu()
 {
     uBegin();
     
@@ -306,11 +306,14 @@ void ShowMenu()
 
     ShowFPS();
 
+    bool pauseMenuOpenned = false;
+
     if (IsAndroid() && menuState == MenuState_Gameplay) {
         uSetFloat(ufTextScale, 1.125f);
         if (uButton(IC_PAUSE, MakeVec2(1880.0f, 30.0f), Vector2f::Zero(), uButtonOpt_Border))
         {
             menuState = MenuState_PauseMenu;
+            pauseMenuOpenned = true;
         }
     }
 
@@ -334,7 +337,9 @@ void ShowMenu()
             case MenuState_Gameplay:  menuState = MenuState_PauseMenu; break;
         };
         currentHover = 0;
+        pauseMenuOpenned = true;
     }
 
     uRender();
+    return pauseMenuOpenned;
 }

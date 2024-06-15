@@ -52,7 +52,11 @@ namespace SceneRenderer
     FrameBuffer m_SSAOFrameBuffer;
     Texture     m_SSAOHalfTexture;
     Texture     m_SSAOTexture;
-    
+
+    FrameBuffer m_ResultFrameBuffer;
+    Texture m_ResultTexture;
+    Texture m_ResultDepthTexture;
+
     // deferred rendering
     Shader      m_DeferredPBRShader;
 
@@ -95,17 +99,6 @@ namespace SceneRenderer
     int m_RedrawShadows = false; // maybe: set this after we rotate sun
 
     Vector3f m_CharacterPos;
-
-    Camera* GetCamera()
-    {
-        return &m_Camera;
-    }
-    
-    void SetCharacterPos(float x, float y, float z)
-    {
-        m_CharacterPos.x = x; m_CharacterPos.y = y; m_CharacterPos.z = z;
-    }
-
 }
 
 namespace ShadowSettings
@@ -126,6 +119,23 @@ namespace ShadowSettings
 
 namespace SceneRenderer 
 {
+
+void DrawLastRenderedFrame()
+{
+    rClearDepth();
+    rRenderFullScreen(m_DepthCopyShader, m_MainFrameBuffer.DepthTexture.handle);
+    rRenderFullScreen(m_ResultTexture.handle);
+}
+
+Camera* GetCamera()
+{
+    return &m_Camera;
+}
+
+void SetCharacterPos(float x, float y, float z)
+{
+    m_CharacterPos.x = x; m_CharacterPos.y = y; m_CharacterPos.z = z;
+}
 
 #ifdef __ANDROID__
 // make width and height smaller, to improve cache utilization and less processing
@@ -156,7 +166,7 @@ static void CreateMainFrameBuffer(MainFrameBuffer& frameBuffer, int width, int h
     frameBuffer.height = height;
     rBindFrameBuffer(frameBuffer.Buffer);
     frameBuffer.ColorTexture  = rCreateTexture(width, height, nullptr, TextureType_RGB8, TexFlags_Nearest);
-    frameBuffer.NormalTexture = rCreateTexture(width, height, nullptr, TextureType_RGB8, TexFlags_Nearest);
+    frameBuffer.NormalTexture = rCreateTexture(width, height, nullptr, TextureType_R11F_G11F_B10, TexFlags_Nearest);
     frameBuffer.ShadowMetallicRoughnessTex = rCreateTexture(width, height, nullptr, TextureType_RGB565, TexFlags_Nearest);
 
     rFrameBufferAttachColor(frameBuffer.ColorTexture , 0);
@@ -198,6 +208,17 @@ static void CreateSSAOFrameBuffer(int width, int height)
 
 static void CreateFrameBuffers(int width, int height)
 {
+    __const DepthType depthType = IsAndroid() ? DepthType_24 : DepthType_32;
+
+    m_ResultFrameBuffer = rCreateFrameBuffer();
+    m_ResultTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_ClampToEdge | TexFlags_Nearest);
+    m_ResultDepthTexture = rCreateDepthTexture(width, height, depthType);
+    rBindFrameBuffer(m_ResultFrameBuffer);
+    rFrameBufferAttachColor(m_ResultTexture, 0);
+    rFrameBufferSetNumColorBuffers(1);
+    rFrameBufferAttachDepth(m_ResultDepthTexture);
+    rFrameBufferCheck();
+    
     CreateMainFrameBuffer(m_MainFrameBuffer, width, height, false);
     // CreateMainFrameBuffer(m_MainFrameBufferHalf, width / 2, height / 2, true); // last arg ishalf true
     CreateSSAOFrameBuffer(width, height);
@@ -205,6 +226,10 @@ static void CreateFrameBuffers(int width, int height)
 
 static void DeleteFrameBuffers()
 {
+    rDeleteTexture(m_ResultTexture);
+    rDeleteTexture(m_ResultDepthTexture);
+    rDeleteFrameBuffer(m_ResultFrameBuffer);
+
     DeleteMainFrameBuffer(m_MainFrameBuffer);
     // DeleteMainFrameBuffer(m_MainFrameBufferHalf);
     DeleteSSAOFrameBuffer();
@@ -419,8 +444,8 @@ void BeginRendering()
 {
     rBindFrameBuffer(m_MainFrameBuffer.Buffer);
     rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
-    rClearDepth();
     rClearColor(0.2f, 0.2f, 0.2f, 1.0);
+    rClearDepth();
 
     m_Camera.Update();
     m_ViewProjection = m_Camera.view * m_Camera.projection;
@@ -777,13 +802,20 @@ static void DrawSkybox()
     rSetClockWise(false);
 }
 
-void EndRendering()
+void EndRendering(bool renderToBackBuffer)
 {
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
     rSetViewportSize(windowSize.x, windowSize.y);
 
-    rUnbindFrameBuffer(); // < draw to backbuffer after this line
+    if (renderToBackBuffer)
+    {
+        rUnbindFrameBuffer(); // < draw to backbuffer after this line
+    }
+    else
+    {
+        rBindFrameBuffer(m_ResultFrameBuffer);
+    }
 
     // copy depth buffer to back buffer
     rRenderFullScreen(m_DepthCopyShader, m_MainFrameBuffer.DepthTexture.handle);
@@ -804,6 +836,11 @@ void EndRendering()
         DrawSkybox();
     }
     rSetDepthWrite(true);
+    
+    if (!renderToBackBuffer)
+    {
+        rUnbindFrameBuffer();
+    }
 }
 
 void Destroy()

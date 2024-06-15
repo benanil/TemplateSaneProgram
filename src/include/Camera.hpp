@@ -3,7 +3,9 @@
 #include "../../ASTL/Math/Matrix.hpp"
 #include "Platform.hpp"
 
-/*
+// #define FREE_CAMERA
+
+#ifdef FREE_CAMERA
 struct Camera
 {
 	Matrix4 projection;
@@ -174,7 +176,8 @@ struct Camera
 	}
 #endif
 };
-*/
+
+#else // not definede FREE_CAMERA
 
 struct Camera
 {
@@ -350,3 +353,5 @@ struct Camera
 	}
 #endif
 };
+
+#endif // not defined free camera

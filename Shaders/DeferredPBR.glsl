@@ -1,9 +1,9 @@
 
 #ifdef __ANDROID__
-    #define MEDIUMP_FLT_MAX    65504.0
-    #define saturateMediump(x) min(x, MEDIUMP_FLT_MAX)
+#define MEDIUMP_FLT_MAX    65504.0
+#define saturateMediump(x) min(x, MEDIUMP_FLT_MAX)
 #else
-    #define saturateMediump(x) x
+#define saturateMediump(x) x
 #endif
 
 #define float16 mediump float
@@ -51,26 +51,44 @@ mediump vec4 toLinear(mediump vec4 sRGB)
 }
 
 float sqr(float x) { return x*x; }
+float16 sqrf16(float16 x) { return x*x; }
 
 // I've made custom lighting shader below,
 // if you want you can use google filament's mobile pbr renderer:
 // https://google.github.io/filament/Filament.html
 
-float16 Reflection(half3 l, half3 n, half3 v)
-{
-    half3 h = normalize(v + l);
-    float16 ldh = max(dot(l, h), 0.0);
-    half3  rl = reflect(-l, n);
-    float16 s = dot(rl, v);
-    s = ldh * ldh * s;
-    return s * s;
+float16 D_GGX(float16 NoH, float16 roughness) {
+    float16 a = NoH * roughness;
+    float16 k = roughness / (1.0 - NoH * NoH + a * a);
+    return k * k * (1.0 / PI);
+}
+
+float16 V_SmithGGXCorrelated_Fast(float16 roughness, float16 NoV, float16 NoL) {
+    // Hammon 2017, "PBR Diffuse Lighting for GGX+Smith Microsurfaces"
+    float16 v = 0.5 / mix(2.0 * NoL * NoV, NoL + NoV, roughness);
+    return saturateMediump(v);
+}
+
+float16 F_Schlick(float16 u, float16 f0) {
+    float16 x = 1.0 - u;
+    return f0 + (1.0 - f0) * (x * x * x * x);
 }
 
 half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
 {
-    float16 ndl = max(dot(l, n), 0.2);
-    float16 r = Reflection(l, n, v);
-    return albedo * ndl + (r * 0.08);
+    const float16 roughness = 0.22;
+    const float16 F0 = 0.08; 
+    half3 h = normalize(l + v);
+    float16 ndl = max(dot(n, l), 0.10);
+    float16 ndh = max(dot(n, h), 0.0);
+    float16 ndv = abs(dot(n, v)) + 1e-5;
+    float16 ldh = max(dot(l, h), 0.0);
+
+    float16 D = D_GGX(ndh, roughness);
+    float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl);
+    float16 F = F_Schlick(ldh, F0);
+    float16 Fr = (D * V) * F; // specular BRDF
+    return (albedo / PI) + Fr; //albedo * ndl + (r * 0.08);
 }
 
 vec3 WorldSpacePosFromDepthBuffer()
@@ -80,13 +98,14 @@ vec3 WorldSpacePosFromDepthBuffer()
     vec4 vsPos = uInvProj * vec4(uv, depth * 2.0 - 1.0, 1.0);
     vsPos /= vsPos.w;
     vsPos = uInvView * vsPos;
-    return vsPos.xyz ;
+    return vsPos.xyz;
 }
 
+// Direction vector from the surface point to the viewer (normalized).
 vec3 GetViewRay(vec3 viewPos, vec3 worldSpacePos)
 {
     // calculate direction between WorldSpacePos and 3rd row of invView(viewPos)
-    vec3 dir = worldSpacePos - viewPos;
+    vec3 dir = viewPos - worldSpacePos;
     return dir * inversesqrt(dot(dir, dir));
 }
 
@@ -98,9 +117,9 @@ half3 GammaCorrect(half3 x) {
 half3 CustomToneMapping(half3 x)
 {
     return GammaCorrect(x / (1.0 + x)); // reinhard
-#ifdef __ANDROID__
+    #ifdef __ANDROID__
     return x / (x + 0.155) * 1.019; // < doesn't require gamma correction
-#else
+    #else
     //return  x / (x + 0.0832) * 0.982;
     const float16 a = 2.51;
     const float16 b = 0.03;
@@ -108,16 +127,16 @@ half3 CustomToneMapping(half3 x)
     const float16 d = 0.59;
     const float16 e = 0.14;
     return GammaCorrect((x * (a * x + b)) / (x * (c * x + d) + e));
-#endif
+    #endif
 }
 
 // https://www.shadertoy.com/view/lsKSWR
 float16 Vignette(half2 uv)
 {
-	uv *= vec2(1.0) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
-	float16 vig = uv.x * uv.y * 15.0; // multiply with sth for intensity
-	vig = pow(vig, 0.15); // change pow for modifying the extend of the  vignette
-	return vig; 
+    uv *= vec2(1.0) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
+    float16 vig = uv.x * uv.y * 15.0; // multiply with sth for intensity
+    vig = pow(vig, 0.15); // change pow for modifying the extend of the  vignette
+    return vig; 
 }
 
 #ifdef __ANDROID__
@@ -154,12 +173,6 @@ float GetShadow(float shadow, vec3 surfPos)
     return shadow * EaseInCirc(playerShadow);
 }
 
-float sdBox(vec2 p, vec2 b)
-{
-    vec2 d = abs(p) - b;
-    return min(max(d.x,d.y),0.0) + length(max(d,0.0));
-}
-
 void main()
 {
     half3 shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
@@ -174,7 +187,8 @@ void main()
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
-    half3 sunColor = vec3(0.982f, 0.972, 0.966);
+    const half3 sunColor = vec3(0.982f, 0.972, 0.966);
+    
     half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay);
 
     for (int i = 0; i < uNumPointLights; i++)

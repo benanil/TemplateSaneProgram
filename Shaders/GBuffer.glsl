@@ -4,12 +4,12 @@
 precision mediump sampler2DShadow;
 
 layout(location = 0) out lowp vec3 oFragColor; // TextureType_RGB8
-layout(location = 1) out lowp vec3 oNormal;    // TextureType_RGB8
+layout(location = 1) out mediump vec3 oNormal;    // TextureType_RGB8
 layout(location = 2) out lowp vec3 oShadowMetallicRoughness; // TextureType_RGB565
 
 in mediump vec2 vTexCoords;
 in highp   vec4 vLightSpaceFrag;
-in lowp    mat3 vTBN;
+in mediump    mat3 vTBN;
 
 uniform lowp sampler2D uAlbedo;
 uniform lowp sampler2D uNormalMap;
@@ -66,7 +66,7 @@ void main()
             discard;
     #endif
 
-    lowp vec3  normal    = vTBN[2];
+    mediump vec3  normal    = vTBN[2];
     lowp float metallic  = 0.5;
     lowp float roughness = 0.3;
 
@@ -74,8 +74,8 @@ void main()
     if (uHasNormalMap == 1)
     {
         // obtain normal from normal map in range [0,1]
-        lowp vec2  c = texture(uNormalMap, vTexCoords).rg * 2.0 - 1.0;
-        lowp float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
+        mediump vec2  c = texture(uNormalMap, vTexCoords).rg * 2.0 - 1.0;
+        mediump float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
         normal  = normalize(vec3(c, z));
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
@@ -88,5 +88,5 @@ void main()
     float shadow = ShadowCalculation();
     oShadowMetallicRoughness = vec3(shadow, metallic, roughness);
     oFragColor = color.rgb;
-    oNormal = normal + vec3(1.0) * vec3(0.5); // convert to 0-1 range
+    oNormal = normalize(normal) + vec3(1.0) * vec3(0.5); // convert to 0-1 range
 }

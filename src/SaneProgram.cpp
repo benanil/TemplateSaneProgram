@@ -8,6 +8,7 @@
 #include "include/CharacterController.hpp"
 #include "include/Camera.hpp"
 #include "include/UI.hpp"
+#include "include/Menu.hpp"
 
 #include "../ASTL/String.hpp"
 
@@ -58,7 +59,6 @@ int AXStart()
     uInitialize();
     // very good font that has lots of icons: http://www.quivira-font.com/
     uLoadFont("Fonts/Quivira.otf"); // "Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
-
     MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();
     Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
@@ -84,28 +84,27 @@ int AXStart()
     return 1;
 }
 
-// from Menu.cpp
-extern void ShowMenu();
+static bool pauseMenuOpened = false;
 
-// static double t;
 // do rendering and main loop here
-void AXLoop(bool shouldRender)
+void AXLoop(bool canRender)
 {
-    Scene* currentScene = &g_CurrentScene;
-    currentScene->Update();
-    
-    float deltaTime = (float)GetDeltaTime();
-    deltaTime = MIN(deltaTime, 0.2f);
-
-    // animate and control the movement of character
-    const bool isSponza = true;
-    characterController.Update(deltaTime, isSponza);
-    AnimationController* animController = &characterController.mAnimController;
-	
     using namespace SceneRenderer;
-	
-    if (shouldRender)
+
+    // draw when we are playing game, don't render when using pause menu to save power
+    if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay))
     {
+        Scene* currentScene = &g_CurrentScene;
+        currentScene->Update();
+    
+        float deltaTime = (float)GetDeltaTime();
+        deltaTime = MIN(deltaTime, 0.2f);
+
+        // animate and control the movement of character
+        const bool isSponza = true;
+        characterController.Update(deltaTime, isSponza);
+        AnimationController* animController = &characterController.mAnimController;
+
         BeginShadowRendering(currentScene);
         {
             RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
@@ -113,16 +112,21 @@ void AXLoop(bool shouldRender)
             // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
         }
         EndShadowRendering();
-	
+ 
         BeginRendering();
         {
             RenderPrefab(currentScene, GLTFPrefab, nullptr);
             RenderPrefab(currentScene, AnimatedPrefab, animController);
         }
-        EndRendering();
+        bool renderToBackBuffer = !pauseMenuOpened;
+        EndRendering(renderToBackBuffer);
+        pauseMenuOpened = false;
     }
-
-    ShowMenu();
+    else
+    {
+        DrawLastRenderedFrame();
+    }
+    pauseMenuOpened = ShowMenu(); // < from Menu.cpp
     // RenderScene(&FBXScene);
     // todo material system
 }

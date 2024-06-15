@@ -9,5 +9,5 @@ float Ease(float x) {
 void main()
 {
     const vec4 skyColor = vec4(0.85, 0.44, 0.25, 1.0);
-    result = skyColor * Ease(inversesqrt(dot(pos, pos)) * 0.62);
+    result = skyColor * Ease(inversesqrt(dot(pos, pos)) * 0.42);
 }

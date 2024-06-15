@@ -8,7 +8,7 @@ layout(location = 5) in lowp    vec4  aWeights;
 
 out mediump vec2 vTexCoords;
 out highp   vec4 vLightSpaceFrag;
-out lowp    mat3 vTBN;
+out mediump mat3 vTBN;
 
 uniform highp mat4 uModel;
 uniform highp mat4 uLightMatrix;
@@ -41,7 +41,7 @@ void main()
         model = model * transpose(animMat);
     }
 
-    lowp mat3 normalMatrix = mat3(model);
+    mediump mat3 normalMatrix = mat3(model);
     vTBN[0] = normalize(normalMatrix * aTangent.xyz); 
     vTBN[2] = normalize(normalMatrix * aNormal);
     vTBN[1] = cross(vTBN[0], vTBN[2]) * aTangent.w;
