@@ -48,4 +48,6 @@ namespace SceneRenderer
     void Destroy();
 
     void WindowResizeCallback(int width, int height);
+
+    bool ShouldReRender();
 }

@@ -36,10 +36,10 @@ namespace SceneRenderer
     struct MainFrameBuffer
     {
         FrameBuffer Buffer;
-        Texture     ColorTexture;
-        Texture     DepthTexture;
-        Texture     NormalTexture;
-        Texture     ShadowMetallicRoughnessTex;
+        Texture     ColorTexture; // < a component is shadow
+        Texture     DepthTexture; 
+        Texture     NormalTexture;// < a component is metallic
+        Texture     RoughnessTexture;
         int width, height;
     };
 
@@ -65,7 +65,7 @@ namespace SceneRenderer
         lModel , lHasAnimation, lSunDirG, lViewProj, lAnimTex;
 
     // Deferred uniform locations
-    int lSunDir, lPlayerPos, lAlbedoTex, lShadowMetallicRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
+    int lSunDir, lPlayerPos, lAlbedoTex, lRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
 
     // SSAO uniform locations
     int sDepthMap, sNormalTex, sView;
@@ -96,7 +96,8 @@ namespace SceneRenderer
     AMaterial m_defaultMaterial;
 
     bool m_ShadowFollowCamera = false;
-    int m_RedrawShadows = false; // maybe: set this after we rotate sun
+    int  m_RedrawShadows = false; // maybe: set this after we rotate sun
+    bool m_ShouldReRender = false;
 
     Vector3f m_CharacterPos;
 }
@@ -165,13 +166,13 @@ static void CreateMainFrameBuffer(MainFrameBuffer& frameBuffer, int width, int h
     frameBuffer.width  = width;
     frameBuffer.height = height;
     rBindFrameBuffer(frameBuffer.Buffer);
-    frameBuffer.ColorTexture  = rCreateTexture(width, height, nullptr, TextureType_RGB8, TexFlags_Nearest);
-    frameBuffer.NormalTexture = rCreateTexture(width, height, nullptr, TextureType_R11F_G11F_B10, TexFlags_Nearest);
-    frameBuffer.ShadowMetallicRoughnessTex = rCreateTexture(width, height, nullptr, TextureType_RGB565, TexFlags_Nearest);
+    frameBuffer.ColorTexture  = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_Nearest);
+    frameBuffer.NormalTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_Nearest);
+    frameBuffer.RoughnessTexture = rCreateTexture(width, height, nullptr, TextureType_R8, TexFlags_Nearest);
 
     rFrameBufferAttachColor(frameBuffer.ColorTexture , 0);
     rFrameBufferAttachColor(frameBuffer.NormalTexture, 1);
-    rFrameBufferAttachColor(frameBuffer.ShadowMetallicRoughnessTex, 2);
+    rFrameBufferAttachColor(frameBuffer.RoughnessTexture, 2);
 
     __const DepthType depthType = IsAndroid() ? DepthType_24 : DepthType_32;
     frameBuffer.DepthTexture  = rCreateDepthTexture(width, height, depthType);
@@ -186,7 +187,7 @@ static void DeleteMainFrameBuffer(MainFrameBuffer& frameBuffer)
     rDeleteTexture(frameBuffer.ColorTexture);
     rDeleteTexture(frameBuffer.DepthTexture);
     rDeleteTexture(frameBuffer.NormalTexture);
-    rDeleteTexture(frameBuffer.ShadowMetallicRoughnessTex);
+    rDeleteTexture(frameBuffer.RoughnessTexture);
     rDeleteFrameBuffer(frameBuffer.Buffer);
 }
 
@@ -246,6 +247,7 @@ void WindowResizeCallback(int width, int height)
     DeleteFrameBuffers();
     CreateFrameBuffers(width, height);
     m_RedrawShadows = 2;
+    m_ShouldReRender = true;
 }
 
 static void GetUniformLocations()
@@ -279,9 +281,9 @@ static void GetUniformLocations()
     rBindShader(m_DeferredPBRShader);
     lPlayerPos                  = rGetUniformLocation("uPlayerPos");
     lSunDir                     = rGetUniformLocation("uSunDir");
-    lAlbedoTex                  = rGetUniformLocation("uAlbedoTex");
-    lShadowMetallicRoughnessTex = rGetUniformLocation("uShadowMetallicRoughnessTex");
-    lNormalTex                  = rGetUniformLocation("uNormalTex");
+    lAlbedoTex                  = rGetUniformLocation("uAlbedoShadowTex");
+    lRoughnessTex               = rGetUniformLocation("uRoughnessTex");
+    lNormalTex                  = rGetUniformLocation("uNormalMetallicTex");
     lDepthMap                   = rGetUniformLocation("uDepthMap");
     lInvView                    = rGetUniformLocation("uInvView");
     lInvProj                    = rGetUniformLocation("uInvProj");
@@ -557,6 +559,13 @@ void EndShadowRendering()
     m_RedrawShadows = MAX(m_RedrawShadows, -1);
 }
 
+bool ShouldReRender()
+{
+    bool should = m_ShouldReRender == true;
+    m_ShouldReRender = false;
+    return should;
+}
+
 static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& primitive)
 {
     int baseColorIndex = material.baseColorTexture.index;
@@ -778,7 +787,7 @@ static void LightingPass()
         rSetShaderValue(invProj.GetPtr(), lInvProj, GraphicType_Matrix4);
 
         rSetTexture(m_MainFrameBuffer.ColorTexture              , 0, lAlbedoTex);
-        rSetTexture(m_MainFrameBuffer.ShadowMetallicRoughnessTex, 1, lShadowMetallicRoughnessTex);
+        rSetTexture(m_MainFrameBuffer.RoughnessTexture, 1, lRoughnessTex);
         rSetTexture(m_MainFrameBuffer.NormalTexture             , 2, lNormalTex);
         rSetTexture(m_MainFrameBuffer.DepthTexture              , 3, lDepthMap);
         rSetTexture(m_SSAOTexture                               , 4, lAmbientOclussionTex);

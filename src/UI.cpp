@@ -88,6 +88,37 @@ struct QuadData
     ushort posX, posY;
 };
 
+struct ScissorRect
+{
+    Vector2f position;
+    ushort sizeX, sizeY;
+    int numElements;
+};
+
+const int MaxScissor = 32;
+
+// we are going to use two pointer algorithm, stencilled quads or texts will be at the beginning of the array
+// so we will render stencilled and non stencilled with seperate draw calls, this way we don't need extra array too
+struct ScissorData
+{
+    int count = 0;
+    int numRect = 0;
+    ScissorRect rects[MaxScissor];
+    
+    void PushNewRect(Vector2f pos, Vector2f scale) {
+        ScissorRect& rect = rects[numRect];
+        rect.position = pos;
+        rect.sizeX = (ushort)scale.x;
+        rect.sizeY = (ushort)scale.y;
+        rect.numElements = 0;
+    }
+
+    void Reset() {
+        count = 0;
+        numRect = 0;
+    }
+};
+
 namespace
 {
     FontAtlas mFontAtlases[4] = {};
@@ -98,29 +129,34 @@ namespace
     float mUIScale; // min(mWindowRatio.x, mWindowRatio.y)
 
     Vector2f mMouseOld;
-    bool mWasHovered = false; // last button was hovered?
+    bool mWasHovered = false; // last element was hovered ? (button, textField, int&float field)
     bool mAnyElementClicked = false;
-    int mNumChars = 0; // textLen without spaces, or undefined characters    
-    bool mInitialized = false;
-    bool mElementFocused[8] = {};
+    bool mInitialized = false; // is renderers initialized?
+    bool mElementFocused[8] = {}; // stack data structure
     int mElementFocusedIndex = 0;
+    uScissorMask mScissorMask = 0;
 
     //------------------------------------------------------------------------
     // Text Batch renderer
     Shader   mFontShader;
     Texture  mTextDataTex; // x = half2:size, y = character: uint8, depth: uint8, scale: half  
     TextData mTextData[MaxCharacters];
-    int dataTexLoc, atlasLoc, uScrSizeLoc; // uniform locations
+    int mNumChars = 0; // textLen without spaces, or undefined characters
+    ScissorData mTextScissor = {};
+
+    int dataTexLoc, atlasLoc, uScrSizeLoc, uIndexStartLocText; // uniform locations
 
     //------------------------------------------------------------------------
     // Quad Batch renderer
     const int MaxQuads = 512;
     Shader   mQuadShader;
-    QuadData mQuadData[MaxQuads];
+    QuadData mQuadData[MaxQuads]= {};
     Texture  mQuadDataTex;
-
     int mQuadIndex = 0;
-    int dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad; // uniform locations
+
+    int dataTexLocQuad, uScrSizeLocQuad, uScaleLocQuad, uIndexStartLocQuad; // uniform locations
+    
+    ScissorData mQuadScissor = {};
     
     //------------------------------------------------------------------------
     // Color Pick
@@ -134,6 +170,10 @@ namespace
         bool isOpen;
     };
     ColorPick mColorPick;
+
+    bool mDropdownOpen = false;
+    int mLastHoveredDropdown = 0;
+    size_t mCurrentDropdown; // < pointer of last edited dropdown label
 
     //------------------------------------------------------------------------
     // TextBox
@@ -183,7 +223,8 @@ namespace
         175.0f, // TextBoxWidth
         18.0f , // Slider Width
         0.9f  , // Depth 
-        98.0f   // Field Width
+        98.0f , // Field Width
+        100.0f  // Text Wrap Width
     };
     constexpr int NumFloats = sizeof(mFloats) / sizeof(float);
     // stack for pushed floats
@@ -279,10 +320,10 @@ void CreateTriangleMesh(int size)
         rDeleteMesh(mTriangleMesh);
 
     const InputLayout inputLayout[] = {
-        { 1, GraphicType_UnsignedInt     }, // 
+        { 1, GraphicType_UnsignedInt     }, // < fixed point position.xy
         { 1, GraphicType_UnsignedInt     }, // < fade, depth, effect, cutStart
-        { 4, GraphicType_UnsignedByte | GraphicType_NormalizeBit },
-        { 1, GraphicType_UnsignedInt     } // padding
+        { 4, GraphicType_UnsignedByte | GraphicType_NormalizeBit }, // color
+        { 1, GraphicType_UnsignedInt     } // < padding
     };
     InputLayoutDesc description;
     description.numLayout = ArraySize(inputLayout);
@@ -309,6 +350,7 @@ void uInitialize()
     dataTexLoc    = rGetUniformLocation("dataTex");
     atlasLoc      = rGetUniformLocation("atlas");
     uScrSizeLoc   = rGetUniformLocation("uScrSize");
+    uIndexStartLocText = rGetUniformLocation("uIndexStart");
     mInitialized  = true;
     mCurrentFontAtlas = nullptr;
     
@@ -316,6 +358,7 @@ void uInitialize()
     dataTexLocQuad  = rGetUniformLocation("dataTex");
     uScrSizeLocQuad = rGetUniformLocation("uScrSize");
     uScaleLocQuad   = rGetUniformLocation("uScale");
+    uIndexStartLocQuad = rGetUniformLocation("uIndexStart");
     GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
 }
 
@@ -672,13 +715,13 @@ inline ushort MakeFixed(float f)
 
 // reference resolution is always 1920x1080,
 // we will remap input position and scale according to current window size
-void uText(const char* text, Vector2f position)
+void uText(const char* text, Vector2f position, uTextFlags flags)
 {
+    if (text == nullptr) return;
     ASSERTR(mInitialized == true, return);
-    ASSERTR(text != nullptr, return);
     ASSERTR(mCurrentFontAtlas != nullptr, return); // you have to initialize at least one font
     
-    int txtLen = 0, txtSize = 0;
+    int txtLen = 0, txtSize = 0; // txtLen is number of utf characters txtSize is size in bytes
     {
         const char* s = text;
         while (*s) 
@@ -688,24 +731,70 @@ void uText(const char* text, Vector2f position)
             s++;
         }
     }
-    ASSERTR(txtLen < MaxCharacters, return);
+    ASSERTR(mNumChars + txtLen < MaxCharacters, return);
+    if (txtLen == 0) return;
+
+    TextData* textData;
+    int numNonScissor = mNumChars - mTextScissor.count;
+    bool usingScissor = (mScissorMask & uScissorMask_Text) >> 1;
+    if (!usingScissor) { 
+        textData = &mTextData[mNumChars];
+    }
+    else { // if text is scisorred
+        textData = &mTextData[mTextScissor.count];
+    }
 
     position *= mWindowRatio;
+    Vector2f posStart = position;
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
+    float ascent = (float)mCurrentFontAtlas->characters['0'].height * 1.15f;
     float scale = uGetFloat(ufTextScale);
     scale *= mUIScale;
     half scalef16 = ConvertFloatToHalf(scale);
     uint color = uGetColor(uColorText);
+    int currentLine = 0;
 
     const char* textEnd = text + txtSize;
-    uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f) ;
+    uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
+    int numChars = 0;
     // fill per quad data
     while (text < textEnd)
     {
+        if (*text == '\n') { // new line 'enter'
+            if (!(flags & uTextFlags_NoNewLine))
+            {
+                currentLine++;
+                position = posStart;
+                position.y += float(currentLine) * ascent * scale;
+            }
+
+            text++;
+            continue;
+        }
+
+        if (*text == '\t') { // tab
+            float space = spaceWidth * scale * 0.5f * mWindowRatio.x;
+            position.x += space * 4.0f;
+            text++;
+            continue;
+        }
+        
         if (*text == ' ') {
+            float sizeX = position.x - posStart.x;
+            if ((flags & uTextFlags_WrapWidthDetermined) && sizeX > uGetFloat(ufTextWrapWidth))
+            {
+                currentLine++;
+                position = posStart;
+                position.y += float(currentLine) * ascent * scale;
+            }
             position.x += spaceWidth * scale * 0.5f * mWindowRatio.x;
             text++;
             continue;
+        }
+
+        if (usingScissor) {
+            // move all of the non scissor data right by txtLen amount
+            textData[numChars + numNonScissor] = textData[numChars];
         }
 
         unsigned int chr;
@@ -724,37 +813,74 @@ void uText(const char* text, Vector2f position)
         pos.x += float(character.xoff) * scale;
         pos.y += float(character.yoff) * scale;
 
-        mTextData[mNumChars].posX = MakeFixed(pos.x);
-        mTextData[mNumChars].posY = MakeFixed(pos.y);
+        textData[numChars].posX = MakeFixed(pos.x);
+        textData[numChars].posY = MakeFixed(pos.y);
 
-        mTextData[mNumChars].size  = uint32_t(MakeFixed(size.x + 0.5f));
-        mTextData[mNumChars].size |= uint32_t(MakeFixed(size.y + 0.5f)) << 16;
+        textData[numChars].size  = uint32_t(MakeFixed(size.x + 0.5f));
+        textData[numChars].size |= uint32_t(MakeFixed(size.y + 0.5f)) << 16;
 
-        mTextData[mNumChars].character = chr;  
-        mTextData[mNumChars].depth = currentDepth;
-        mTextData[mNumChars].scale = scalef16;
-        mTextData[mNumChars].color = color;
+        textData[numChars].character = chr;  
+        textData[numChars].depth = currentDepth;
+        textData[numChars].scale = scalef16;
+        textData[numChars].color = color;
 
         position.x += character.advence * scale;
-        mNumChars++;
+        numChars++;
     }
+    if (usingScissor) {
+        mTextScissor.count += numChars;
+        mTextScissor.rects[mTextScissor.numRect].numElements += numChars;
+    }
+    mNumChars += numChars; // we shouldn't count spaces or tabs
 }
 
-Vector2f uCalcTextSize(const char* text)
+Vector2f uCalcTextSize(const char* text, uTextFlags flags)
 {
     if (!text) return { 0.0f, 0.0f };
     
     float scale = uGetFloat(ufTextScale);
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
+    float ascent = (float)mCurrentFontAtlas->characters['0'].height * 1.15f;
+    
     const char* textEnd = text + StringLength(text);
-
     Vector2f size = {0.0f, 0.0f};
+    float maxX = 0.0f;
+
     short lastXoff, lastWidth;
     unsigned int chr;
+    int currentLine = 0;
 
     while (*text)
     {
+        if (*text == '\n') { // newline
+            if (!(flags & uTextFlags_NoNewLine))
+            {
+                currentLine++;
+                maxX = MAX(size.x, maxX);
+                size.x = 0.0f;
+                size.y += float(currentLine) * ascent * scale;
+            }
+
+            text++;
+            continue;
+        }
+
+        if (*text == '\t') { // tab
+            float space = spaceWidth * scale * 0.5f * mWindowRatio.x;
+            size.x += space * 4.0f;
+            text++;
+            continue;
+        }
+
         if (*text == ' ') {
+            if ((flags & uTextFlags_WrapWidthDetermined) && size.x  > uGetFloat(ufTextWrapWidth))
+            {
+                currentLine++;
+                currentLine++;
+                maxX = MAX(size.x, maxX);
+                size.x = 0.0f;
+                size.y += float(currentLine) * ascent * scale;
+            }
             size.x += spaceWidth * scale * 0.5f * mWindowRatio.x;
             text++;
             continue;
@@ -770,10 +896,30 @@ Vector2f uCalcTextSize(const char* text)
         size.x += character.advence * scale;
         size.y = MAX(size.y, character.height * scale);
     }
+    size.x = MAX(size.x, maxX);
     // size.x += (lastWidth + lastXoff) * scale;
     return size;
 }
 
+int CalcTextNumLines(const char* text, uTextFlags flags)
+{
+    int numLines = 1;
+    while (*text)
+    {
+        if (*text == '\n') {
+            if (!(flags & uTextFlags_NoNewLine))
+            {
+                numLines++;
+            }
+        }
+        // if (*text == ' ') {
+        //     numLines += (flags & uTextFlags_WrapWidthDetermined) && size.x > uGetFloat(ufTextWrapWidth);
+        // }
+        // sizeX += character.advence * scale;
+        text += UTF8CharLen(text);
+    }
+    return numLines;
+}
 
 //------------------------------------------------------------------------
 // Quad Drawing
@@ -781,18 +927,29 @@ void uQuad(Vector2f position, Vector2f scale, uint color, uint properties)
 {
     ASSERTR(mQuadIndex < MaxQuads, return);
     position *= mWindowRatio;
-    mQuadData[mQuadIndex].posX = MakeFixed(position.x);
-    mQuadData[mQuadIndex].posY = MakeFixed(position.y);
+    QuadData* quadData = nullptr;
 
-    mQuadData[mQuadIndex].size  = uint32_t(MakeFixed(scale.x));
-    mQuadData[mQuadIndex].size |= uint32_t(MakeFixed(scale.y)) << 16;
+    if (!(mScissorMask & uScissorMask_Quad)) { 
+        quadData = &mQuadData[mQuadIndex];
+    }
+    else {
+        quadData = &mQuadData[mQuadScissor.count];
+        mQuadData[mQuadIndex] = mQuadData[mQuadScissor.count++];
+        mQuadScissor.rects[mQuadScissor.numRect].numElements++;
+    }
+    mQuadIndex++;
+
+    quadData->posX = MakeFixed(position.x);
+    quadData->posY = MakeFixed(position.y);
+
+    quadData->size  = uint32_t(MakeFixed(scale.x));
+    quadData->size |= uint32_t(MakeFixed(scale.y)) << 16;
     
     uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
-    mQuadData[mQuadIndex].color = color;
-    mQuadData[mQuadIndex].depth = currentDepth;
-    mQuadData[mQuadIndex].effect = 0xFF & properties;
-    mQuadData[mQuadIndex].cutStart = 0xFF & (properties >> 8);
-    mQuadIndex++;
+    quadData->color = color;
+    quadData->depth = currentDepth;
+    quadData->effect = 0xFF & properties;
+    quadData->cutStart = 0xFF & (properties >> 8);
 }
 
 enum CheckOpt_ { CheckOpt_WhileMouseDown = 1, CheckOpt_BigColission = 2 };
@@ -822,6 +979,42 @@ static bool ClickCheck(Vector2f pos, Vector2f scale, CheckOpt flags = 0)
         return mWasHovered;
 
     return mWasHovered && released;
+}
+
+float uToolTip(const char* text, float timeRemaining, bool wasHovered)
+{
+    if (!wasHovered) {
+        timeRemaining = 1.0f; // tooltip will shown after one second
+    }
+    else { 
+        timeRemaining -= (float)GetDeltaTime();
+    }
+
+    if (timeRemaining <= 0.02f)
+    {
+        uTextFlags textFlag = uTextFlags_None;
+        Vector2f mousePos;
+        int numLines = CalcTextNumLines(text, textFlag);
+        GetMouseWindowPos(&mousePos.x, &mousePos.y);
+        // we apply window ratio in functions but we shouldn't apply because we get the mouse position 
+        mousePos /= mWindowRatio; 
+        uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.9f);
+        uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.5f);
+        Vector2f textSize = uCalcTextSize(text, textFlag) * 1.15f;
+
+        float lineHeight = textSize.y / (float)numLines;
+        mousePos.y += lineHeight;
+        uText(text, mousePos + (textSize * 0.05f), textFlag);
+        
+        mousePos.y -= lineHeight;
+        textSize.y += lineHeight * 0.5f;
+        uQuad(mousePos, textSize, uGetColor(uColorQuad), uButtonOpt_Border);
+        uBorder(mousePos, textSize);
+
+        uPopFloat(ufTextScale);
+        uPopFloat(ufDepth);
+    }
+    return timeRemaining;
 }
 
 //------------------------------------------------------------------------
@@ -1019,9 +1212,11 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     uPushColor(uColorBorder, borderColor);
         uBorder(pos, size);
     uPopColor(uColorBorder);
+    
+    uBeginScissor(pos, size, uScissorMask_Text); // clip the text inside of rectangle
 
     if (clicked) {
-        wShowKeyboard(true);
+        wShowKeyboard(true); // < for android
     }
 
     // todo: add cursor movement
@@ -1036,8 +1231,8 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     {
         // max number of characters that we can write
         const int TextCapacity = 128; // todo: make adjustable
-        float maxCharWidth = mCurrentFontAtlas->maxCharWidth * 0.7f;
-        mCurrText.MaxLen = MIN(TextCapacity, int(size.x * 1.3f / maxCharWidth));
+        float maxCharWidth = mCurrentFontAtlas->maxCharWidth * 0.5f;
+        mCurrText.MaxLen = MIN(TextCapacity, int(size.x * mWindowRatio.x / maxCharWidth));
         uint32_t hash = MurmurHash32(text, mCurrText.Len, 643364);
         if (hash != mLastStrHash) { // edited text is changed
             mCurrText.Pos = mCurrText.Len;
@@ -1082,58 +1277,92 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
         }
     }
 
-    uText(text, pos);
+    uText(text, pos, uTextFlags_NoNewLine);
     
+    uEndScissor(uScissorMask_Text);
     uPopFloat(ufTextScale);
     return clicked;
 }
 
-bool uSlider(const char* label, Vector2f pos, float* val, float scale)
+int uDropdown(const char* label, Vector2f pos, const char** names, int numNames, int current)
 {
     Vector2f labelSize = Label(label, pos);
-    Vector2f size = { scale, uGetFloat(ufSliderHeight) };
-    
+    Vector2f size;
+    size.x = uGetFloat(ufTextBoxWidth);
+    size.y = labelSize.y * 0.85f;
+
     float contentStart = uGetFloat(ufContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
+    bool clicked = ClickCheck(pos, size);
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+
+    size_t id = (size_t)label;
+    bool newlyOpenned = false;
+    if (clicked && !mDropdownOpen) {
+        mCurrentDropdown = id;
+        newlyOpenned = true;
+        mDropdownOpen = true;
+    }
+
+    float textScale = uGetFloat(ufTextScale);
+    float offset = size.y * 0.1f;
+    Vector2f textPos = pos;
+    textPos.y += size.y - offset;
+    textPos.x += offset;
+
+    bool isCurrentDropdown = mCurrentDropdown == id;
+    size.y *= 1.0f + (float(numNames) * (isCurrentDropdown && mDropdownOpen));
+    
+    uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.9f);
+    
+    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+
     uPushColor(uColorBorder, borderColor);
-        uBorder(pos, size);
+    uBorder(pos, size);
     uPopColor(uColorBorder);
 
-    bool edited = ClickCheck(pos, size, CheckOpt_WhileMouseDown);
-    
-    // fix: doesn't work with different scales
-    if (edited && elementFocused) {
-        Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
-        mousePos -= pos * mWindowRatio;
-        mousePos = Max(mousePos, Vector2f::Zero());
-        *val = Remap(mousePos.x, 0.0f, size.x * mWindowRatio.x, 0.0f, 1.0f);
-    }
+    uBeginScissor(pos, size, uScissorMask_Text); // clip the text inside of rectangle
+    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.7f);
 
-    if (elementFocused && GetKeyReleased(Key_LEFT))  
-        *val -= 0.1f,  edited = true, PlayButtonHoverSound();
-    if (elementFocused && GetKeyReleased(Key_RIGHT)) 
-        *val += 0.1f,  edited = true, PlayButtonHoverSound();
-
-    *val = Clamp(*val, 0.0f, 1.0f);
-    
-    if (*val > 0.001f)
+    if (!(mDropdownOpen && isCurrentDropdown))
     {
-        float lineThickness = uGetFloat(ufLineThickness);
-        size.x *= *val;
-        pos    += lineThickness;
-        size   -= lineThickness;
-        uQuad(pos, size, uGetColor(uColorSliderInside));
-        
-        uPushFloat(ufLineThickness, 3.0f);
-        pos.x += size.x;
-        uLineVertical(pos, size.y);
-        uPopFloat(ufLineThickness);
+        current = Clamp(current, 0, numNames - 1);
+        uText(names[current], textPos, uTextFlags_NoNewLine);
     }
-    return edited;
+    else if (!newlyOpenned) // < if dropdown is newly clicked, it will select first element, to avoid it we should do this test
+    {
+        float elementHeight = size.y / (float)numNames;
+        size.y = elementHeight;
+
+        for (int i = 0; i < numNames; i++)
+        {
+            uText(names[i], textPos, uTextFlags_NoNewLine);
+            clicked = ClickCheck(pos, size);
+            
+            if (mWasHovered) {
+                uQuad(pos, size, uGetColor(uColorHovered));
+                if (mLastHoveredDropdown != i) 
+                    PlayButtonHoverSound(), mLastHoveredDropdown = i;
+            }
+
+            if (clicked) {
+                current = i;
+                mDropdownOpen = false;
+                PlayButtonClickSound();
+            }
+
+            pos.y += elementHeight;
+            textPos.y += elementHeight;
+        }
+    }
+
+    uEndScissor(uScissorMask_Text);
+    uPopFloat(ufTextScale);
+    uPopFloat(ufDepth);
+    return current;
 }
 
 int uChoice(const char* label, Vector2f pos, const char** names, int numNames, int current)
@@ -1184,6 +1413,54 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
         else current = 0;
     }
     return current;
+}
+
+bool uSlider(const char* label, Vector2f pos, float* val, float scale)
+{
+    Vector2f labelSize = Label(label, pos);
+    Vector2f size = { scale, uGetFloat(ufSliderHeight) };
+    
+    float contentStart = uGetFloat(ufContentStart);
+    pos.x += contentStart - size.x;
+    pos.y -= size.y;
+
+    bool elementFocused = uGetElementFocused();
+    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uPushColor(uColorBorder, borderColor);
+    uBorder(pos, size);
+    uPopColor(uColorBorder);
+
+    bool edited = ClickCheck(pos, size, CheckOpt_WhileMouseDown);
+    
+    // fix: doesn't work with different scales
+    if (edited && elementFocused) {
+        Vector2f mousePos; GetMouseWindowPos(&mousePos.x, &mousePos.y);
+        mousePos -= pos * mWindowRatio;
+        mousePos = Max(mousePos, Vector2f::Zero());
+        *val = Remap(mousePos.x, 0.0f, size.x * mWindowRatio.x, 0.0f, 1.0f);
+    }
+
+    if (elementFocused && GetKeyReleased(Key_LEFT))  
+        *val -= 0.1f,  edited = true, PlayButtonHoverSound();
+    if (elementFocused && GetKeyReleased(Key_RIGHT)) 
+        *val += 0.1f,  edited = true, PlayButtonHoverSound();
+
+    *val = Clamp(*val, 0.0f, 1.0f);
+    
+    if (*val > 0.001f)
+    {
+        float lineThickness = uGetFloat(ufLineThickness);
+        size.x *= *val;
+        pos    += lineThickness;
+        size   -= lineThickness;
+        uQuad(pos, size, uGetColor(uColorSliderInside));
+        
+        uPushFloat(ufLineThickness, 3.0f);
+        pos.x += size.x;
+        uLineVertical(pos, size.y);
+        uPopFloat(ufLineThickness);
+    }
+    return edited;
 }
 
 FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int maxVal, float dragSpeed)
@@ -1686,7 +1963,7 @@ void uVerticalTriangle(Vector2f pos, float size, float axis, uint color)
         pos.x -= size;
         uVertex(pos, 255, color);
         pos.x += size * 0.5f; pos.y += axis * size;
-        uVertex(pos, 255, color);        
+        uVertex(pos, 255, color);
     }
 }
 
@@ -1879,6 +2156,32 @@ void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
 //------------------------------------------------------------------------
 // Rendering
 
+void uBeginScissor(Vector2f pos, Vector2f scale, uScissorMask mask)
+{
+    ASSERTR(mQuadScissor.numRect < MaxScissor, return);
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
+    pos *= mWindowRatio;
+    scale *= mWindowRatio;
+    pos.y = (float)windowSize.y - (pos.y + scale.y); // convert to opengl coordinates
+
+    mScissorMask = mask;
+    if (mask & uScissorMask_Quad) {
+        mQuadScissor.PushNewRect(pos, scale);
+    }
+
+    if (mask & uScissorMask_Text) {
+        mTextScissor.PushNewRect(pos, scale);
+    }
+}
+
+void uEndScissor(uScissorMask mask)
+{
+    mQuadScissor.numRect += mask & uScissorMask_Quad;
+    mTextScissor.numRect += (mask & uScissorMask_Text) >> 1;
+    mScissorMask &= ~mask;
+}
+
 static void uRenderTriangles(Vector2i windowSize)
 {
     if (mCurrentTriangle <= 0) return;
@@ -1896,10 +2199,26 @@ static void uRenderTriangles(Vector2i windowSize)
     mCurrentTriangle = 0;   
 }
 
+static void RenderScissored(ScissorData& scissorData, int indexStartLoc)
+{
+    rScissorToggle(true);
+    int numScisorred = 0;
+    for (int i = 0; i < scissorData.numRect; i++)
+    {
+        ScissorRect scissorRect = scissorData.rects[i];
+        if (scissorRect.numElements == 0) continue;
+        rScissor((int)scissorRect.position.x, (int)scissorRect.position.y, scissorRect.sizeX, (int)scissorRect.sizeY);
+        rSetShaderValue(numScisorred * 6, indexStartLoc);
+        rRenderMeshNoVertex(6 * scissorRect.numElements); // 6 index for each char
+        numScisorred += scissorRect.numElements;
+    }
+    rSetShaderValue(numScisorred, indexStartLoc);
+    rScissorToggle(false);
+}
+
 static void uRenderQuads(Vector2i windowSize)
 {
-    if (mQuadIndex < 0) return;
-    
+    if (mQuadIndex + mQuadScissor.count <= 0) return;
     rBindShader(mQuadShader);
 
     rUpdateTexture(mQuadDataTex, mQuadData);
@@ -1907,14 +2226,21 @@ static void uRenderQuads(Vector2i windowSize)
     
     rSetShaderValue(&mWindowRatio.x, uScaleLocQuad, GraphicType_Vector2f);
     rSetShaderValue(&windowSize.x, uScrSizeLocQuad, GraphicType_Vector2i);
+    rSetShaderValue(0, uIndexStartLocQuad);
+    
+    if (mQuadScissor.count) {
+        RenderScissored(mQuadScissor, uIndexStartLocQuad);
+        rSetShaderValue(mQuadScissor.count * 6, uIndexStartLocQuad);
+    }
 
-    rRenderMeshNoVertex(6 * mQuadIndex); // 6 index for each char
+    int numNonScissorred = mQuadIndex - mQuadScissor.count;
+    rRenderMeshNoVertex(6 * numNonScissorred); // 6 index for each char
     mQuadIndex = 0;
 }
 
 static void uRenderTexts(Vector2i windowSize)
 {
-    if (mNumChars < 0) return;
+    if (mNumChars + mTextScissor.count <= 0) return;
 
     rBindShader(mFontShader);
 
@@ -1923,8 +2249,15 @@ static void uRenderTexts(Vector2i windowSize)
     rSetTexture(mCurrentFontAtlas->textureHandle, 1, atlasLoc);
 
     rSetShaderValue(&windowSize.x, uScrSizeLoc, GraphicType_Vector2i);
+    rSetShaderValue(0, uIndexStartLocText);
 
-    rRenderMeshNoVertex(6 * mNumChars); // 6 index for each char
+    if (mTextScissor.count) {
+        RenderScissored(mTextScissor, uIndexStartLocText);
+        rSetShaderValue(mTextScissor.count * 6, uIndexStartLocText);
+    }
+    
+    int numNonScissorred = mNumChars - mTextScissor.count;
+    rRenderMeshNoVertex(6 * numNonScissorred); // 6 index for each char
     mNumChars = 0;
 }
 
@@ -1990,6 +2323,8 @@ void uBegin()
     mAnyTextEdited = false;
     mAnyFloatEdited = false;
     mAnyElementClicked = false;
+    mQuadScissor.Reset();
+    mTextScissor.Reset();
 }
 
 void uRender()

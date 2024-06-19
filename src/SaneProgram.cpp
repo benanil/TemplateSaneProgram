@@ -58,7 +58,7 @@ int AXStart()
 
     uInitialize();
     // very good font that has lots of icons: http://www.quivira-font.com/
-    uLoadFont("Fonts/Quivira.otf"); // "Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
+    uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
     MemsetZero(&characterController, sizeof(CharacterController));
     StartAnimationSystem();
     Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
@@ -92,14 +92,14 @@ void AXLoop(bool canRender)
     using namespace SceneRenderer;
 
     // draw when we are playing game, don't render when using pause menu to save power
-    if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay))
+    if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
     {
         Scene* currentScene = &g_CurrentScene;
         currentScene->Update();
     
         float deltaTime = (float)GetDeltaTime();
         deltaTime = MIN(deltaTime, 0.2f);
-
+            
         // animate and control the movement of character
         const bool isSponza = true;
         characterController.Update(deltaTime, isSponza);

@@ -9,6 +9,7 @@
 #define float16 mediump float
 #define half2   mediump vec2
 #define half3   mediump vec3
+#define half4   mediump vec4
 
 layout(location = 0) out vec4 oFragColor; // TextureType_RGB8
 
@@ -29,11 +30,11 @@ uniform LightInstance uSpotLights[16];
 uniform int uNumSpotLights;
 uniform int uNumPointLights;
 
-uniform mediump sampler2D uAlbedoTex;
-uniform mediump sampler2D uShadowMetallicRoughnessTex;
-uniform mediump sampler2D uNormalTex;
-uniform highp   sampler2D uDepthMap;
-uniform lowp    sampler2D uAmbientOclussionTex; // < ambient occlusion
+uniform lowp  sampler2D uAlbedoShadowTex; // albedo + shadow
+uniform lowp  sampler2D uRoughnessTex;
+uniform lowp  sampler2D uNormalMetallicTex; // normal + metallic
+uniform highp sampler2D uDepthMap;
+uniform lowp  sampler2D uAmbientOclussionTex; // < ambient occlusion
 
 uniform highp   vec3 uPlayerPos;
 uniform mediump vec3 uSunDir;
@@ -44,7 +45,7 @@ uniform highp mat4 uInvProj;
 const float gamma = 2.2;
 const float PI = 3.1415926535;
 
-mediump vec4 toLinear(mediump vec4 sRGB)
+mediump vec3 toLinear(mediump vec3 sRGB)
 {
     // https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
     return sRGB * (sRGB * (sRGB * 0.305306011 + 0.682171111) + 0.012522878);
@@ -66,18 +67,23 @@ float16 D_GGX(float16 NoH, float16 roughness) {
 float16 V_SmithGGXCorrelated_Fast(float16 roughness, float16 NoV, float16 NoL) {
     // Hammon 2017, "PBR Diffuse Lighting for GGX+Smith Microsurfaces"
     float16 v = 0.5 / mix(2.0 * NoL * NoV, NoL + NoV, roughness);
-    return saturateMediump(v);
+    return (v); //saturateMediump
 }
 
-float16 F_Schlick(float16 u, float16 f0) {
+float16 V_Neubelt(float16 NoV, float16 NoL) {
+    // Neubelt and Pettineo 2013, "Crafting a Next-gen Material Pipeline for The Order: 1886"
+    return (1.0 / (4.0 * (NoL + NoV - NoL * NoV))); // saturateMediump
+}
+
+float16 F_Schlick(float16 u) {
+    const float16 F0 = 0.08; 
     float16 x = 1.0 - u;
-    return f0 + (1.0 - f0) * (x * x * x * x);
+    return F0 + (1.0 - F0) * (x * x * x * x); // * x
 }
 
 half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
 {
     const float16 roughness = 0.22;
-    const float16 F0 = 0.08; 
     half3 h = normalize(l + v);
     float16 ndl = max(dot(n, l), 0.10);
     float16 ndh = max(dot(n, h), 0.0);
@@ -85,8 +91,8 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
     float16 ldh = max(dot(l, h), 0.0);
 
     float16 D = D_GGX(ndh, roughness);
-    float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl);
-    float16 F = F_Schlick(ldh, F0);
+    float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl); // V_Neubelt(ndv, ndl); //;
+    float16 F = F_Schlick(ldh);
     float16 Fr = (D * V) * F; // specular BRDF
     return (albedo / PI) + Fr; //albedo * ndl + (r * 0.08);
 }
@@ -175,21 +181,23 @@ float GetShadow(float shadow, vec3 surfPos)
 
 void main()
 {
-    half3 shadMetRough = texture(uShadowMetallicRoughnessTex, texCoord).rgb;
-    half3 normal = texture(uNormalTex, texCoord).rgb * 2.0 - 1.0;
-    half3 albedo = toLinear(texture(uAlbedoTex, texCoord)).rgb;
-    normal = normalize(normal);
+    float16 roughness    = texture(uRoughnessTex, texCoord).r;
+    half4 normalMetallic = texture(uNormalMetallicTex, texCoord);
+    half4 albedoShadow   = texture(uAlbedoShadowTex, texCoord); 
     
-    float16 shadow    = shadMetRough.x;
-    float16 metallic  = shadMetRough.y;
-    float16 roughness = shadMetRough.z * shadMetRough.z;
+    albedoShadow.rgb = toLinear(albedoShadow.rgb);
+    normalMetallic.rgb = normalize(normalMetallic.rgb * 2.0 - 1.0);
+    
+    float16 shadow    = albedoShadow.w;
+    float16 metallic  = normalMetallic.w;
+    roughness = roughness * roughness;
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
     const half3 sunColor = vec3(0.982f, 0.972, 0.966);
     
-    half3 lighting = Lighting(albedo * sunColor, uSunDir, normal, viewRay);
+    half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, normalMetallic.xyz, viewRay);
 
     for (int i = 0; i < uNumPointLights; i++)
     {
@@ -205,8 +213,8 @@ void main()
         lightDir = lightDir / len; // < normalize
         half3 lightColor = unpackUnorm4x8(uPointLights[i].color).xyz;
         lightColor = lightColor * lightColor; // convert to linear space
-        half3 color = mix(albedo, lightColor, 0.55);
-        lighting += Lighting(color, lightDir, normal, viewRay) * intensity;
+        half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
+        lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay) * intensity;
         shadow = min(shadow + intensity, 1.0);
     }
     
@@ -228,10 +236,10 @@ void main()
             float16 intensity = spotLight.intensity * effect;
             half3 lightColor = unpackUnorm4x8(spotLight.color).xyz;
             lightColor = lightColor * lightColor;
-            half3 color = mix(albedo, lightColor, 0.55);
+            half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
     
             lighting *= 0.18 + intensity;
-            lighting += Lighting(color, lightDir, normal, viewRay) * intensity;
+            lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay) * intensity;
             shadow += min(shadow + intensity, 1.0);
         }
     }

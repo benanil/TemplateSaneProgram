@@ -145,7 +145,32 @@ enum rBlendFunc_  {
     rBlendFunc_Alpha,
     rBlendFunc_OneMinusAlpha
 };
+
+enum rCompare_ {
+    rNEVER, 
+    rLESS,
+    rLEQUAL, 
+    rGREATER, 
+    rGEQUAL, 
+    rEQUAL, 
+    rNOTEQUAL,
+    rALWAYS
+};
+
+enum rStencilOp_ {
+    rKEEP,
+    rZERO,
+    rREPLACE,
+    rINCR,
+    rINCR_WRAP,
+    rDECR,
+    rDECR_WRAP,
+    rINVERT
+};
+
 typedef int rBlendFunc;
+typedef int rCompare;
+typedef int rStencilOp;
 
 struct Shader {
     unsigned int handle; 
@@ -192,6 +217,15 @@ void rBeginShadow();
 
 void rEndShadow();
 
+void rStencilMask(unsigned char mask);
+
+void rStencilFunc(rCompare compare, uint ref, uint mask);
+
+void rStencilOperation(rStencilOp op, rStencilOp fail, rStencilOp pass);
+
+void rScissorToggle(bool active);
+
+void rScissor(int x, int y, int width, int height);
 
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Texture                                  */

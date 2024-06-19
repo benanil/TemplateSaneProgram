@@ -4,6 +4,7 @@ uniform highp usampler2D dataTex; // ivec2 uint32 = half2:size, rgba8:color
 
 uniform ivec2 uScrSize;
 uniform vec2 uScale;
+uniform int uIndexStart; // vertex index of the first quad that will be rendered 
 
 out      lowp vec2 vTexCoord;
 out      lowp vec4 vColor;
@@ -14,8 +15,8 @@ out flat lowp float oCutStart;
 
 void main() 
 {
-    int quadID   = gl_VertexID / 6;
-    int vertexID = gl_VertexID % 6;
+    int quadID   = (uIndexStart + gl_VertexID) / 6;
+    int vertexID = (uIndexStart + gl_VertexID) % 6;
 
     // unpack per quad data
     highp uvec4 data    = texelFetch(dataTex, ivec2(quadID, 0), 0);

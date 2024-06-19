@@ -3,13 +3,13 @@
 // text above edited by engine, do not touch if you don't know what it does.
 precision mediump sampler2DShadow;
 
-layout(location = 0) out lowp vec3 oFragColor; // TextureType_RGB8
-layout(location = 1) out mediump vec3 oNormal;    // TextureType_RGB8
-layout(location = 2) out lowp vec3 oShadowMetallicRoughness; // TextureType_RGB565
+layout(location = 0) out lowp vec4 oFragColorShadow; // TextureType_RGBA8
+layout(location = 1) out lowp vec4 oNormalMetallic;  // TextureType_RGBA8
+layout(location = 2) out lowp float oRoughness; // TextureType_R8
 
 in mediump vec2 vTexCoords;
 in highp   vec4 vLightSpaceFrag;
-in mediump    mat3 vTBN;
+in lowp    mat3 vTBN;
 
 uniform lowp sampler2D uAlbedo;
 uniform lowp sampler2D uNormalMap;
@@ -61,6 +61,8 @@ float ShadowCalculation()
 void main()
 {
     lowp vec4 color = texture(uAlbedo, vTexCoords);
+    color.w = ShadowCalculation();
+    
     #if ALPHA_CUTOFF == 1
         if (color.a < 0.001)
             discard;
@@ -74,8 +76,8 @@ void main()
     if (uHasNormalMap == 1)
     {
         // obtain normal from normal map in range [0,1]
-        mediump vec2  c = texture(uNormalMap, vTexCoords).rg * 2.0 - 1.0;
-        mediump float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
+        lowp vec2  c = texture(uNormalMap, vTexCoords).rg * 2.0 - 1.0;
+        lowp float z = sqrt(1.0 - c.x * c.x - c.y * c.y);
         normal  = normalize(vec3(c, z));
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
@@ -85,8 +87,8 @@ void main()
         roughness = metalRoughness.g;
     }
     #endif
-    float shadow = ShadowCalculation();
-    oShadowMetallicRoughness = vec3(shadow, metallic, roughness);
-    oFragColor = color.rgb;
-    oNormal = normalize(normal) + vec3(1.0) * vec3(0.5); // convert to 0-1 range
+    oRoughness = roughness;
+    oFragColorShadow = color;
+    oNormalMetallic.xyz = normalize(normal) + vec3(1.0) * vec3(0.5); // convert to 0-1 range
+    oNormalMetallic.w = metallic;
 }

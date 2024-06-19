@@ -45,8 +45,8 @@ enum uTriEffect_ {
     uCutBit  = 2, // discards rendering pixel if fade value is below CutStart
     uFadeInvertBit  = 4,  // inverts the per vertex fade value
     uEmptyInsideBit = 8,  // whatever the shape is this will set the center fade value to 0
-    uIntenseFadeBit    = 16, // in fragment shader it will multiply fade value by 2.0
-    uCenterFadeBit     = 32  // maps fade value between [0.0f, 1.0f, 0.0f] instead of [0.0f, 1.0f] so center is white other areas are dark(left right)
+    uIntenseFadeBit = 16, // in fragment shader it will multiply fade value by 2.0
+    uCenterFadeBit  = 32  // maps fade value between [0.0f, 1.0f, 0.0f] instead of [0.0f, 1.0f] so center is white other areas are dark(left right)
 };
 
 enum uButtonOpt_ { // bitmask
@@ -59,13 +59,20 @@ enum uFloat_ {
     ufLineThickness,
     // if set to zero it will start at the end of the text
     // Content Start is: Vsync On _________ [X]  the space between label and content
-    ufContentStart,
-    ufButtonSpace , // Space between button text and button quad start
-    ufTextScale   , // 1.0 default
-    ufTextBoxWidth,
-    ufSliderHeight,
-    ufDepth       , // < between [0.0, 1.0] lower depth will shown on top
-    ufFieldWidth  , // < width of float or int fields
+    ufContentStart ,
+    ufButtonSpace  , // Space between button text and button quad start
+    ufTextScale    , // 1.0 default
+    ufTextBoxWidth ,
+    ufSliderHeight ,
+    ufDepth        , // < between [0.0, 1.0] lower depth will shown on top
+    ufFieldWidth   , // < width of float or int fields
+    ufTextWrapWidth, // < only active if uTextFlags_WrapWidthDetermined flag is active
+};
+
+enum uTextFlags_{
+    uTextFlags_None      = 0,
+    uTextFlags_NoNewLine = 1,
+    uTextFlags_WrapWidthDetermined = 2,
 };
 
 typedef uint FontHandle;
@@ -73,6 +80,8 @@ typedef uint uColor;
 typedef uint uButtonOptions;
 typedef uint uFloat;
 typedef uint uTriEffect;
+typedef uint uTextFlags;
+
 //------------------------------------------------------------------------
 // also sets the current font to the loaded font
 FontHandle uLoadFont(const char* file);
@@ -100,12 +109,17 @@ uint uGetColor(uColor color);
 float uGetFloat(uFloat what);
 bool uIsHovered(); // last button was hovered?
 
+//
+float uToolTip(const char* text, float timeRemaining, bool wasHovered);
+
 //------------------------------------------------------------------------
 
 // text is an utf8 string
-void uText(const char* text, Vector2f position);
+void uText(const char* text, Vector2f position, uTextFlags flags = 0);
 
-Vector2f uCalcTextSize(const char* text);
+Vector2f uCalcTextSize(const char* text, uTextFlags flags = 0);
+
+int CalcTextNumLines(const char* text, uTextFlags flags = 0);
 
 // returns true if clicked, make scale [0.0,0.0] if you want to scale the button according to text
 bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt = 0);
@@ -168,6 +182,9 @@ void uSprite(Vector2f pos, Vector2f scale, struct Texture* texturePtr);
 //      CurrentGraphics = uChoice("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics)
 int uChoice(const char* label, Vector2f pos, const char** elements, int numElements, int current);
 
+// similar to uChoice but when we click it opens dropdown menu and allows us to select
+int uDropdown(const char* label, Vector2f pos, const char** names, int numNames, int current);
+
 bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text);
 
 void uLineVertical(Vector2f begin, float size, uint properties = 0);
@@ -205,6 +222,18 @@ void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
 
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
 void uVerticalTriangle(Vector2f pos, float size, float axis, uint color);
+
+enum uScissorMask_ {
+    uScissorMask_Quad = 1, // effects the quads
+    uScissorMask_Text = 2, // effects the texts
+    uScissorMask_Vertex = 4, // effects the circles, capsules, vertices
+};
+typedef uint uScissorMask;
+
+// uQuad and uTexts between begin and EndStencil functions, will use scisor (outside of rectangle will not drawn)
+void uBeginScissor(Vector2f pos, Vector2f scale, uScissorMask mask);
+
+void uEndScissor(uScissorMask mask);
 
 //------------------------------------------------------------------------
 

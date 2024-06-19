@@ -1017,6 +1017,42 @@ void rClearDepthStencil()
     glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT); 
 }
 
+void rStencilMask(unsigned char mask)
+{
+    glStencilMask(mask);
+}
+
+void rStencilFunc(rCompare compare, uint ref, uint mask)
+{
+    compare += GL_NEVER; //, GL_LESS, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_EQUAL, GL_NOTEQUAL, GL_ALWAYS
+    glStencilFunc(compare, ref, mask);
+}
+
+void rStencilOperation(rStencilOp op, rStencilOp fail, rStencilOp pass)
+{
+    const uint opMap[] = {
+        GL_KEEP,
+        GL_ZERO,
+        GL_REPLACE,
+        GL_INCR,
+        GL_INCR_WRAP,
+        GL_DECR,
+        GL_DECR_WRAP,
+        GL_INVERT
+    };
+    glStencilOp(opMap[op], opMap[fail], opMap[pass]);
+}
+
+void rScissorToggle(bool active)
+{
+    if (active) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+}
+
+void rScissor(int x, int y, int width, int height)
+{
+    glScissor(x, y, width, height);
+}
+
 void rBeginShadow()
 {
     glReadBuffer(GL_NONE);

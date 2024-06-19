@@ -275,7 +275,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
             PlatformCtx.MousePosX = (float)LOWORD(lparam); 
             PlatformCtx.MousePosY = (float)HIWORD(lparam); 
             if (PlatformCtx.MouseMoveCallback) 
-			PlatformCtx.MouseMoveCallback(PlatformCtx.MousePosX, PlatformCtx.MousePosY);
+                PlatformCtx.MouseMoveCallback(PlatformCtx.MousePosX, PlatformCtx.MousePosY);
             break;
         case WM_MOUSEWHEEL:
             PlatformCtx.MouseWheelDelta = (float)GET_WHEEL_DELTA_WPARAM(wparam) / (float)WHEEL_DELTA;
@@ -297,7 +297,7 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_SETFOCUS:
         case WM_KILLFOCUS:
             if (PlatformCtx.FocusChangedCallback)
-			PlatformCtx.FocusChangedCallback(msg == WM_SETFOCUS);
+                PlatformCtx.FocusChangedCallback(msg == WM_SETFOCUS);
             break;
         case WM_KEYUP:
         case WM_SYSKEYUP:
@@ -397,14 +397,14 @@ static void GetWglFunctions(void)
 
     int format = ChoosePixelFormat(dc, &desc);
     if (!format)
-	    FatalError("Cannot choose OpenGL pixel format for dummy window!");
+        FatalError("Cannot choose OpenGL pixel format for dummy window!");
 
     int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
     ASSERT(ok && "Failed to describe OpenGL pixel format");
 
     // reason to create dummy window is that SetPixelFormat can be called only once for the window
     if (!SetPixelFormat(dc, format, &desc))
-	    FatalError("Cannot set OpenGL pixel format for dummy window!");
+        FatalError("Cannot set OpenGL pixel format for dummy window!");
 
     HGLRC rc = wglCreateContext(dc);
     ASSERT(rc && "Failed to create OpenGL context for dummy window");
@@ -427,18 +427,18 @@ static HWND WindowCreate(HINSTANCE instance)
     GetWglFunctions();
     // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
     int pixel_format_attribs[] = {
-		0x2001,          1, // WGL_DRAW_TO_WINDOW_ARB
-		0x2010,          1, // WGL_SUPPORT_OPENGL_ARB
-		0x2011,          1, // WGL_DOUBLE_BUFFER_ARB
-		0x2003,     0x2027, // WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB
-		0x2013,     0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
-		0x2014,         32, // WGL_COLOR_BITS_ARB
-		0x2022,         24, // WGL_DEPTH_BITS_ARB
-		0x2023,          8, // WGL_STENCIL_BITS_ARB
-		0x20A9,          1, // WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB <- SRGB support
-		0x2041,          1, // WGL_SAMPLE_BUFFERS_ARB           <- enable MSAA
-		0x2042,          8, // WGL_SAMPLES_ARB                  <- 4x MSAA
-		0
+        0x2001,          1, // WGL_DRAW_TO_WINDOW_ARB
+        0x2010,          1, // WGL_SUPPORT_OPENGL_ARB
+        0x2011,          1, // WGL_DOUBLE_BUFFER_ARB
+        0x2003,     0x2027, // WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB
+        0x2013,     0x202B, // WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB
+        0x2014,         32, // WGL_COLOR_BITS_ARB
+        0x2022,         24, // WGL_DEPTH_BITS_ARB
+        0x2023,          8, // WGL_STENCIL_BITS_ARB
+        0x20A9,          1, // WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB <- SRGB support
+        0x2041,          1, // WGL_SAMPLE_BUFFERS_ARB           <- enable MSAA
+        0x2042,          8, // WGL_SAMPLES_ARB                  <- 4x MSAA
+        0
     };
     // register window class to have custom WindowProc callback
     WNDCLASSEX wc = {};
@@ -499,14 +499,14 @@ static HWND WindowCreate(HINSTANCE instance)
     
     UINT formats;
     if (!wglChoosePixelFormatARB(dc, attrib, NULL, 1, &format, &formats) || formats == 0)
-	    FatalError("OpenGL does not support required pixel format!");
+        FatalError("OpenGL does not support required pixel format!");
     
     int ok = DescribePixelFormat(dc, format, sizeof(desc), &desc);
     ASSERT(ok && "Failed to describe OpenGL pixel format");
 
     // always set pixel format, same for all windows
     if (!SetPixelFormat(dc, format, &desc))
-	    FatalError("Cannot set OpenGL selected pixel format!");
+        FatalError("Cannot set OpenGL selected pixel format!");
 
     return window;
 }
@@ -519,11 +519,11 @@ HGLRC InitOpenGL(HDC dc)
         0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
         0x2092, 3, // WGL_CONTEXT_MINOR_VERSION_ARB
         0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
-		#ifdef DEBUG
+        #ifdef DEBUG
         // ask for debug context for non "Release" builds
         // this is so we can enable debug callback
         0x2094, 0x00000001, // WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB
-		#endif
+        #endif
         0,
     };
 
@@ -598,7 +598,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     PlatformCtx.Frequency   = frequency.QuadPart;
 
     if (AXStart() == 0)
-	    return 1; // user defined startup failed
+        return 1; // user defined startup failed
 
     while (!PlatformCtx.ShouldClose)
     {   
@@ -606,7 +606,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
         {
             if (msg.message == WM_QUIT) 
-			goto end_infinite_loop;
+                goto end_infinite_loop;
          
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
@@ -619,7 +619,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         prevTime = currentTime;
         
         if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check
-		goto end_infinite_loop;
+            goto end_infinite_loop;
 
         // char fps[10]={};
         // IntToString(fps, (int)(1.0 / PlatformCtx.DeltaTime));

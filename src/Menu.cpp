@@ -97,6 +97,7 @@ static void PauseMenu()
 
 static void OptionsMenu()
 {
+
     Vector2f bgPos;
     Vector2f bgScale = { 940.0f, 766.0f };
     bgPos.x = (1920.0f / 2.0f) - (bgScale.x / 2.0f);
@@ -109,6 +110,7 @@ static void OptionsMenu()
     
     float settingElementWidth = bgScale.x / 1.4f;
     float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
+    Vector2f textSize = uCalcTextSize("Settings");
 
     uPushFloat(ufContentStart, settingElementWidth);
 
@@ -116,7 +118,6 @@ static void OptionsMenu()
     uBorder(pos, bgScale);
 
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.2f);
-    Vector2f textSize = uCalcTextSize("Settings");
     float settingsXStart = (bgScale.x/2.0f) - (textSize.x/2.0f);
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
@@ -174,8 +175,8 @@ static void OptionsMenu()
     static int CurrentGraphics = 0;
     pos.y += textSize.y + textPadding;
 
-    uSetElementFocused(CurrElement == 5);
-    int selectedGraphics = uChoice("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics);
+    uSetElementFocused(CurrElement == 5); // uChoice function does the same thing, but it is not expanding, 
+    int selectedGraphics = uDropdown("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics);
     if (selectedGraphics != CurrentGraphics) { // element changed
         CurrElement = 5;
     }
@@ -184,9 +185,14 @@ static void OptionsMenu()
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 6);
     static int numFrames = 144;
+    static float numFramesHoverTime = 1.0f;
     if (uIntField("Num Frames", pos, &numFrames)) {
         CurrElement = 6;
     }
+
+    numFramesHoverTime = 
+    uToolTip("target number of frames that\n"
+             "will shown in one second", numFramesHoverTime, uIsHovered());
 
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 7);
@@ -265,10 +271,10 @@ static void TriangleTest()
     uint properties = MakeTriProperty(uCutBit, cutStart, numSegments);
     uCircle(circlePos, 25.0f, color0, properties); circlePos.x += 55.0f;
 
-    properties |= uEmptyInsideBit;                           
+    properties |= uEmptyInsideBit;
     uCircle(circlePos, 25.0f, color0, properties); circlePos.x += 55.0f;
     
-    properties |= uFadeInvertBit;          
+    properties |= uFadeInvertBit;
     uCircle(circlePos, 25.0f, color0, properties);
     circlePos.x -= 55.0f * 3.0f;
     
@@ -310,11 +316,19 @@ bool ShowMenu()
 
     if (IsAndroid() && menuState == MenuState_Gameplay) {
         uSetFloat(ufTextScale, 1.125f);
-        if (uButton(IC_PAUSE, MakeVec2(1880.0f, 30.0f), Vector2f::Zero(), uButtonOpt_Border))
+
+        Vector2f buttonPos = MakeVec2(1850.0f, 30.0f);
+        if (uButton(nullptr, buttonPos, MakeVec2(40.0f), uButtonOpt_Border))
         {
             menuState = MenuState_PauseMenu;
             pauseMenuOpenned = true;
         }
+
+        // make pause icon ||
+        buttonPos += MakeVec2(10.0f, 7.0f);
+        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        buttonPos.x += 15.0f;
+        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
     }
 
     if (showDetails) {

@@ -3,14 +3,15 @@
 // x = half2:size, y = character: uint8, depth: uint8, scale: half
 uniform highp usampler2D dataTex; 
 uniform ivec2 uScrSize;
+uniform int uIndexStart; // vertex index of the first text character that will be rendered 
 
 out mediump vec2 vTexCoord;
 out lowp vec4 vColor;
 
 void main() 
 {
-    int quadID   = gl_VertexID / 6;
-    int vertexID = gl_VertexID % 6;
+    int quadID   = (uIndexStart + gl_VertexID) / 6;
+    int vertexID = (uIndexStart + gl_VertexID) % 6;
 
     // read per quad data
     highp uvec4 data = texelFetch(dataTex, ivec2(quadID, 0), 0);
