@@ -3,6 +3,7 @@
 #include "include/Scene.hpp"
 #include "include/SceneRenderer.hpp"
 #include "include/Platform.hpp"
+#include "../ASTL/String.hpp" // StrCmp16
 
 struct Matrix3x4f16
 {
@@ -16,6 +17,49 @@ const int MaxNumJoints = 256;
 void StartAnimationSystem()
 { }
 
+int FindRootNodeIndex(Prefab* prefab)
+{
+    if (prefab->skins == nullptr)
+        return 0;
+
+    ASkin skin = prefab->skins[0];
+    if (skin.skeleton != -1) 
+        return skin.skeleton;
+    
+    // search for Armature name, and also record the node that has most children
+    int armatureIdx = -1;
+    int maxChilds   = 0;
+    int maxChildIdx = 0;
+    // maybe recurse to find max children
+    for (int i = 0; i < prefab->numNodes; i++)
+    {
+        if (StrCMP16(prefab->nodes[i].name, "Armature")) {
+            armatureIdx = i;
+            break;
+        }
+    
+        int numChildren = prefab->nodes[i].numChildren;
+        if (numChildren > maxChilds) {
+            maxChilds = numChildren;
+            maxChildIdx = i;
+        }
+    }
+    
+    int skeletonNode = armatureIdx != -1 ? armatureIdx : maxChildIdx;
+    return skeletonNode;
+}
+
+void CreateAnimationController(Prefab* prefab, AnimationController* result)
+{
+    ASkin& skin = prefab->skins[0];
+    result->mMatrixTex = rCreateTexture(skin.numJoints*3, 1, nullptr, TextureType_RGBA16F, TexFlags_RawData);
+    result->mRootNodeIndex = FindRootNodeIndex(prefab);
+    
+    ASSERT(skin.numJoints < MaxNumJoints);
+    ASSERT(result->mRootNodeIndex < MaxNumJoints);
+    ASSERT(prefab->GetNodePtr(result->mRootNodeIndex)->numChildren > 0); // root node has to have children nodes
+}
+
 static void RecurseNodeMatrices(ANode* node, ANode* nodes, Matrix4 parentMatrix, Matrix4* matrices)
 {
     for (int c = 0; c < node->numChildren; c++)
@@ -27,15 +71,6 @@ static void RecurseNodeMatrices(ANode* node, ANode* nodes, Matrix4 parentMatrix,
 
         RecurseNodeMatrices(children, nodes, childTranslation, matrices);
     }
-}
-
-void CreateAnimationController(Prefab* prefab, AnimationController* result)
-{
-    ASkin& skin = prefab->skins[0];
-    ASSERT(skin.numJoints < MaxNumJoints);
-
-    result->numAnimations = prefab->numAnimations;
-    result->matrixTex = rCreateTexture(skin.numJoints*3, 1, nullptr, TextureType_RGBA16F, TexFlags_RawData);
 }
 
 static void InitNodes(ANode* nodes, Pose* pose, int numNodes)
@@ -112,18 +147,67 @@ static void SampleAnimationPose(Pose* pose, AAnimation* animation, float normTim
     }
 }
 
+// send matrices to GPU
+void AnimationController::UploadAnimationPose(Prefab* prefab, Pose* pose)
+{
+    InitNodes(prefab->nodes, pose, prefab->numNodes);
+
+    Matrix4 nodeMatrices[MaxNumJoints];
+    ANode* rootNode = prefab->GetNodePtr(mRootNodeIndex);
+    Matrix4 rootMatrix = Matrix4::PositionRotationScale(rootNode->translation, rootNode->rotation, rootNode->scale);
+    nodeMatrices[mRootNodeIndex] = rootMatrix;
+
+    RecurseNodeMatrices(rootNode, prefab->nodes, rootMatrix, nodeMatrices);
+
+    ASkin& skin = prefab->skins[0];
+    Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
+    Matrix3x4f16 outMatrices[MaxNumJoints];
+
+    for (int i = 0; i < skin.numJoints; i++)
+    {
+        Matrix4 mat = invMatrices[i] * nodeMatrices[skin.joints[i]];
+        mat = Matrix4::Transpose(mat);
+        ConvertFloatToHalf(outMatrices[i].x, (float*)&mat.r[0], 4);
+        ConvertFloatToHalf(outMatrices[i].y, (float*)&mat.r[1], 4);
+        ConvertFloatToHalf(outMatrices[i].z, (float*)&mat.r[2], 4);
+    }
+    
+    // upload anim matrix texture to the GPU
+    rUpdateTexture(mMatrixTex, outMatrices);
+}
+
+void AnimationController::PlayAnim(Prefab* prefab, int index, float norm)
+{
+    Pose animPose[MaxBonePoses];
+    AAnimation* animation0 = &prefab->animations[index];
+    SampleAnimationPose(animPose, animation0, norm, prefab->nodes, prefab->numNodes);
+
+    UploadAnimationPose(prefab, animPose);
+}
+
+void MixAnimations(Prefab* prefab, int IdxAnimA, int IdxAnimB, float normA, float normB, float blend)
+{
+    const int numNodes = prefab->numNodes;
+    AAnimation* animation0 = &prefab->animations[IdxAnimA];
+    AAnimation* animation1 = &prefab->animations[IdxAnimB];
+    Pose animPose0[MaxBonePoses], animPose1[MaxBonePoses];
+
+    SampleAnimationPose(animPose0, animation0, normA, prefab->nodes, numNodes);
+    SampleAnimationPose(animPose1, animation1, normB, prefab->nodes, numNodes);
+    MergeAnims(animPose0, animPose1, EaseOut(blend), numNodes);
+}
+
 // x, y has to be between -1.0 and 1.0
 // normTime should be between 0 and 1
-void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, float x, float y, float xNorm, float yNorm)
+void AnimationController::EvaluateLocomotion(Prefab* prefab, float x, float y, float xNorm, float yNorm)
 {
     ASSERT(prefab->numNodes < 250);
-    const bool hasAnimation = prefab->numSkins > 0 && animController != nullptr;
+    const bool hasAnimation = prefab->numSkins > 0;
 
     if (!hasAnimation)
         return;
 
     const bool yIsNegative = y < 0.0f;
-
     // step 0 sample animations to pose arrays,
     // step 1 mix sampled pose of animations into another pose
     // step 2 send mixed pose to nodes
@@ -145,14 +229,14 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
             yi = -yi;
         
         int sign = Sign(yi);
-        int index = animController->GetAnim(a_middle, yi);
+        int index = GetAnim(a_middle, yi);
         animation0 = &prefab->animations[index];
         
         SampleAnimationPose(animPose0, animation0, yNorm, prefab->nodes, numNodes);
 
         if (yi != 3 && yBlend > 0.00001f) 
         {
-            index = animController->GetAnim(a_middle, yi + sign);
+            index = GetAnim(a_middle, yi + sign);
             animation1 = &prefab->animations[index];
             
             SampleAnimationPose(animPose1, animation1, yNorm, prefab->nodes, numNodes);
@@ -160,60 +244,27 @@ void EvaluateAnimOfPrefab(Prefab* prefab, AnimationController* animController, f
         }
     }
 
+    // Todo: make better horizontal movement, 
+    //       better when we are not moving vertical
     if (!AlmostEqual(x, 0.0f))
     {
         // -2,-2 range to 0, 4 range to make array indexing
-        float xBlend = Abs(Fract(x));   
+        float xBlend = Abs(Fract(x));
         eAnimLocation xAnim = x < 0.0f ? a_left : a_right;
         {
-            int index = animController->GetAnim(xAnim, yi);
+            int index = GetAnim(xAnim, yi);
             animation1 = &prefab->animations[index];
             SampleAnimationPose(animPose1, animation1, xNorm, prefab->nodes, numNodes);
         }
         MergeAnims(animPose0, animPose1, EaseOut(xBlend), numNodes);
     }
 
-    InitNodes(prefab->nodes, animPose0, numNodes);
-
-    int skeletonNode = 0;
-    if (prefab->numScenes > 0) {
-        AScene defaultScene = prefab->scenes[prefab->defaultSceneIndex];
-        skeletonNode = defaultScene.nodes[0];
-    }
-
-    Matrix4 nodeMatrices[MaxNumJoints];
-
-    ASkin& skin = prefab->skins[0];
-    int rootNodeIdx = skin.skeleton != -1 ? skin.skeleton : skeletonNode; ASSERT(rootNodeIdx < MaxNumJoints);
-    ANode* rootNode = prefab->GetNodePtr(rootNodeIdx);
-
-    Matrix4 rootMatrix = Matrix4::PositionRotationScale(rootNode->translation, rootNode->rotation, rootNode->scale);
-    nodeMatrices[rootNodeIdx] = rootMatrix;
-    RecurseNodeMatrices(rootNode, prefab->nodes, rootMatrix, nodeMatrices);
-
-    // output matrices to GPU
-    {
-        Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
-        
-        Matrix3x4f16 outMatrices[MaxNumJoints];
-
-        for (int i = 0; i < skin.numJoints; i++)
-        {
-            Matrix4 mat = invMatrices[i] * nodeMatrices[skin.joints[i]];
-            mat = Matrix4::Transpose(mat);
-            ConvertFloatToHalf(outMatrices[i].x, (float*)&mat.r[0], 4);
-            ConvertFloatToHalf(outMatrices[i].y, (float*)&mat.r[1], 4);
-            ConvertFloatToHalf(outMatrices[i].z, (float*)&mat.r[2], 4);
-        }
-
-        // upload anim matrix texture to the GPU
-        rUpdateTexture(animController->matrixTex, outMatrices);
-    }
+    UploadAnimationPose(prefab, animPose0);
 }
 
 void ClearAnimationController(AnimationController* animSystem)
 {
-    rDeleteTexture(animSystem->matrixTex);
+    rDeleteTexture(animSystem->mMatrixTex);
 }
 
 void DestroyAnimationSystem()

@@ -50,7 +50,7 @@ int AXStart()
         return 0;
     }
 
-    if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Paladin/Paladin.gltf", 1.0f))
+    if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Brute/Brute.gltf", 1.0f))
     {
         AX_ERROR("gltf scene load failed2");
         return 0;

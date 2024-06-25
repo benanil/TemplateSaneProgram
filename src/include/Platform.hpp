@@ -8,7 +8,9 @@
 
 #pragma once
 
-#if defined(_DEBUG) || defined(DEBUG) || defined(Debug)
+#define AX_ENABLE_LOGGING
+
+#if defined(AX_ENABLE_LOGGING) || defined(_DEBUG) || defined(DEBUG) || defined(Debug)
 #ifdef __ANDROID__
     #include <android/log.h>
     #define AX_ERROR(format, ...) { __android_log_print(ANDROID_LOG_FATAL, "AX-FATAL", "%s -line:%i " format, GetFileName(__FILE__), __LINE__, ##__VA_ARGS__); ASSERT(0);}
@@ -32,7 +34,6 @@
     #define AX_LOG(format, ...)  
     #define AX_WARN(format, ...) 
 #endif
-
 
 inline constexpr const char* GetFileName(const char* path)
 {

@@ -63,7 +63,7 @@ Blender Mixamo Character Import Settings:
     Scale.xyz          :  0.140, 0.140, 0.140 
     Transform.+yUp     :  uncheck
     
-    Blender Multi Animation: https://shorturl.at/ajszQ
+    Blender Multi Animation: https://roderickvella.wordpress.com/2023/05/18/importing-mixamo-animations-into-raylib/
 
 # Used Libraries
 for fbx scenes [ufbx](https://github.com/ufbx/ufbx)<br>

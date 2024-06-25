@@ -61,7 +61,6 @@ float ShadowCalculation()
 void main()
 {
     lowp vec4 color = texture(uAlbedo, vTexCoords);
-    color.w = ShadowCalculation();
     
     #if ALPHA_CUTOFF == 1
         if (color.a < 0.001)
@@ -69,11 +68,9 @@ void main()
     #endif
 
     mediump vec3  normal    = vTBN[2];
-    lowp float metallic  = 0.5;
-    lowp float roughness = 0.3;
 
     #if !defined(__ANDROID__)
-    if (uHasNormalMap == 1)
+    if (uHasNormalMap == 1 )
     {
         // obtain normal from normal map in range [0,1]
         lowp vec2  c = texture(uNormalMap, vTexCoords).rg * 2.0 - 1.0;
@@ -81,14 +78,12 @@ void main()
         normal  = normalize(vec3(c, z));
         // transform normal vector to range [-1,1]
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
-
-        lowp vec2 metalRoughness = texture(uMetallicRoughnessMap, vTexCoords).rg;
-        metallic  = metalRoughness.r;
-        roughness = metalRoughness.g;
     }
     #endif
-    oRoughness = roughness;
+    lowp vec2 metallicRoughness = texture(uMetallicRoughnessMap, vTexCoords).rg;
+    color.w = ShadowCalculation();
+    oRoughness = metallicRoughness.y;
     oFragColorShadow = color;
     oNormalMetallic.xyz = normalize(normal) + vec3(1.0) * vec3(0.5); // convert to 0-1 range
-    oNormalMetallic.w = metallic;
+    oNormalMetallic.w = metallicRoughness.x;
 }

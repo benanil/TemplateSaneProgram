@@ -41,17 +41,6 @@
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/String.hpp"
 
-inline void* stbi_realloc(void* p, size_t newsz)
-{
-    delete[] (char*)p;
-    p = (void*)new char[newsz];
-    return p;
-}
-
-#define STBI_MALLOC(sz) (void*)new char[sz]
-#define STBI_REALLOC(p,newsz) stbi_realloc(p, newsz)
-#define STBI_FREE(p) delete[] (char*)p;
-
 #define STBI_ASSERT(x) ASSERT(x)
 #define STB_IMAGE_IMPLEMENTATION
 

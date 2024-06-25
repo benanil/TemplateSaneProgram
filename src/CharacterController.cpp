@@ -35,12 +35,11 @@ void CharacterController::Start(Prefab* _character)
     mPosition.y = -0.065f; // make foots touch the ground
     mMovementSpeed = 2.7f;
     mAnimSpeed = 1.0f;
+    mIsAnimTrigerred = false;
+    mIdleLimit = 8.0f;
+    mIdleTime = 0.0f;
     {
-        ASkin& skin = _character->skins[0];
-    
-        int skeletonNode = _character->GetRootNodeIdx();
-        mRootNodeIdx = skin.skeleton != -1 ? skin.skeleton : skeletonNode; 
-
+        mRootNodeIdx = FindRootNodeIndex(_character);
         float* posPtr = _character->nodes[mRootNodeIdx].translation;
         float* rotPtr = _character->nodes[mRootNodeIdx].rotation;
     
@@ -48,15 +47,19 @@ void CharacterController::Start(Prefab* _character)
         mStartRotation = VecLoad(rotPtr);
     }
     
-    int a_idle           = FindAnimIndex(_character, "idle_short");
-    int a_walk           = FindAnimIndex(_character, "walk");
-    int a_jog_forward    = FindAnimIndex(_character, "jog_forward");
-    int a_jog_backward   = FindAnimIndex(_character, "jog_backward");
-    int a_run            = FindAnimIndex(_character, "run_fast");
-    int a_diagonal_left  = FindAnimIndex(_character, "jog_left");
-    int a_diagonal_right = FindAnimIndex(_character, "jog_right");
-    int a_strafe_left    = FindAnimIndex(_character, "strafe_left");
-    int a_strafe_right   = FindAnimIndex(_character, "strafe_right");
+    int a_idle           = FindAnimIndex(_character, "Idle");
+    int a_walk           = FindAnimIndex(_character, "Walk");
+    int a_jog_forward    = FindAnimIndex(_character, "Jog_Forward");
+    int a_jog_backward   = a_jog_forward; // FindAnimIndex(_character, "Jog_Backward");
+    int a_diagonal_left  = FindAnimIndex(_character, "Jog_Forward_Left");
+    int a_diagonal_right = FindAnimIndex(_character, "Jog_Forward_Right");
+    int a_strafe_left    = FindAnimIndex(_character, "Strafe_Left");
+    int a_strafe_right   = FindAnimIndex(_character, "Strafe_Right");
+
+    mAtackIndex = FindAnimIndex(_character, "Sword_Attack");
+    mIdle2Index = FindAnimIndex(_character, "Idle_Look_Around");
+    mJumpIndex  = FindAnimIndex(_character, "Jump");
+    mJumpWalkingIndex  = FindAnimIndex(_character, "Jump_Walking");
 
     // idle, left&right strafe
     mAnimController.SetAnim(a_left  , 0, a_strafe_left);
@@ -66,10 +69,6 @@ void CharacterController::Start(Prefab* _character)
     mAnimController.SetAnim(a_middle, 1, a_walk);
     mAnimController.SetAnim(a_middle, 2, a_jog_forward);
 
-    // set last row to all run anim
-    mAnimController.SetAnim(a_left  , 3, a_run);
-    mAnimController.SetAnim(a_middle, 3, a_run);
-    mAnimController.SetAnim(a_right , 3, a_run);
     // set second row to idle 
     mAnimController.SetAnim(a_left      , 1, a_diagonal_left);
     mAnimController.SetAnim(a_right     , 1, a_diagonal_right);
@@ -112,6 +111,15 @@ void CharacterController::ColissionDetection(Vector3f oldPos)
         // set z position to old position and add opposite direction movement
         mPosition.z = oldPos.z + xDiff;
     }
+}
+
+void CharacterController::TriggerAnim(int index)
+{
+    if (mIsAnimTrigerred) return; // already trigerred
+    mIsAnimTrigerred = true;
+    mTriggerredAnim = index;
+    mCurrentMovement = Vector2f::Zero();
+    mAnimTime.y = 0.0f;
 }
 
 void CharacterController::Update(float deltaTime, bool isSponza)
@@ -163,7 +171,7 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     //------------------------------------------------------------------------
 #endif
     mAnimTime.y += deltaTime * (mAnimSpeed * 0.87f);
-    mAnimTime.y = Fract(mAnimTime.y);
+    mAnimTime.y = !mIsAnimTrigerred ? Fract(mAnimTime.y) : mAnimTime.y;
     
     mAnimTime.x += deltaTime * (mAnimSpeed * 0.87f);
     mAnimTime.x = Fract(mAnimTime.x);
@@ -174,19 +182,32 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     SmallMemCpy(posPtr, &mStartPos.x, sizeof(Vector3f));
     VecStore(rotPtr, mStartRotation);
 
-    EvaluateAnimOfPrefab(mCharacter,
-                        &mAnimController,
-                         mCurrentMovement.x,
-                         mCurrentMovement.y,
-                         mAnimTime.x,
-                         mAnimTime.y);
+    if (!mIsAnimTrigerred) {
+        mAnimController.EvaluateLocomotion(mCharacter,
+                                           mCurrentMovement.x,
+                                           mCurrentMovement.y,
+                                           mAnimTime.x,
+                                           mAnimTime.y);
+    }
+    else {
+        if (mAnimTime.y >= 1.0f)
+        {
+            mAnimTime.y = 0.0f;
+            mIsAnimTrigerred = false;
+            mTriggerredAnim = mIdle2Index;
+            mIdleTime = 0.0f;
+            mPosition.y = -0.065f;
+        }
+        mAnimController.PlayAnim(mCharacter, mTriggerredAnim, mAnimTime.y);
+    }
 
-    isRunning  |= GetKeyDown(Key_SHIFT);
-    bool isSprinting = GetKeyDown(Key_CONTROL);
-    targetMovement.y += (float)isRunning + (float)isSprinting;
-
-    float animAddition = (float)isRunning * 0.45f + (float)isSprinting * 0.2f;
+    isRunning |= GetKeyDown(Key_SHIFT);
+    targetMovement.y += (float)isRunning;
+    float animAddition = (float)isRunning * 0.55f;
     mAnimSpeed = Lerp(mAnimSpeed, 0.9f + animAddition, 0.1f);
+    
+    if (mIsAnimTrigerred && mTriggerredAnim == mIdle2Index)
+        mAnimSpeed = 0.2f;
 
     const float smoothTime = 0.25f;
 
@@ -208,24 +229,51 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     }
     VecStore(rotPtr, mRotation);
 
-    const float sprintMultiplier = 2.0f;
-    targetMovement.y += (float)isSprinting * sprintMultiplier;
     x += -inputAngle / 2.0f;
     // handle character position
     {   
-        Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
-        Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
-        Vector3f oldPos = mPosition;
-
-        mPosition += progress * mAnimSpeed * 1.5f;
-        // animatedPos.y = 8.15f;
+        bool isWalkJumping = mTriggerredAnim == mJumpWalkingIndex;
+        if (mIsAnimTrigerred == false || isWalkJumping)
+        {
+            Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
+            Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
+            Vector3f oldPos = mPosition;
+            mPosition += progress * mAnimSpeed * 1.5f;
+            
+            if (isSponza)
+                ColissionDetection(oldPos);
+        }
+        
+        // animatedPos.y = 8.15f; // if you want to walk on top floor
         camera->targetPos = mPosition;
-        if (isSponza)
-            ColissionDetection(oldPos);
         // set animated pos for the renderer
         SmallMemCpy(posPtr, &mPosition.x, sizeof(Vector3f));
     }
     SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
+
+    if (GetMousePressed(MouseButton_Left) && !mIsAnimTrigerred) {
+        TriggerAnim(mAtackIndex);
+    }
+
+    if (GetKeyPressed(Key_SPACE)) {
+        int anim = mCurrentMovement.y > 0.15f ? mJumpWalkingIndex : mJumpIndex;
+        TriggerAnim(anim);
+    }
+
+    if (!mIsAnimTrigerred && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f) 
+    {
+        mIdleTime += deltaTime;
+    }
+    else {
+        mIdleTime = 0.0f;
+    }
+
+    if (mIdleTime >= mIdleLimit)
+    {
+        TriggerAnim(mIdle2Index);
+        mIdleTime = 0.0f;
+        mIdleLimit = 6.0f + (Random::NextFloat01(Random::Seed32()) * 15.0f);
+    }
 }
 
 void CharacterController::Destroy()

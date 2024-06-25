@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+
 #if defined(ASTCENC_DIAGNOSTICS)
 	#include <cstdio>
 #endif

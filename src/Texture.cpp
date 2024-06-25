@@ -19,19 +19,20 @@
 *        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
-
 #include <thread>
 #include <bitset>
 
 #include "include/AssetManager.hpp"
 #include "include/Scene.hpp"
 #include "include/Renderer.hpp"
+#include "include/Platform.hpp"
 
 #include "../ASTL/String.hpp"
 #include "../ASTL/Math/Math.hpp"
 #include "../ASTL/Array.hpp"
 #include "../ASTL/Additional/GLTFParser.hpp"
 #include "../ASTL/IO.hpp"
+#include "../ASTL/MultiThreading/ParallelFor.hpp"
 
 #include "../External/stb_image.h"
 #include "../External/zstd.h"
@@ -41,7 +42,7 @@
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
 #include "../External/ProcessDxtc.hpp"
 #include "../External/stb_dxt.h"
-#include "../External/astc-encoder/astcenccli_internal.h"
+#include "../External/astc-encoder/astcenc.h"
 #include "../External/stb_image_resize2.h"
 #endif
 
@@ -58,7 +59,7 @@ namespace {
     };
 }
 
-const int g_AXTextureVersion = 12345;
+const int g_AXTextureVersion = 12348;
 
 // note: maybe we will need to check for data changed or not.
 bool IsTextureLastVersion(const char* path)
@@ -79,7 +80,7 @@ static std::thread CompressASTCImagesThread;
 extern uint64_t astcenc_main(const char* input_filename, unsigned char* currentCompression);
 
 // converts to rg, removes blue
-static void MakeNormalTextureFromRGB(unsigned char* texture, int numPixels)
+static void MakeRGTextureFromRGB(unsigned char* texture, int numPixels)
 {
     const unsigned char* rgb = texture;
     
@@ -94,7 +95,7 @@ static void MakeNormalTextureFromRGB(unsigned char* texture, int numPixels)
 }
 
 // converts to rg, removes blue and alpha
-static void MakeNormalTextureFromRGBA(unsigned char* texture, int numPixels)
+static void MakeRGTextureFromRGBA(unsigned char* texture, int numPixels)
 {
     const unsigned char* rgba = texture;
     
@@ -166,15 +167,15 @@ uint64_t ASTCCompress(unsigned char* buffer, unsigned char* image, int dim_x, in
     astcenc_profile profile = ASTCENC_PRF_LDR;
     
     // This has to come first, as the block size is in the file header
-    astc_compressed_image image_comp{};
     astcenc_config config{};
     
     float        quality = ASTCENC_PRE_MEDIUM;
     unsigned int flags   = 0;
     unsigned int block_x = 4, block_y = 4, block_z = 1;
     astcenc_error error = astcenc_config_init(profile, block_x, block_y, block_z,
-                                                  quality, flags, &config);
+                                              quality, flags, &config);
     if (error) {
+        AX_ERROR("astcenc_config_init failed: %s\n", astcenc_get_error_string(error));
         return 1;
     }
     
@@ -188,74 +189,72 @@ uint64_t ASTCCompress(unsigned char* buffer, unsigned char* image, int dim_x, in
     codec_status = astcenc_context_alloc(&config, threadCount, &codec_context);
     if (codec_status != ASTCENC_SUCCESS)
     {
-        print_error("ERROR: Codec context alloc failed: %s\n", astcenc_get_error_string(codec_status));
-        ASSERT(0);
+        AX_ERROR("Codec context alloc failed: %s\n", astcenc_get_error_string(codec_status));
         return 1;
     }
     
     int dim_z = 1;
-    astcenc_image *uncomp = new astcenc_image;
+    astcenc_image *src = new astcenc_image;
     {
-        uncomp->dim_x = dim_x;
-        uncomp->dim_y = dim_y;
-        uncomp->dim_z = dim_z;
+        src->dim_x = dim_x;
+        src->dim_y = dim_y;
+        src->dim_z = dim_z;
         
         void** data = new void*[dim_z];
-        uncomp->data = data;
-        uncomp->data_type = ASTCENC_TYPE_U8;
-        data[0] = image; // new uint8_t[dim_x * dim_y * 4];
+        src->data = data;
+        src->data_type = ASTCENC_TYPE_U8;
+        src->data[0] = image; 
     }
     
     // Compress an image
-    // if (operation & ASTCENC_STAGE_COMPRESS)
-    unsigned int blocks_x = (uncomp->dim_x + config.block_x - 1) / config.block_x;
-    unsigned int blocks_y = (uncomp->dim_y + config.block_y - 1) / config.block_y;
-    unsigned int blocks_z = (uncomp->dim_z + config.block_z - 1) / config.block_z;
-    size_t buffer_size = blocks_x * blocks_y * blocks_z * 16;
-    int numMips = MAX((int)Log2(uncomp->dim_x) >> 1, 1) - 1;
+    unsigned int blocks_x = (src->dim_x + config.block_x - 1) / config.block_x;
+    unsigned int blocks_y = (src->dim_y + config.block_y - 1) / config.block_y;
+    unsigned int blocks_z = (src->dim_z + config.block_z - 1) / config.block_z;
+    size_t bufferSize = blocks_x * blocks_y * blocks_z * 16;
+    int numMips = MAX((int)Log2((unsigned)src->dim_x) >> 1, 1) - 1;
     
-    unsigned char* compressBuffer = new unsigned char[(uncomp->dim_x * uncomp->dim_y * 4) >> 1];
+    unsigned char* compressBuffer = new unsigned char[(src->dim_x * src->dim_y * 4) >> 1];
+    unsigned char* cb = compressBuffer;
+    
     uint64_t compressedSize = 0;
     
     do {
-        error = astcenc_compress_image(codec_context, uncomp, &swz_encode, buffer, buffer_size, 0);
+        error = astcenc_compress_image(codec_context, src, &swz_encode, buffer, bufferSize, 0);
         
+        if (error != ASTCENC_SUCCESS) {
+            AX_ERROR("ERROR: Codec compress failed: %s\n", astcenc_get_error_string(error));
+            break;
+        }
         astcenc_compress_reset(codec_context);
         
-        if (error != ASTCENC_SUCCESS)
-        {
-            print_error("ERROR: Codec compress failed: %s\n", astcenc_get_error_string(error));
-            ASSERT(0);
-            return 1;
-        }
-        
-        int dim_x = uncomp->dim_x;
-        int dim_y = uncomp->dim_y;
-        
-        compressedSize += buffer_size;
-        buffer += buffer_size;
+        compressedSize += bufferSize;
+        buffer += bufferSize;
         
         if (numMips-- <= 0)
             break;
         
-        stbir_resize(*uncomp->data, dim_x, dim_y, dim_x * 4, 
-                     compressBuffer, dim_x >> 1, dim_y >> 1, (dim_x >> 1) * 4, 
-                     STBIR_RGBA, STBIR_TYPE_UINT8, STBIR_EDGE_CLAMP, STBIR_FILTER_MITCHELL);
+        void* resized = stbir_resize(*src->data, src->dim_x, src->dim_y, src->dim_x * 4, 
+                                     compressBuffer, src->dim_x >> 1, src->dim_y >> 1, (src->dim_x >> 1) * 4, 
+                                     STBIR_RGBA, STBIR_TYPE_UINT8, STBIR_EDGE_CLAMP, STBIR_FILTER_MITCHELL);
         
-        unsigned char* temp = (unsigned char*)*uncomp->data;
-        *uncomp->data = compressBuffer;
+        if (resized == nullptr) {
+            AX_LOG("stbir_resize failed");
+        }
+
+        unsigned char* temp = (unsigned char*)*src->data;
+        *src->data = compressBuffer;
         compressBuffer = temp;
         
-        uncomp->dim_x >>= 1;
-        uncomp->dim_y >>= 1;
-        buffer_size = uncomp->dim_x * uncomp->dim_y;
+        src->dim_x >>= 1;
+        src->dim_y >>= 1;
+        bufferSize = src->dim_x * src->dim_y;
     } while (true);
     
     
-    delete[] uncomp->data; 
+    delete[] src->data; 
     astcenc_context_free(codec_context);
     
-    delete[] compressBuffer;
+    delete[] cb;
     return compressedSize;
 }
 
@@ -275,8 +274,10 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
         return;
     }
     
-    ASSERT(numImages < 512);
+    ASSERTR(numImages < 512, return);
     std::bitset<512> isNormalMap{};
+    std::bitset<512> isMetallicRoughnessMap{};
+
     AMaterial* materials = scene->materials;
     int numMaterials = scene->numMaterials;
     // this makes always positive
@@ -293,7 +294,13 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
     {
         isNormalMap.reset(materials[i].baseColorTexture.index & 511);
     }
-    
+
+    // WIP Convert specular texture to metallic roughness Texture
+    for (int i = 0; i < numMaterials; i++)
+    {
+        isMetallicRoughnessMap.set(materials[i].metallicRoughnessTexture.index & 511);
+    }
+
     ScopedPtr<ImageInfo> imageInfos = new ImageInfo[numImages];
     ScopedPtr<uint64_t>  currentCompressions = new uint64_t[numImages];
     uint64_t beforeCompressedSize = 0;
@@ -361,11 +368,16 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
             if (info.width == 0)
                 continue;
             
-            // note: that stb image using new and delete instead of malloc free (I overloaded)
-            ScopedPtr<unsigned char> stbImage = stbi_load(imagePath, &info.width, &info.height, &info.numComp, 0);
+            struct ScopedFree { 
+                unsigned char* ptr; 
+                ScopedFree(unsigned char* x) : ptr(x) {} 
+                ~ScopedFree() { stbi_image_free(ptr); }
+            };
+            ScopedFree stbImage = stbi_load(imagePath, &info.width, &info.height, &info.numComp, 0);
             
             if (stbImage.ptr == nullptr) {
-                stbImage.ptr = new unsigned char[info.width * info.height * info.numComp];
+                AX_WARN("stbi_load failed %s", imagePath);
+                stbImage.ptr = (unsigned char*)malloc(info.width * info.height * info.numComp);
             }
             
             int imageSize = info.width * info.height;
@@ -389,11 +401,11 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
                 currentCompression += numBytes;
                 continue;
             }
-
-            if (isNormalMap[i])
+            
+            if (isNormalMap[i] || isMetallicRoughnessMap[i]) // both are rg only textures
             {
-                if (info.numComp == 3) MakeNormalTextureFromRGB(stbImage, imageSize);
-                if (info.numComp == 4) MakeNormalTextureFromRGBA(stbImage, imageSize);
+                if (info.numComp == 3) MakeRGTextureFromRGB(stbImage.ptr, imageSize);
+                if (info.numComp == 4) MakeRGTextureFromRGBA(stbImage.ptr, imageSize);
                 imageInfos.ptr[i].numComp = 2;
 
                 CompressBC5(stbImage.ptr, textureLoadBuffer.Data(), info.width, info.height);
@@ -431,7 +443,6 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
             currentCompression += imageSize;
     	}
     };
-
 
     int numTask = numImages;
     int taskPerThread = MAX(numImages / 8, 1);
@@ -540,8 +551,8 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
 
 static void SaveAndroidCompressedImagesFn(Prefab* scene, char* astcPath)
 {
-	SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
-	delete[] astcPath;
+    SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
+    delete[] astcPath;
 }
 
 void SaveSceneImages(Prefab* scene, char* path)

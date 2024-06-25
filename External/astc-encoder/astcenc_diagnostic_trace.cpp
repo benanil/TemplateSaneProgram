@@ -19,6 +19,8 @@
  * @brief Functions for the library entrypoint.
  */
 
+#include "astcenc_diagnostic_trace.h"
+
 #if defined(ASTCENC_DIAGNOSTICS)
 
 #include <cassert>
@@ -27,8 +29,6 @@
 #include <cmath>
 #include <limits>
 #include <string>
-
-#include "astcenc_diagnostic_trace.h"
 
 /** @brief The global trace logger. */
 static TraceLog* g_TraceLog = nullptr;

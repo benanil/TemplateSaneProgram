@@ -360,7 +360,7 @@ void FatalError(const char* format, ...)
     OutputDebugString(buffer);
     // Display the message box
     MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
-    ASSERT(0);
+    // ASSERT(0);
 }
 
 void DebugLog(const char* format, ...)
@@ -372,6 +372,7 @@ void DebugLog(const char* format, ...)
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
     printf(buffer);
+    MessageBoxA(NULL, buffer, "DebugLog", MB_ICONWARNING | MB_OK);
     OutputDebugString(buffer);
 }
 

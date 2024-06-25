@@ -490,7 +490,7 @@ static void RenderShadowOfNode(ANode* node, Prefab* prefab, Matrix4 parentMat)
 static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight, AnimationController* animSystem)
 {
     int hasAnimation = (int)(animSystem != nullptr);
-    if (hasAnimation) rSetTexture(animSystem->matrixTex, 0, rGetUniformLocation("uAnimTex"));
+    if (hasAnimation) rSetTexture(animSystem->mMatrixTex, 0, rGetUniformLocation("uAnimTex"));
     rSetShaderValue(hasAnimation, rGetUniformLocation("uHasAnimation"));
 
     bool hasScene = prefab->numScenes > 0;
@@ -581,9 +581,9 @@ static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& pri
     rSetShaderValue(hasNormalMap, lHasNormalMap);
 
     int metalicRoughnessIndex = material.metallicRoughnessTexture.index;
-    // if (scene->textures && metalicRoughnessIndex != -1 && scene->textures[metalicRoughnessIndex].width != 0)
-    //     SetTexture(scene->textures[metalicRoughnessIndex], 2, metallicMapLoc);
-    // else
+    if (prefab->textures && metalicRoughnessIndex != -1 && prefab->gpuTextures[metalicRoughnessIndex].width != 0)
+        rSetTexture(prefab->gpuTextures[metalicRoughnessIndex], 2, lMetallicMap);
+    else
     if (!IsAndroid())
     {
         Texture texture;
@@ -667,7 +667,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
 
     if (hasAnimation)
     {
-        rSetTexture(animSystem->matrixTex, 4, lAnimTex);
+        rSetTexture(animSystem->mMatrixTex, 4, lAnimTex);
     }
         
     for (int i = 0; i < numNodes; i++)

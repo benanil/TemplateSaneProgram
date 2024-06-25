@@ -12364,7 +12364,7 @@
       "uri": "textures/material_2_baseColor.jpeg"
     },
     {
-      "uri": "textures/material_2_metallicRoughness.jpg"
+      "uri": "textures/material_2_metallicRoughness.png"
     },
     {
       "uri": "textures/material_2_normal.jpeg"
@@ -12382,7 +12382,7 @@
       "uri": "textures/material_4_baseColor.jpeg"
     },
     {
-      "uri": "textures/material_4_metallicRoughness.jpg"
+      "uri": "textures/material_4_metallicRoughness.png"
     },
     {
       "uri": "textures/material_4_normal.jpeg"
@@ -12418,7 +12418,7 @@
       "uri": "textures/material_8_baseColor.jpeg"
     },
     {
-      "uri": "textures/material_8_metallicRoughness.jpg"
+      "uri": "textures/material_8_metallicRoughness.png"
     },
     {
       "uri": "textures/material_8_normal.jpeg"
@@ -12457,7 +12457,7 @@
       "uri": "textures/material_13_baseColor.jpeg"
     },
     {
-      "uri": "textures/material_13_metallicRoughness.jpg"
+      "uri": "textures/material_13_metallicRoughness.png"
     },
     {
       "uri": "textures/material_13_normal.jpeg"
@@ -12466,7 +12466,7 @@
       "uri": "textures/material_14_baseColor.jpeg"
     },
     {
-      "uri": "textures/material_14_metallicRoughness.jpg"
+      "uri": "textures/material_14_metallicRoughness.png"
     },
     {
       "uri": "textures/material_14_normal.jpeg"
@@ -12487,7 +12487,7 @@
       "uri": "textures/material_17_baseColor.jpeg"
     },
     {
-      "uri": "textures/material_17_metallicRoughness.jpg"
+      "uri": "textures/material_17_metallicRoughness.png"
     },
     {
       "uri": "textures/material_17_normal.jpeg"

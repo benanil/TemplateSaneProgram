@@ -26,6 +26,18 @@ struct CharacterController
     Vector2f mTouchStart;
     bool mWasPressing;
 
+    // animation indices
+    int mAtackIndex;
+    int mIdle2Index;
+    int mJumpIndex;
+    int mJumpWalkingIndex;
+
+    bool mIsAnimTrigerred;
+    int mTriggerredAnim;
+
+    float mIdleTime;
+    float mIdleLimit;
+
 //------------------------------------------------------------------------
     void Start(Prefab* _character);
 
@@ -34,4 +46,6 @@ struct CharacterController
     void ColissionDetection(Vector3f oldPos);
     
     void Destroy();
+
+    void TriggerAnim(int index);
 };

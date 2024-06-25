@@ -535,7 +535,7 @@ FontHandle uLoadFont(const char* file)
         addUnicodeGlyphFn(aditionalCharacters[i-127], i);
     }
 
-    stbi_write_png("atlas.png", AtlasWidth, AtlasWidth, 1, image, AtlasWidth);
+    // stbi_write_png("atlas.png", AtlasWidth, AtlasWidth, 1, image, AtlasWidth);
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     mCurrentFontAtlas = currentAtlas;
     currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
@@ -1814,9 +1814,10 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
         Vector2f mousePos; 
         GetMouseWindowPos(&mousePos.x, &mousePos.y);
 
-        // Warning: width of the alpha selection area and hue selection area 
-        //          is %88 smaller than color field, that's why you are seeing 0.88f and 0.12f. 
-        //          if you change these you have to change in shader too, same values have been used in shader for visualization
+        // Warning:
+        // width of the alpha selection area and hue selection area 
+        // is %88 smaller than color field, that's why you are seeing 0.88f and 0.12f. 
+        // if you change these you have to change in shader too, same values have been used in shader for visualization
         Vector2f alphaPos  = mColorPick.pos;
         Vector2f alphaSize = mColorPick.size;
         alphaPos.x  += alphaSize.x * 0.88f;

@@ -1444,7 +1444,7 @@ END_OF_TESTS:
 #endif
 
 		scb.block_type = SYM_BTYPE_CONST_U16;
-		vfloat4 color_f32 = clamp(0.0f, 1.0f, blk.origin_texel) * 65535.0f;
+        vfloat4 color_f32(0.0f); // clamp(0.0f, 1.0f, blk.origin_texel) * 65535.0f;
 		vint4 color_u16 = float_to_int_rtn(color_f32);
 		store(color_u16, scb.constant_color);
 	}

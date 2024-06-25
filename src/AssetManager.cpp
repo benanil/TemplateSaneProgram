@@ -1181,4 +1181,3 @@ int LoadGLTFBinary(const char* path, SceneBundle* gltf)
     gltf->intAllocator    = intAllocator.TakeOwnership();
     return 1;
 }
-

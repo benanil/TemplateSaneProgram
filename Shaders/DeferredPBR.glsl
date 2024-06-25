@@ -75,15 +75,15 @@ float16 V_Neubelt(float16 NoV, float16 NoL) {
     return (1.0 / (4.0 * (NoL + NoV - NoL * NoV))); // saturateMediump
 }
 
-float16 F_Schlick(float16 u) {
-    const float16 F0 = 0.08; 
+half3 F_Schlick(float16 u, half3 albedo, float16 metallic, float16 roughness) {
+    half3 F0 = vec3(0.08);
+    F0 = mix(F0, albedo, metallic);
     float16 x = 1.0 - u;
     return F0 + (1.0 - F0) * (x * x * x * x); // * x
 }
 
-half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
+half3 Lighting(half3 albedo, half3 l, half3 n, half3 v, float16 metallic, float16 roughness)
 {
-    const float16 roughness = 0.22;
     half3 h = normalize(l + v);
     float16 ndl = max(dot(n, l), 0.10);
     float16 ndh = max(dot(n, h), 0.0);
@@ -92,8 +92,8 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v)
 
     float16 D = D_GGX(ndh, roughness);
     float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl); // V_Neubelt(ndv, ndl); //;
-    float16 F = F_Schlick(ldh);
-    float16 Fr = (D * V) * F; // specular BRDF
+    half3 F = F_Schlick(ldh, albedo, metallic, roughness);
+    half3 Fr = F * (D * V); // specular BRDF
     return (albedo / PI) + Fr; //albedo * ndl + (r * 0.08);
 }
 
@@ -190,14 +190,13 @@ void main()
     
     float16 shadow    = albedoShadow.w;
     float16 metallic  = normalMetallic.w;
-    roughness = roughness * roughness;
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
     const half3 sunColor = vec3(0.982f, 0.972, 0.966);
     
-    half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, normalMetallic.xyz, viewRay);
+    half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, normalMetallic.xyz, viewRay, metallic, roughness);
 
     for (int i = 0; i < uNumPointLights; i++)
     {
@@ -214,7 +213,7 @@ void main()
         half3 lightColor = unpackUnorm4x8(uPointLights[i].color).xyz;
         lightColor = lightColor * lightColor; // convert to linear space
         half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
-        lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay) * intensity;
+        lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness) * intensity;
         shadow = min(shadow + intensity, 1.0);
     }
     
@@ -239,10 +238,11 @@ void main()
             half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
     
             lighting *= 0.18 + intensity;
-            lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay) * intensity;
+            lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness) * intensity;
             shadow += min(shadow + intensity, 1.0);
         }
     }
-
+    
     oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetShadow(shadow, pos);
+    // oFragColor = vec4(roughness);
 }
