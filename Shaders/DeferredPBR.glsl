@@ -75,9 +75,9 @@ float16 V_Neubelt(float16 NoV, float16 NoL) {
     return (1.0 / (4.0 * (NoL + NoV - NoL * NoV))); // saturateMediump
 }
 
-half3 F_Schlick(float16 u, half3 albedo, float16 metallic, float16 roughness) {
-    half3 F0 = vec3(0.08);
-    F0 = mix(F0, albedo, metallic);
+float16 F_Schlick(float16 u, half3 albedo, float16 metallic) {
+    float16 F0 = 0.08;
+    F0 = mix(F0, dot(albedo, vec3(0.33333)), metallic);
     float16 x = 1.0 - u;
     return F0 + (1.0 - F0) * (x * x * x * x); // * x
 }
@@ -92,9 +92,9 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v, float16 metallic, float1
 
     float16 D = D_GGX(ndh, roughness);
     float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl); // V_Neubelt(ndv, ndl); //;
-    half3 F = F_Schlick(ldh, albedo, metallic, roughness);
-    half3 Fr = F * (D * V); // specular BRDF
-    return (albedo / PI) + Fr; //albedo * ndl + (r * 0.08);
+    float16 F = F_Schlick(ldh, albedo, metallic);
+    float16 Fr = F * (D * V); // specular BRDF
+    return (albedo / PI) + vec3(Fr); //albedo * ndl + (r * 0.08);
 }
 
 vec3 WorldSpacePosFromDepthBuffer()
