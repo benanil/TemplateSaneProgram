@@ -412,7 +412,9 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
             ASSERT(anode.children[j] != -1);
         }
         
-        SmallMemCpy(anode.translation, &unode->world_transform, sizeof(ufbx_transform));
+        SmallMemCpy(anode.translation, &unode->world_transform.translation.x, sizeof(Vector3f));
+        SmallMemCpy(anode.rotation, &unode->world_transform.rotation.x, sizeof(vec_t));
+        SmallMemCpy(anode.scale, &unode->world_transform.scale.x, sizeof(Vector3f));
         
         if (anode.type == 0)
         {
@@ -668,7 +670,7 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
 /*//////////////////////////////////////////////////////////////////////////*/
 
 ZSTD_CCtx* zstdCompressorCTX = nullptr;
-const int ABMMeshVersion = 41;
+const int ABMMeshVersion = 42;
 
 bool IsABMLastVersion(const char* path)
 {

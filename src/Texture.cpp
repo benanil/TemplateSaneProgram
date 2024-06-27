@@ -59,7 +59,7 @@ namespace {
     };
 }
 
-const int g_AXTextureVersion = 12348;
+const int g_AXTextureVersion = 12349;
 
 // note: maybe we will need to check for data changed or not.
 bool IsTextureLastVersion(const char* path)

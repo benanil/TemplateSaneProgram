@@ -83,8 +83,8 @@ struct QuadData
     uint color;
     uint8 depth;
     uint8 cutStart;
-    uint8 padding;
-    uint8 effect; 
+    uint8 padding; // < maybe use this as rotation angle
+    uint8 effect;
     ushort posX, posY;
 };
 

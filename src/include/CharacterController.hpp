@@ -31,9 +31,7 @@ struct CharacterController
     int mIdle2Index;
     int mJumpIndex;
     int mJumpWalkingIndex;
-
-    bool mIsAnimTrigerred;
-    int mTriggerredAnim;
+    int mCrouchIndex;
 
     float mIdleTime;
     float mIdleLimit;

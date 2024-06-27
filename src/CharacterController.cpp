@@ -29,13 +29,14 @@ void CharacterController::Start(Prefab* _character)
 
     mCharacter  = _character;
     mTouchStart = MakeVec2(0.0f, 0.0f);
-    MemsetZero(&mAnimController, sizeof(AnimationController));
+    // we don't need to set zero the poses
+    constexpr size_t poseSize = sizeof(AnimationController::mAnimPoseA) + sizeof(AnimationController::mAnimPoseB);
+    MemsetZero(&mAnimController, sizeof(AnimationController) - poseSize);
     CreateAnimationController(_character, &mAnimController);
     
     mPosition.y = -0.065f; // make foots touch the ground
     mMovementSpeed = 2.7f;
     mAnimSpeed = 1.0f;
-    mIsAnimTrigerred = false;
     mIdleLimit = 8.0f;
     mIdleTime = 0.0f;
     {
@@ -56,34 +57,35 @@ void CharacterController::Start(Prefab* _character)
     int a_strafe_left    = FindAnimIndex(_character, "Strafe_Left");
     int a_strafe_right   = FindAnimIndex(_character, "Strafe_Right");
 
-    mAtackIndex = FindAnimIndex(_character, "Sword_Attack");
-    mIdle2Index = FindAnimIndex(_character, "Idle_Look_Around");
-    mJumpIndex  = FindAnimIndex(_character, "Jump");
+    mAtackIndex  = FindAnimIndex(_character, "Sword_Attack");
+    mIdle2Index  = FindAnimIndex(_character, "Idle_Look_Around");
+    mJumpIndex   = FindAnimIndex(_character, "Jump");
+    mCrouchIndex = FindAnimIndex(_character, "Crouch");
     mJumpWalkingIndex  = FindAnimIndex(_character, "Jump_Walking");
 
     // idle, left&right strafe
-    mAnimController.SetAnim(a_left  , 0, a_strafe_left);
-    mAnimController.SetAnim(a_middle, 0, a_idle);
-    mAnimController.SetAnim(a_right , 0, a_strafe_right);
+    mAnimController.SetAnim(aLeft  , 0, a_strafe_left);
+    mAnimController.SetAnim(aMiddle, 0, a_idle);
+    mAnimController.SetAnim(aRight , 0, a_strafe_right);
     // walk, jog, run
-    mAnimController.SetAnim(a_middle, 1, a_walk);
-    mAnimController.SetAnim(a_middle, 2, a_jog_forward);
+    mAnimController.SetAnim(aMiddle, 1, a_walk);
+    mAnimController.SetAnim(aMiddle, 2, a_jog_forward);
 
     // set second row to idle 
-    mAnimController.SetAnim(a_left      , 1, a_diagonal_left);
-    mAnimController.SetAnim(a_right     , 1, a_diagonal_right);
-    
-    // set first row to idle 
-    mAnimController.SetAnim(a_left      , 0, a_diagonal_left);
-    mAnimController.SetAnim(a_right     , 0, a_diagonal_right);
+    mAnimController.SetAnim(aLeft  , 1, a_diagonal_left);
+    mAnimController.SetAnim(aRight , 1, a_diagonal_right);
+                                    
+    // set first row to idle        
+    mAnimController.SetAnim(aLeft  , 0, a_diagonal_left);
+    mAnimController.SetAnim(aRight , 0, a_diagonal_right);
  
     // copy first row to inverse first row
-    SmallMemCpy(mAnimController.locomotionIndicesInv[0],
-                mAnimController.locomotionIndices[0], sizeof(int) * 5);
+    SmallMemCpy(mAnimController.mLocomotionIndicesInv[0],
+                mAnimController.mLocomotionIndices[0], sizeof(int) * 5);
 
-    mAnimController.SetAnim(a_left  , -1, a_diagonal_left);
-    mAnimController.SetAnim(a_middle, -1, a_jog_backward);
-    mAnimController.SetAnim(a_right , -1, a_diagonal_right);
+    mAnimController.SetAnim(aLeft  , -1, a_diagonal_left);
+    mAnimController.SetAnim(aMiddle, -1, a_jog_backward);
+    mAnimController.SetAnim(aRight , -1, a_diagonal_right);
 }
 
 void CharacterController::ColissionDetection(Vector3f oldPos)
@@ -115,11 +117,11 @@ void CharacterController::ColissionDetection(Vector3f oldPos)
 
 void CharacterController::TriggerAnim(int index)
 {
-    if (mIsAnimTrigerred) return; // already trigerred
-    mIsAnimTrigerred = true;
-    mTriggerredAnim = index;
+    if (mAnimController.IsTrigerred()) 
+        return;
+
     mCurrentMovement = Vector2f::Zero();
-    mAnimTime.y = 0.0f;
+    mAnimController.TriggerAnim(index, 0.5f);
 }
 
 void CharacterController::Update(float deltaTime, bool isSponza)
@@ -170,11 +172,6 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     targetMovement.x = -targetMovement.x;
     //------------------------------------------------------------------------
 #endif
-    mAnimTime.y += deltaTime * (mAnimSpeed * 0.87f);
-    mAnimTime.y = !mIsAnimTrigerred ? Fract(mAnimTime.y) : mAnimTime.y;
-    
-    mAnimTime.x += deltaTime * (mAnimSpeed * 0.87f);
-    mAnimTime.x = Fract(mAnimTime.x);
 
     float* posPtr = mCharacter->nodes[mRootNodeIdx].translation;
     float* rotPtr = mCharacter->nodes[mRootNodeIdx].rotation;
@@ -182,35 +179,16 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     SmallMemCpy(posPtr, &mStartPos.x, sizeof(Vector3f));
     VecStore(rotPtr, mStartRotation);
 
-    if (!mIsAnimTrigerred) {
-        mAnimController.EvaluateLocomotion(mCharacter,
-                                           mCurrentMovement.x,
-                                           mCurrentMovement.y,
-                                           mAnimTime.x,
-                                           mAnimTime.y);
-    }
-    else {
-        if (mAnimTime.y >= 1.0f)
-        {
-            mAnimTime.y = 0.0f;
-            mIsAnimTrigerred = false;
-            mTriggerredAnim = mIdle2Index;
-            mIdleTime = 0.0f;
-            mPosition.y = -0.065f;
-        }
-        mAnimController.PlayAnim(mCharacter, mTriggerredAnim, mAnimTime.y);
-    }
+    mAnimController.EvaluateLocomotion(mCurrentMovement.x,
+                                       mCurrentMovement.y,
+                                       mAnimSpeed);
 
     isRunning |= GetKeyDown(Key_SHIFT);
     targetMovement.y += (float)isRunning;
     float animAddition = (float)isRunning * 0.55f;
-    mAnimSpeed = Lerp(mAnimSpeed, 0.9f + animAddition, 0.1f);
-    
-    if (mIsAnimTrigerred && mTriggerredAnim == mIdle2Index)
-        mAnimSpeed = 0.2f;
+    mAnimSpeed = Lerp(mAnimSpeed, 0.9f + animAddition, deltaTime);
 
     const float smoothTime = 0.25f;
-
     mCurrentMovement.y = SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime); //
     mCurrentMovement.x = Lerp(mCurrentMovement.x, targetMovement.x, 4.0f * deltaTime);
 
@@ -227,13 +205,13 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         Quaternion targetRotation = QFromAxisAngle(MakeVec3(0.0f, 1.0f, 0.0f), x + PI);
         mRotation = QSlerp(mRotation, targetRotation, deltaTime * rotationSpeed);
     }
-    VecStore(rotPtr, mRotation);
 
     x += -inputAngle / 2.0f;
     // handle character position
     {   
-        bool isWalkJumping = mTriggerredAnim == mJumpWalkingIndex;
-        if (mIsAnimTrigerred == false || isWalkJumping)
+        int trigerredAnim = mAnimController.mTriggerredAnim;
+        bool isWalkJumping = trigerredAnim == mJumpWalkingIndex;
+        if (AX_LIKELY(mAnimController.mState == AnimState_Update || isWalkJumping))
         {
             Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
             Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
@@ -246,12 +224,9 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         
         // animatedPos.y = 8.15f; // if you want to walk on top floor
         camera->targetPos = mPosition;
-        // set animated pos for the renderer
-        SmallMemCpy(posPtr, &mPosition.x, sizeof(Vector3f));
     }
-    SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
 
-    if (GetMousePressed(MouseButton_Left) && !mIsAnimTrigerred) {
+    if (GetMousePressed(MouseButton_Left)) {
         TriggerAnim(mAtackIndex);
     }
 
@@ -260,12 +235,17 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         TriggerAnim(anim);
     }
 
-    if (!mIsAnimTrigerred && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f) 
+    if (!mAnimController.IsTrigerred() && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f) 
     {
         mIdleTime += deltaTime;
     }
     else {
         mIdleTime = 0.0f;
+    }
+
+    if (GetKeyPressed('C'))
+    {
+        TriggerAnim(mCrouchIndex);
     }
 
     if (mIdleTime >= mIdleLimit)
@@ -274,6 +254,11 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         mIdleTime = 0.0f;
         mIdleLimit = 6.0f + (Random::NextFloat01(Random::Seed32()) * 15.0f);
     }
+
+    VecStore(rotPtr, mRotation);
+    // set animated pos for the renderer
+    SmallMemCpy(posPtr, &mPosition.x, sizeof(Vector3f));
+    SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
 }
 
 void CharacterController::Destroy()

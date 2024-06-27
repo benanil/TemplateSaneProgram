@@ -20,7 +20,7 @@ set(SOURCES
     ASTL/Additional/OBJParser.cpp
     ASTL/Additional/Profiler.cpp
     External/vulkan/shVulkan.c
-    
+
     src/Animation.cpp
     src/AssetManager.cpp
     src/SaneProgram.cpp
@@ -43,9 +43,9 @@ endif()
 if(NOT AX_GAME_BUILD)
   
   list(APPEND SOURCES 
-     External/ufbx.c
-     External/zstd.c # game build include all zstd library. (compressor and decompressor)
-     External/ProcessDxtc.cpp) # compress dxt and bcn textures
+       External/ufbx.c
+       External/zstd.c # game build include all zstd library. (compressor and decompressor)
+       External/ProcessDxtc.cpp) # compress dxt and bcn textures
 
   # Add all .cpp files from External/astc-encoder to the SOURCES list
   file(GLOB ASTC_ENCODER_SOURCES External/astc-encoder/*.cpp)

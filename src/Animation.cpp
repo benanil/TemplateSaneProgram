@@ -51,11 +51,15 @@ int FindRootNodeIndex(Prefab* prefab)
 
 void CreateAnimationController(Prefab* prefab, AnimationController* result)
 {
-    ASkin& skin = prefab->skins[0];
-    result->mMatrixTex = rCreateTexture(skin.numJoints*3, 1, nullptr, TextureType_RGBA16F, TexFlags_RawData);
+    ASkin* skin = &prefab->skins[0];
+    ASSERTR(skin != nullptr, return);
+    result->mMatrixTex = rCreateTexture(skin->numJoints*3, 1, nullptr, TextureType_RGBA16F, TexFlags_RawData);
     result->mRootNodeIndex = FindRootNodeIndex(prefab);
-    
-    ASSERT(skin.numJoints < MaxNumJoints);
+    result->mPrefab = prefab;
+    result->mState = AnimState_Update;
+    result->mNumNodes = prefab->numNodes;
+
+    ASSERT(skin->numJoints < MaxNumJoints);
     ASSERT(result->mRootNodeIndex < MaxNumJoints);
     ASSERT(prefab->GetNodePtr(result->mRootNodeIndex)->numChildren > 0); // root node has to have children nodes
 }
@@ -73,16 +77,6 @@ static void RecurseNodeMatrices(ANode* node, ANode* nodes, Matrix4 parentMatrix,
     }
 }
 
-static void InitNodes(ANode* nodes, Pose* pose, int numNodes)
-{
-    for (int i = 0; i < numNodes; i++)
-    {
-        Vec3Store(nodes[i].translation, pose[i].translation);
-        VecStore(nodes[i].rotation, pose[i].rotation);
-        Vec3Store(nodes[i].scale, pose[i].scale);
-    }
-}
-
 static void MergeAnims(Pose* pose0, Pose* pose1, float animBlend, int numNodes)
 {
     for (int i = 0; i < numNodes; i++)
@@ -93,6 +87,16 @@ static void MergeAnims(Pose* pose0, Pose* pose1, float animBlend, int numNodes)
         vec_t q = QSlerp(pose0[i].rotation, pose1[i].rotation, animBlend);
         q = QNorm(q);
         pose0[i].rotation = q;
+    }
+}
+
+static void InitNodes(ANode* nodes, Pose* pose, int numNodes)
+{
+    for (int i = 0; i < numNodes; i++)
+    {
+        VecStore(nodes[i].translation, pose[i].translation);
+        VecStore(nodes[i].rotation, pose[i].rotation);
+        VecStore(nodes[i].scale, pose[i].scale);
     }
 }
 
@@ -121,15 +125,18 @@ static void SampleAnimationPose(Pose* pose, AAnimation* animation, float normTim
         if (channel.targetPath == AAnimTargetPath_Weight)
             continue;
     
+        // maybe binary search
         int beginIdx = 0;
         while (realTime >= sampler.input[beginIdx + 1])
             beginIdx++;
-    
-        vec_t begin = ((vec_t*)sampler.output)[beginIdx]; 
+        
+        beginIdx = MIN(beginIdx, sampler.count - 1);
+        vec_t begin = ((vec_t*)sampler.output)[beginIdx];
         vec_t end   = ((vec_t*)sampler.output)[beginIdx + 1];
     
         float t = MAX(0.0f, realTime - sampler.input[beginIdx]) / MAX(sampler.input[beginIdx + 1] - sampler.input[beginIdx], 0.0001f);
-    
+        t = Clamp01(t);
+
         switch (channel.targetPath)
         {
             case AAnimTargetPath_Scale:
@@ -148,18 +155,18 @@ static void SampleAnimationPose(Pose* pose, AAnimation* animation, float normTim
 }
 
 // send matrices to GPU
-void AnimationController::UploadAnimationPose(Prefab* prefab, Pose* pose)
+void AnimationController::UploadAnimationPose(Pose* pose)
 {
-    InitNodes(prefab->nodes, pose, prefab->numNodes);
+    InitNodes(mPrefab->nodes, pose, mPrefab->numNodes);
 
     Matrix4 nodeMatrices[MaxNumJoints];
-    ANode* rootNode = prefab->GetNodePtr(mRootNodeIndex);
+    ANode* rootNode = mPrefab->GetNodePtr(mRootNodeIndex);
     Matrix4 rootMatrix = Matrix4::PositionRotationScale(rootNode->translation, rootNode->rotation, rootNode->scale);
     nodeMatrices[mRootNodeIndex] = rootMatrix;
 
-    RecurseNodeMatrices(rootNode, prefab->nodes, rootMatrix, nodeMatrices);
+    RecurseNodeMatrices(rootNode, mPrefab->nodes, rootMatrix, nodeMatrices);
 
-    ASkin& skin = prefab->skins[0];
+    ASkin& skin = mPrefab->skins[0];
     Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
     Matrix3x4f16 outMatrices[MaxNumJoints];
 
@@ -167,99 +174,118 @@ void AnimationController::UploadAnimationPose(Prefab* prefab, Pose* pose)
     {
         Matrix4 mat = invMatrices[i] * nodeMatrices[skin.joints[i]];
         mat = Matrix4::Transpose(mat);
-        ConvertFloatToHalf(outMatrices[i].x, (float*)&mat.r[0], 4);
-        ConvertFloatToHalf(outMatrices[i].y, (float*)&mat.r[1], 4);
-        ConvertFloatToHalf(outMatrices[i].z, (float*)&mat.r[2], 4);
+        ConvertFloatToHalf4(outMatrices[i].x, (float*)&mat.r[0]);
+        ConvertFloatToHalf4(outMatrices[i].y, (float*)&mat.r[1]);
+        ConvertFloatToHalf4(outMatrices[i].z, (float*)&mat.r[2]);
     }
     
     // upload anim matrix texture to the GPU
     rUpdateTexture(mMatrixTex, outMatrices);
 }
 
-void AnimationController::PlayAnim(Prefab* prefab, int index, float norm)
+void AnimationController::PlayAnim(int index, float norm)
 {
     Pose animPose[MaxBonePoses];
-    AAnimation* animation0 = &prefab->animations[index];
-    SampleAnimationPose(animPose, animation0, norm, prefab->nodes, prefab->numNodes);
-
-    UploadAnimationPose(prefab, animPose);
+    AAnimation* animation0 = &mPrefab->animations[index];
+    SampleAnimationPose(animPose, animation0, norm, mPrefab->nodes, mPrefab->numNodes);
+    UploadAnimationPose(animPose);
 }
 
-void MixAnimations(Prefab* prefab, int IdxAnimA, int IdxAnimB, float normA, float normB, float blend)
+void AnimationController::TriggerAnim(int index, float triggerTime)
 {
-    const int numNodes = prefab->numNodes;
-    AAnimation* animation0 = &prefab->animations[IdxAnimA];
-    AAnimation* animation1 = &prefab->animations[IdxAnimB];
-    Pose animPose0[MaxBonePoses], animPose1[MaxBonePoses];
+    if (IsTrigerred()) return; // already trigerred
 
-    SampleAnimationPose(animPose0, animation0, normA, prefab->nodes, numNodes);
-    SampleAnimationPose(animPose1, animation1, normB, prefab->nodes, numNodes);
-    MergeAnims(animPose0, animPose1, EaseOut(blend), numNodes);
+    AAnimation* animEnd = &mPrefab->animations[index];
+    mTriggerredAnim = index;
+    mTransitionTime = triggerTime;
+    mCurTransitionTime = triggerTime;
+    mState = AnimState_TriggerIn;
+    
+    SampleAnimationPose(mAnimPoseB, animEnd, 0.0f, mPrefab->nodes, mNumNodes);
 }
 
 // x, y has to be between -1.0 and 1.0
-// normTime should be between 0 and 1
-void AnimationController::EvaluateLocomotion(Prefab* prefab, float x, float y, float xNorm, float yNorm)
+void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
 {
-    ASSERT(prefab->numNodes < 250);
-    const bool hasAnimation = prefab->numSkins > 0;
+    const float deltaTime = (float)GetDeltaTime();
 
-    if (!hasAnimation)
-        return;
-
-    const bool yIsNegative = y < 0.0f;
-    // step 0 sample animations to pose arrays,
-    // step 1 mix sampled pose of animations into another pose
-    // step 2 send mixed pose to nodes
-    Pose animPose0[MaxBonePoses], animPose1[MaxBonePoses];
-
-    AAnimation* animation0 = nullptr;
-    AAnimation* animation1 = nullptr;
-    
-    y = Abs(y); // todo: fix negative animations
-    const int numNodes = prefab->numNodes;
-    const float yBlend = Fract(y);
-
-    int yi = int(y);
-    // sample y anim
+    if (mState == AnimState_TriggerIn)
     {
-        ASSERT(yi <= 3); // must be between 1 and 4
-        
-        if (yIsNegative)
-            yi = -yi;
-        
+        float newNorm = (mTransitionTime - mCurTransitionTime) / mTransitionTime;
+        float animDelta = deltaTime * (1.0f / MAX(1.0f-newNorm, 0.001f));
+        animDelta = Clamp01(animDelta);
+        MergeAnims(mAnimPoseA, mAnimPoseB, animDelta, mNumNodes);
+        mCurTransitionTime -= deltaTime;
+
+        if (mCurTransitionTime <= 0.0f) {
+            mState = AnimState_TriggerPlaying;
+            mTrigerredNorm = 0.0f; // trigger stage complated
+        }
+    }
+    else if (mState == AnimState_TriggerOut)
+    {
+        // merge last animation with trigerred animation's beginning
+        float newNorm = (mTransitionTime - mCurTransitionTime) / mTransitionTime;
+        float animDelta = deltaTime * (1.0f / MAX(1.0f-newNorm, 0.001f));
+        animDelta = Clamp01(animDelta);
+        MergeAnims(mAnimPoseA, mAnimPoseB, animDelta, mNumNodes);
+        mCurTransitionTime -= deltaTime;
+
+        if (mCurTransitionTime <= 0.0f)
+        {
+            mState = AnimState_Update;
+        }
+    }
+    else if (mState == AnimState_TriggerPlaying)
+    {
+        float animStep = 1.0f / mPrefab->animations[mTriggerredAnim].duration;
+        mTrigerredNorm += animSpeed * animStep * deltaTime;
+        mTrigerredNorm = Clamp01(mTrigerredNorm);
+
+        AAnimation* anim = &mPrefab->animations[mTriggerredAnim];
+        SampleAnimationPose(mAnimPoseA, anim, mTrigerredNorm, mPrefab->nodes, mPrefab->numNodes);
+
+        if (mTrigerredNorm >= 1.0f)
+        {
+            AAnimation* animEnd = &mPrefab->animations[mLastAnim];
+            SampleAnimationPose(mAnimPoseB, animEnd, 0.0f, mPrefab->nodes, mNumNodes);
+            mState = AnimState_TriggerOut;
+            mCurTransitionTime = mTransitionTime;
+        }
+    }
+    else if (mState == AnimState_Update)
+    {
+        y = Abs(y);
+        float yBlend = Fract(y);
+
+        int yi = int(y);
+        // sample y anim
+        ASSERTR(yi <= 3, return); // must be between 1 and 4
         int sign = Sign(yi);
-        int index = GetAnim(a_middle, yi);
-        animation0 = &prefab->animations[index];
-        
-        SampleAnimationPose(animPose0, animation0, yNorm, prefab->nodes, numNodes);
-
-        if (yi != 3 && yBlend > 0.00001f) 
+        int yIndex = GetAnim(aMiddle, yi);
+        AAnimation* animStart = &mPrefab->animations[yIndex];
+    
+        SampleAnimationPose(mAnimPoseA, animStart, mAnimTime.y, mPrefab->nodes, mNumNodes);
+    
+        bool shouldAnimBlendY = yi != 3 && yBlend > 0.00002f;
+        if (shouldAnimBlendY)
         {
-            index = GetAnim(a_middle, yi + sign);
-            animation1 = &prefab->animations[index];
-            
-            SampleAnimationPose(animPose1, animation1, yNorm, prefab->nodes, numNodes);
-            MergeAnims(animPose0, animPose1, EaseOut(yBlend), numNodes);
+            yIndex = GetAnim(aMiddle, yi + sign);
+            AAnimation* animEnd = &mPrefab->animations[yIndex];
+            SampleAnimationPose(mAnimPoseB, animEnd, mAnimTime.y, mPrefab->nodes, mNumNodes);
+            MergeAnims(mAnimPoseA, mAnimPoseB, EaseOut(yBlend), mNumNodes);
         }
+
+        // if anim is two seconds animStep is 0.5 because we are using normalized value
+        float yAnimStep = 1.0f / mPrefab->animations[yIndex].duration;
+        mAnimTime.y += animSpeed * yAnimStep * deltaTime;
+        mAnimTime.y  = Fract(mAnimTime.y);
+
+        mLastAnim = yIndex;
     }
 
-    // Todo: make better horizontal movement, 
-    //       better when we are not moving vertical
-    if (!AlmostEqual(x, 0.0f))
-    {
-        // -2,-2 range to 0, 4 range to make array indexing
-        float xBlend = Abs(Fract(x));
-        eAnimLocation xAnim = x < 0.0f ? a_left : a_right;
-        {
-            int index = GetAnim(xAnim, yi);
-            animation1 = &prefab->animations[index];
-            SampleAnimationPose(animPose1, animation1, xNorm, prefab->nodes, numNodes);
-        }
-        MergeAnims(animPose0, animPose1, EaseOut(xBlend), numNodes);
-    }
-
-    UploadAnimationPose(prefab, animPose0);
+    // if (mState != AnimState_None)
+    UploadAnimationPose(mAnimPoseA);
 }
 
 void ClearAnimationController(AnimationController* animSystem)

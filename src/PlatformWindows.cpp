@@ -617,6 +617,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         
         QueryPerformanceCounter(&currentTime);
         PlatformCtx.DeltaTime = (double)(currentTime.QuadPart - prevTime.QuadPart) / frequency.QuadPart;
+        PlatformCtx.DeltaTime = Clamp(PlatformCtx.DeltaTime, 0.000001, 0.1);
         prevTime = currentTime;
         
         if (GetKeyDown(Key_MENU) && GetKeyDown(Key_F4)) // alt f4 check

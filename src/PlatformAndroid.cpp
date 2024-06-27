@@ -477,7 +477,8 @@ void android_main(android_app *pApp)
             HandleInput();
 
             currentTime = PerformanceCounter();
-            PlatformCtx.DeltaTime = (double)(currentTime - prevTime) / NS_PER_SECOND;
+            PlatformCtx.DeltaTime = Clamp01((double)(currentTime - prevTime) / NS_PER_SECOND);
+            PlatformCtx.DeltaTime = MIN(PlatformCtx.DeltaTime, 0.1);
             prevTime = currentTime;
 
             AXLoop(PlatformCtx.ShouldRender);
