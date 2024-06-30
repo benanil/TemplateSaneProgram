@@ -44,6 +44,4 @@ struct CharacterController
     void ColissionDetection(Vector3f oldPos);
     
     void Destroy();
-
-    void TriggerAnim(int index);
 };

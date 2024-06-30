@@ -36,7 +36,6 @@ void CharacterController::Start(Prefab* _character)
     
     mPosition.y = -0.065f; // make foots touch the ground
     mMovementSpeed = 2.7f;
-    mAnimSpeed = 1.0f;
     mIdleLimit = 8.0f;
     mIdleTime = 0.0f;
     {
@@ -115,15 +114,6 @@ void CharacterController::ColissionDetection(Vector3f oldPos)
     }
 }
 
-void CharacterController::TriggerAnim(int index)
-{
-    if (mAnimController.IsTrigerred()) 
-        return;
-
-    mCurrentMovement = Vector2f::Zero();
-    mAnimController.TriggerAnim(index, 0.5f);
-}
-
 void CharacterController::Update(float deltaTime, bool isSponza)
 {
     Vector2f targetMovement = {0.0f, 0.0f};
@@ -179,15 +169,14 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     SmallMemCpy(posPtr, &mStartPos.x, sizeof(Vector3f));
     VecStore(rotPtr, mStartRotation);
 
+    const float animSpeed = 1.0f;
     mAnimController.EvaluateLocomotion(mCurrentMovement.x,
                                        mCurrentMovement.y,
-                                       mAnimSpeed);
+                                       animSpeed);
 
     isRunning |= GetKeyDown(Key_SHIFT);
     targetMovement.y += (float)isRunning;
-    float animAddition = (float)isRunning * 0.55f;
-    mAnimSpeed = Lerp(mAnimSpeed, 0.9f + animAddition, deltaTime);
-
+    
     const float smoothTime = 0.25f;
     mCurrentMovement.y = SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime); //
     mCurrentMovement.x = Lerp(mCurrentMovement.x, targetMovement.x, 4.0f * deltaTime);
@@ -205,34 +194,34 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         Quaternion targetRotation = QFromAxisAngle(MakeVec3(0.0f, 1.0f, 0.0f), x + PI);
         mRotation = QSlerp(mRotation, targetRotation, deltaTime * rotationSpeed);
     }
+    // float xLean = Clamp(mCurrentMovement.x * 0.01f, -0.1f, 0.1f);
+    // mRotation = QMul(QFromAxisAngle(MakeVec3(0.0f, 0.0f, 1.0f), xLean), mRotation);
+    mRotation = QMul(QFromAxisAngle(MakeVec3(1.0f, 0.0f, 0.0f), mCurrentMovement.y * 0.005f), mRotation);
 
     x += -inputAngle / 2.0f;
     // handle character position
     {   
-        int trigerredAnim = mAnimController.mTriggerredAnim;
-        bool isWalkJumping = trigerredAnim == mJumpWalkingIndex;
-        if (AX_LIKELY(mAnimController.mState == AnimState_Update || isWalkJumping))
-        {
-            Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
-            Vector3f progress = forward * -mCurrentMovement.Length() * mMovementSpeed * deltaTime;
-            Vector3f oldPos = mPosition;
-            mPosition += progress * mAnimSpeed * 1.5f;
-            
-            if (isSponza)
-                ColissionDetection(oldPos);
-        }
+        Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
+        Vector3f progress = forward * mMovementSpeed * deltaTime;
+        progress *= Clamp(-mCurrentMovement.LengthSafe(), -1.0f, targetMovement.y);
+        Vector3f oldPos = mPosition;
+        float runAddition = 1.0f + (float(isRunning) * 0.55f);
+        mPosition += progress * runAddition * 1.5f;
+        
+        if (isSponza)
+            ColissionDetection(oldPos);
         
         // animatedPos.y = 8.15f; // if you want to walk on top floor
         camera->targetPos = mPosition;
     }
 
     if (GetMousePressed(MouseButton_Left)) {
-        TriggerAnim(mAtackIndex);
+        mAnimController.TriggerAnim(mAtackIndex, 0.25f, true);
     }
 
     if (GetKeyPressed(Key_SPACE)) {
         int anim = mCurrentMovement.y > 0.15f ? mJumpWalkingIndex : mJumpIndex;
-        TriggerAnim(anim);
+        mAnimController.TriggerAnim(anim, 0.2f, false);
     }
 
     if (!mAnimController.IsTrigerred() && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f) 
@@ -245,12 +234,18 @@ void CharacterController::Update(float deltaTime, bool isSponza)
 
     if (GetKeyPressed('C'))
     {
-        TriggerAnim(mCrouchIndex);
+        mAnimController.TriggerAnim(mCrouchIndex, 1.0f, false);
+    }
+
+    if (mAnimController.IsTrigerred() &&
+        mAnimController.mTriggerredAnim == mCrouchIndex)
+    {
+        mCurrentMovement = Vector2f::Zero();
     }
 
     if (mIdleTime >= mIdleLimit)
     {
-        TriggerAnim(mIdle2Index);
+        mAnimController.TriggerAnim(mIdle2Index, 0.25f, true);
         mIdleTime = 0.0f;
         mIdleLimit = 6.0f + (Random::NextFloat01(Random::Seed32()) * 15.0f);
     }

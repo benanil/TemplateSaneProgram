@@ -61,7 +61,7 @@ float ShadowCalculation()
 void main()
 {
     lowp vec4 color = texture(uAlbedo, vTexCoords);
-    
+
     #if ALPHA_CUTOFF == 1
         if (color.a < 0.001)
             discard;

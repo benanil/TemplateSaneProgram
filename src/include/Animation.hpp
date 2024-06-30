@@ -13,6 +13,13 @@ struct Pose
     vec_t scale;
 };
 
+struct Matrix3x4f16
+{
+    half x[4];
+    half y[4];
+    half z[4];
+};
+
 enum eAnimLocation_
 {
     aLeft, aMiddle, aRight
@@ -35,10 +42,11 @@ constexpr int MaxBonePoses = 128; // make 192 or 256 if we use more joints
 struct AnimationController
 {
     Texture mMatrixTex;
-    int mRootNodeIndex;
     Prefab* mPrefab;
-    int mNumNodes;
     eAnimState mState;
+
+    int mRootNodeIndex;
+    int mNumNodes;
 
     Vector2f mAnimTime;
 
@@ -47,7 +55,28 @@ struct AnimationController
     float mTransitionTime; // trigger time
     float mCurTransitionTime; // trigger time
     int mLastAnim;
+    bool mTrigerredStanding;
     
+    ANode* mSpineNode; // < upper body root bone 
+    ANode* mNeckNode;
+
+    int mSpineNodeIdx; 
+    int mNeckNodeIdx;
+
+    // lower body bones are starting from 60th with Brute character
+    // used for animating diferrent animations for legs and uper body
+    // this value might change from character to character. 
+    // Maybe Add: automatic detect.
+    int lowerBodyIdxStart; 
+
+    // angle's recomended values are between (-PI/3, PI/3)
+    // calculate the angle between target and player, then clamp the value between the limits
+    // to enable spine or neck additive rotation you just have to set angle's any value which is not zero
+    float mSpineAngle;
+    float mNeckAngle;
+    Vector3f mSpineAxis; // < will rotate around this axis (normalized) default vec3::up
+    Vector3f mNeckAxis;  // < will rotate around this axis (normalized) default vec3::up
+
     // animation indexes to blend coordinates
     // Given xy blend coordinates, we will blend animations.
     // in typical animation system, the diagram should be like the diagran below.
@@ -61,6 +90,12 @@ struct AnimationController
     // two posses for blending
     Pose mAnimPoseA[MaxBonePoses]; // < the result bone array that we send to GPU
     Pose mAnimPoseB[MaxBonePoses]; // < used for blending between animations
+    
+    Pose mAnimPoseC[MaxBonePoses]; // < used for Upper Body begin
+    Pose mAnimPoseD[MaxBonePoses]; // < used for Upper Body end
+
+    Matrix4 mBoneMatrices[MaxBonePoses];
+    Matrix3x4f16 mOutMatrices[MaxBonePoses];
 
     void SetAnim(int x, int y, int index)
     {
@@ -90,16 +125,23 @@ struct AnimationController
     // play the given animation, norm is the animation progress between 0.0 and 1.0
     void PlayAnim(int index, float norm);
 
-    void TriggerAnim(int index, float triggerTime);
+    // trigger time is the animation transition time
+    // standing anims are animations that we can play when walking or running
+    void TriggerAnim(int animIndex, float triggerTime, bool standing = false);
 
+    // after this line all of the functions are private but feel free to use
     // upload to gpu. internal usage only for now
     void UploadAnimationPose(Pose* nodeMatrices);
     
-    void MixedAnim(Prefab* prefab, int IdxAnimA, int IdxAnimB, float normA, float normB, float blend);
+    void RecurseNodeMatrices(ANode* node, Matrix4 parentMatrix);
+
+    void UploadBoneMatrices();
+    
+    void UploadPoseUpperLower(Pose* lowerPose, Pose* uperPose);
 };
 
 // no constructors and deconstructors hehe
-void CreateAnimationController(Prefab* prefab, AnimationController* animController);
+void CreateAnimationController(Prefab* prefab, AnimationController* animController, bool humanoid = true);
 
 void ClearAnimationController(AnimationController* animController);
 

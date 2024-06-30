@@ -8,7 +8,7 @@
 
 #pragma once
 
-#define AX_ENABLE_LOGGING
+// #define AX_ENABLE_LOGGING
 
 #if defined(AX_ENABLE_LOGGING) || defined(_DEBUG) || defined(DEBUG) || defined(Debug)
 #ifdef __ANDROID__

@@ -1,15 +1,34 @@
-/*************************************************************************************
-*  Purpose: Importing Fonts, Creating font atlases and rendering Text                *
-*  Author : Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com                           *
-*  Note:                                                                             *
-*  if you want icons, font must have Unicode Block 'Miscellaneous Technical'         *
-*  I've analysed the european countries languages and alphabets                      *
-*  to support most used letters in European languages.                               *
-*  English, Turkish, German, Brazilian, Portuguese, Finnish, Swedish fully supported *
-*  for letters that are not supported in other nations I've used transliteration     *
-*  to get closest character. for now 12*12 = 144 character supported                 *
-*  each character is maximum 48x48px                                                 *
-**************************************************************************************/
+/*******************************************************************************************
+*                                                                                         *
+* Purpose:                                                                                *
+*     Immediate Mode Graphical Rendering System for rendering user interfaces             *
+*     Importing Fonts, Creating font atlases, rendering Text...                           *
+*     There are 3 type of rendering:                                                      *
+*         Quad Rendering: for quad shapes (lines, backgrounds, buttons etc.)              *
+*         Triangle Rendering: for rounded shapes (circle capsule etc.)                    *
+*         TextRenderer Rendering: its an single pass text batch renderer with atlas       *
+*     Quad and Text renderers works without Vertex or index buffers,                      *
+*     Storing per quad data in textures instead of per vertex data,                       *
+*     sending data to GPU every frame so less data is faster.                             *
+*     we are packing data in CPU and unpacking in the GPU.                                *
+*     Fixed Point float number used to store position data with 16 bit integers           *
+* Usage:                                                                                  *
+*     Position (0.0, 0.0) is starting point Top left corner when using UI functions       *
+*     be aware of that, Most of the functions are taking an position and scale,           *
+*     if you not define the scale some of the functions will automatically                *
+*     set the scale for you
+* Note:                                                                                   *
+*     if you want icons, font must have Unicode Block 'Miscellaneous Technical'           *
+*     I've analysed the european countries languages and alphabets                        *
+*     to support most used letters in European languages.                                 *
+*     English, Turkish, German, Brazilian, Portuguese, Finnish, Swedish fully supported   *
+*     for letters that are not supported in other nations I've used transliteration       *
+*     to get closest character. for now 12*12 = 144 character supported                   *
+*     each character is maximum 48x48px                                                   *
+*                                                                                         *
+* Author:                                                                                 *
+*     Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com                                      *
+*******************************************************************************************/
 
 #include "include/AssetManager.hpp" // for AX_GAME_BUILD macro
 
