@@ -75,6 +75,12 @@ enum uTextFlags_{
     uTextFlags_WrapWidthDetermined = 2,
 };
 
+enum CheckOpt_ { 
+    CheckOpt_WhileMouseDown = 1, 
+    CheckOpt_BigColission = 2 
+};
+
+typedef int uClickOpt;
 typedef uint FontHandle;
 typedef uint uColor;
 typedef uint uButtonOptions;
@@ -108,6 +114,9 @@ void uPopFloat(uFloat what);
 uint uGetColor(uColor color);
 float uGetFloat(uFloat what);
 bool uIsHovered(); // last button was hovered?
+
+bool ClickCheck(Vector2f pos, Vector2f scale, uClickOpt flags = 0);
+bool uClickCheckCircle(Vector2f pos, float radius, uClickOpt flags = 0);
 
 //
 float uToolTip(const char* text, float timeRemaining, bool wasHovered);

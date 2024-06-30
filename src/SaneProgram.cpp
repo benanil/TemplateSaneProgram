@@ -50,7 +50,7 @@ int AXStart()
         return 0;
     }
 
-    if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Brute/Brute.gltf", 1.0f))
+    if (!g_CurrentScene.ImportPrefab(&AnimatedPrefab, "Meshes/Paladin/Paladin.gltf", 1.0f))
     {
         AX_ERROR("gltf scene load failed2");
         return 0;
@@ -90,6 +90,8 @@ static bool pauseMenuOpened = false;
 void AXLoop(bool canRender)
 {
     using namespace SceneRenderer;
+    
+    uBegin(); // user interface begin
 
     // draw when we are playing game, don't render when using pause menu to save power
     if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
@@ -127,6 +129,8 @@ void AXLoop(bool canRender)
         DrawLastRenderedFrame();
     }
     pauseMenuOpened = ShowMenu(); // < from Menu.cpp
+    
+    uRender(); // < user interface end 
     // RenderScene(&FBXScene);
     // todo material system
 }

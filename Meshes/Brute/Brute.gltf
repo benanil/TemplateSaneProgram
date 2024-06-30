@@ -32779,13 +32779,6 @@
 	"materials":[
 		{
 			"doubleSided":true,
-			"extensions":{
-				"KHR_materials_specular":{
-					"specularTexture":{
-						"index":0
-					}
-				}
-			},
 			"name":"blinn7",
 			"normalTexture":{
 				"index":1
@@ -32793,6 +32786,9 @@
 			"pbrMetallicRoughness":{
 				"baseColorTexture":{
 					"index":2
+				},
+				"metallicRoughnessTexture":{
+					"index":0
 				},
 				"metallicFactor":0,
 				"roughnessFactor":0.5527864098548889
@@ -32846,13 +32842,6 @@
 		},
 		{
 			"doubleSided":true,
-			"extensions":{
-				"KHR_materials_specular":{
-					"specularTexture":{
-						"index":7
-					}
-				}
-			},
 			"name":"MaleBruteA_Bottom5",
 			"normalTexture":{
 				"index":8
@@ -32860,6 +32849,9 @@
 			"pbrMetallicRoughness":{
 				"baseColorTexture":{
 					"index":9
+				},
+			    "metallicRoughnessTexture":{
+					"index":7
 				},
 				"metallicFactor":0.5,
 				"roughnessFactor":0.5527864098548889
@@ -32935,13 +32927,6 @@
 		{
 			"alphaMode":"BLEND",
 			"doubleSided":true,
-			"extensions":{
-				"KHR_materials_specular":{
-					"specularTexture":{
-						"index":13
-					}
-				}
-			},
 			"name":"MaleBruteA_Hair6",
 			"normalTexture":{
 				"index":14
@@ -32950,6 +32935,9 @@
 				"baseColorTexture":{
 					"index":15
 				},
+				"metallicRoughnessTexture":{
+					"index":13
+				},
 				"metallicFactor":0,
 				"roughnessFactor":0.5527864098548889
 			}
@@ -32957,13 +32945,6 @@
 		{
 			"alphaMode":"BLEND",
 			"doubleSided":true,
-			"extensions":{
-				"KHR_materials_specular":{
-					"specularTexture":{
-						"index":16
-					}
-				}
-			},
 			"name":"MaleBruteA_Moustache5",
 			"normalTexture":{
 				"index":17
@@ -32972,19 +32953,16 @@
 				"baseColorTexture":{
 					"index":18
 				},
+				"metallicRoughnessTexture":{
+					"index":16
+				},
 				"metallicFactor":0,
 				"roughnessFactor":0.5527864098548889
 			}
 		},
 		{
 			"doubleSided":true,
-			"extensions":{
-				"KHR_materials_specular":{
-					"specularTexture":{
-						"index":19
-					}
-				}
-			},
+			
 			"name":"MaleBruteA_Shoes6",
 			"normalTexture":{
 				"index":20
@@ -32992,6 +32970,9 @@
 			"pbrMetallicRoughness":{
 				"baseColorTexture":{
 					"index":21
+				},
+				"metallicRoughnessTexture":{
+					"index":19
 				},
 				"metallicFactor":0.5,
 				"roughnessFactor":0.5527864098548889

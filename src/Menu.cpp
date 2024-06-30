@@ -306,8 +306,6 @@ static void TriangleTest()
 
 bool ShowMenu()
 {
-    uBegin();
-    
     TriangleTest();
 
     ShowFPS();
@@ -354,6 +352,5 @@ bool ShowMenu()
         pauseMenuOpenned = true;
     }
 
-    uRender();
     return pauseMenuOpenned;
 }

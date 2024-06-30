@@ -33,6 +33,8 @@ struct Prefab : public SceneBundle
         return node;
     }
 
+    static int FindAnimRootNodeIndex(Prefab* prefab);
+    static int FindNodeFromName(Prefab* prefab, const char* name);
 };
 
 typedef ushort PrefabID;

@@ -76,8 +76,8 @@ float16 V_Neubelt(float16 NoV, float16 NoL) {
 }
 
 float16 F_Schlick(float16 u, half3 albedo, float16 metallic) {
-    float16 F0 = 0.08;
-    F0 = mix(F0, dot(albedo, vec3(0.33333)), metallic);
+    float16 F0 = 0.04;
+    F0 = mix(F0, dot(albedo, vec3(0.333333)), metallic);
     float16 x = 1.0 - u;
     return F0 + (1.0 - F0) * (x * x * x * x); // * x
 }

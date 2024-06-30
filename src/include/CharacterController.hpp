@@ -3,6 +3,7 @@
 
 #include "Animation.hpp"
 #include "Scene.hpp"
+#include "../../ASTL/Random.hpp"
 
 struct CharacterController
 {
@@ -30,16 +31,20 @@ struct CharacterController
     int mAtackIndex;
     int mIdle2Index;
     int mJumpIndex;
-    int mJumpWalkingIndex;
-    int mCrouchIndex;
+    int mKickIndex;
+    int mImpactIndex;
 
     float mIdleTime;
     float mIdleLimit;
+
+    uint mRandomState;
 
 //------------------------------------------------------------------------
     void Start(Prefab* _character);
 
     void Update(float deltaTime, bool isSponza);
+    
+    void RespondInput();
 
     void ColissionDetection(Vector3f oldPos);
     

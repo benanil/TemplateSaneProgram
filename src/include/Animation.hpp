@@ -141,11 +141,9 @@ struct AnimationController
 };
 
 // no constructors and deconstructors hehe
-void CreateAnimationController(Prefab* prefab, AnimationController* animController, bool humanoid = true);
+void CreateAnimationController(Prefab* prefab, AnimationController* animController, bool humanoid = true, int lowerBodyStart = 58);
 
 void ClearAnimationController(AnimationController* animController);
-
-int FindRootNodeIndex(Prefab* prefab);
 
 // does nothing for now
 [[maybe_unused]] void StartAnimationSystem();

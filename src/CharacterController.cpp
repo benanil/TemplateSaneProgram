@@ -1,5 +1,5 @@
 
-#include <math.h>
+#include <math.h> // atan2f
 
 #include "include/CharacterController.hpp"
 #include "include/Platform.hpp"
@@ -13,11 +13,9 @@ static int FindAnimIndex(Prefab* prefab, const char* name)
 {
     int len = StringLength(name);
     for (int i = 0; i < prefab->numAnimations; i++)
-    {
         if (StringEqual(prefab->animations[i].name, name, len))
             return i;
-    }
-    ASSERT(0);
+    AX_WARN("couldn't find animation from name %s", name);
     return 0;
 }
 
@@ -32,14 +30,16 @@ void CharacterController::Start(Prefab* _character)
     // we don't need to set zero the poses
     constexpr size_t poseSize = sizeof(AnimationController::mAnimPoseA) + sizeof(AnimationController::mAnimPoseB);
     MemsetZero(&mAnimController, sizeof(AnimationController) - poseSize);
-    CreateAnimationController(_character, &mAnimController);
+    CreateAnimationController(_character, &mAnimController, true, 58);
     
+    mRandomState = Random::Seed32();
+
     mPosition.y = -0.065f; // make foots touch the ground
     mMovementSpeed = 2.7f;
     mIdleLimit = 8.0f;
     mIdleTime = 0.0f;
     {
-        mRootNodeIdx = FindRootNodeIndex(_character);
+        mRootNodeIdx = Prefab::FindAnimRootNodeIndex(_character);
         float* posPtr = _character->nodes[mRootNodeIdx].translation;
         float* rotPtr = _character->nodes[mRootNodeIdx].rotation;
     
@@ -49,18 +49,18 @@ void CharacterController::Start(Prefab* _character)
     
     int a_idle           = FindAnimIndex(_character, "Idle");
     int a_walk           = FindAnimIndex(_character, "Walk");
-    int a_jog_forward    = FindAnimIndex(_character, "Jog_Forward");
+    int a_jog_forward    = FindAnimIndex(_character, "Run");
     int a_jog_backward   = a_jog_forward; // FindAnimIndex(_character, "Jog_Backward");
-    int a_diagonal_left  = FindAnimIndex(_character, "Jog_Forward_Left");
-    int a_diagonal_right = FindAnimIndex(_character, "Jog_Forward_Right");
-    int a_strafe_left    = FindAnimIndex(_character, "Strafe_Left");
-    int a_strafe_right   = FindAnimIndex(_character, "Strafe_Right");
+    // int a_diagonal_left  = FindAnimIndex(_character, "Jog_Forward_Left");
+    // int a_diagonal_right = FindAnimIndex(_character, "Jog_Forward_Right");
+    int a_strafe_left    = FindAnimIndex(_character, "StrafeLeft");
+    int a_strafe_right   = a_strafe_left;
 
-    mAtackIndex  = FindAnimIndex(_character, "Sword_Attack");
-    mIdle2Index  = FindAnimIndex(_character, "Idle_Look_Around");
+    mAtackIndex  = FindAnimIndex(_character, "Slash2");
+    mIdle2Index  = FindAnimIndex(_character, "Idle2");
     mJumpIndex   = FindAnimIndex(_character, "Jump");
-    mCrouchIndex = FindAnimIndex(_character, "Crouch");
-    mJumpWalkingIndex  = FindAnimIndex(_character, "Jump_Walking");
+    mImpactIndex = FindAnimIndex(_character, "Impact");
+    mKickIndex   = FindAnimIndex(_character, "Kick");
 
     // idle, left&right strafe
     mAnimController.SetAnim(aLeft  , 0, a_strafe_left);
@@ -71,20 +71,20 @@ void CharacterController::Start(Prefab* _character)
     mAnimController.SetAnim(aMiddle, 2, a_jog_forward);
 
     // set second row to idle 
-    mAnimController.SetAnim(aLeft  , 1, a_diagonal_left);
-    mAnimController.SetAnim(aRight , 1, a_diagonal_right);
+    mAnimController.SetAnim(aLeft  , 1, a_jog_forward);//a_diagonal_left);
+    mAnimController.SetAnim(aRight , 1, a_jog_forward);//a_diagonal_right);
                                     
     // set first row to idle        
-    mAnimController.SetAnim(aLeft  , 0, a_diagonal_left);
-    mAnimController.SetAnim(aRight , 0, a_diagonal_right);
+    mAnimController.SetAnim(aLeft  , 0, a_jog_forward);//a_diagonal_left);
+    mAnimController.SetAnim(aRight , 0, a_jog_forward);//a_diagonal_right);
  
     // copy first row to inverse first row
     SmallMemCpy(mAnimController.mLocomotionIndicesInv[0],
                 mAnimController.mLocomotionIndices[0], sizeof(int) * 5);
 
-    mAnimController.SetAnim(aLeft  , -1, a_diagonal_left);
+    mAnimController.SetAnim(aLeft  , -1, a_jog_forward); //a_diagonal_left);
     mAnimController.SetAnim(aMiddle, -1, a_jog_backward);
-    mAnimController.SetAnim(aRight , -1, a_diagonal_right);
+    mAnimController.SetAnim(aRight , -1, a_jog_forward);//a_diagonal_right);
 }
 
 void CharacterController::ColissionDetection(Vector3f oldPos)
@@ -112,6 +112,52 @@ void CharacterController::ColissionDetection(Vector3f oldPos)
         // set z position to old position and add opposite direction movement
         mPosition.z = oldPos.z + xDiff;
     }
+}
+
+void CharacterController::RespondInput()
+{
+#ifndef PLATFORM_ANDROID
+    if (GetMousePressed(MouseButton_Left)) {
+        mAnimController.TriggerAnim(mAtackIndex, 0.25f, true);
+    }
+
+    if (GetKeyPressed(Key_SPACE)) {
+        mAnimController.TriggerAnim(mJumpIndex, 0.2f, false);
+    }
+
+    if (GetKeyPressed('F')) {
+        mAnimController.TriggerAnim(mKickIndex, 0.25f, false);
+    }
+
+    if (GetKeyPressed('C')) {
+        mAnimController.TriggerAnim(mImpactIndex, 1.0f, false);
+    }
+#else
+    Vector2f pos = { 1731.0f, 840.0f };
+    const float buttonSize = 40.0f;
+    const float buttonPadding = 120.0f;
+    constexpr uint effect = uFadeBit | uEmptyInsideBit | uFadeInvertBit | uIntenseFadeBit;
+    uCircle(pos, buttonSize, ~0, effect);
+    if (uClickCheckCircle(pos, buttonSize))
+    {
+        mAnimController.TriggerAnim(mAtackIndex, 0.25f, true);
+    }
+
+    pos.x -= buttonPadding;
+    uCircle(pos, buttonSize, ~0, effect);
+    if (uClickCheckCircle(pos, buttonSize))
+    {
+        mAnimController.TriggerAnim(mKickIndex, 0.2f, false);
+    }
+
+    pos.x += buttonPadding;
+    pos.y -= buttonPadding;
+    uCircle(pos, buttonSize, ~0, effect);
+    if (uClickCheckCircle(pos, buttonSize))
+    {
+        mAnimController.TriggerAnim(mImpactIndex, 0.25f, false);
+    }
+#endif
 }
 
 void CharacterController::Update(float deltaTime, bool isSponza)
@@ -193,10 +239,10 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         const float rotationSpeed = 12.0f;
         Quaternion targetRotation = QFromAxisAngle(MakeVec3(0.0f, 1.0f, 0.0f), x + PI);
         mRotation = QSlerp(mRotation, targetRotation, deltaTime * rotationSpeed);
+        mRotation = QMul(QFromXAngle(mCurrentMovement.y * 0.005f), mRotation);
     }
-    // float xLean = Clamp(mCurrentMovement.x * 0.01f, -0.1f, 0.1f);
-    // mRotation = QMul(QFromAxisAngle(MakeVec3(0.0f, 0.0f, 1.0f), xLean), mRotation);
-    mRotation = QMul(QFromAxisAngle(MakeVec3(1.0f, 0.0f, 0.0f), mCurrentMovement.y * 0.005f), mRotation);
+
+    // mRotation = QMul(QFromZAngle(mCurrentMovement.x * 0.2f), mRotation);
 
     x += -inputAngle / 2.0f;
     // handle character position
@@ -215,16 +261,9 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         camera->targetPos = mPosition;
     }
 
-    if (GetMousePressed(MouseButton_Left)) {
-        mAnimController.TriggerAnim(mAtackIndex, 0.25f, true);
-    }
+    RespondInput();
 
-    if (GetKeyPressed(Key_SPACE)) {
-        int anim = mCurrentMovement.y > 0.15f ? mJumpWalkingIndex : mJumpIndex;
-        mAnimController.TriggerAnim(anim, 0.2f, false);
-    }
-
-    if (!mAnimController.IsTrigerred() && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f) 
+    if (!mAnimController.IsTrigerred() && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f)
     {
         mIdleTime += deltaTime;
     }
@@ -232,13 +271,9 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         mIdleTime = 0.0f;
     }
 
-    if (GetKeyPressed('C'))
-    {
-        mAnimController.TriggerAnim(mCrouchIndex, 1.0f, false);
-    }
-
     if (mAnimController.IsTrigerred() &&
-        mAnimController.mTriggerredAnim == mCrouchIndex)
+       (mAnimController.mTriggerredAnim == mImpactIndex || 
+        mAnimController.mTriggerredAnim == mKickIndex))
     {
         mCurrentMovement = Vector2f::Zero();
     }
@@ -247,7 +282,7 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     {
         mAnimController.TriggerAnim(mIdle2Index, 0.25f, true);
         mIdleTime = 0.0f;
-        mIdleLimit = 6.0f + (Random::NextFloat01(Random::Seed32()) * 15.0f);
+        mIdleLimit = 6.0f + (Random::NextFloat01(Random::PCG2Next(mRandomState)) * 15.0f);
     }
 
     VecStore(rotPtr, mRotation);

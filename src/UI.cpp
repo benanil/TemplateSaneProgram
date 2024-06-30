@@ -144,7 +144,9 @@ namespace
     FontAtlas* mCurrentFontAtlas;
     int mNumFontAtlas = 0;
 
-    Vector2f mWindowRatio; // ratio against 1920x1080, [1.0, 1.0] if 1080p 0.5 if half of it, 2.0 if two times bigger
+    // ratio against 1920x1080, [1.0, 1.0] if 1080p 0.5 if half of it, 2.0 if two times bigger
+    // aspect ratio fixer thingy
+    Vector2f mWindowRatio;
     float mUIScale; // min(mWindowRatio.x, mWindowRatio.y)
 
     Vector2f mMouseOld;
@@ -971,10 +973,7 @@ void uQuad(Vector2f position, Vector2f scale, uint color, uint properties)
     quadData->cutStart = 0xFF & (properties >> 8);
 }
 
-enum CheckOpt_ { CheckOpt_WhileMouseDown = 1, CheckOpt_BigColission = 2 };
-typedef int CheckOpt;
-
-static bool ClickCheck(Vector2f pos, Vector2f scale, CheckOpt flags = 0)
+bool uClickCheck(Vector2f pos, Vector2f scale, uClickOpt flags = 0)
 {
     Vector2f mousePos;
     GetMouseWindowPos(&mousePos.x, &mousePos.y);
@@ -991,6 +990,23 @@ static bool ClickCheck(Vector2f pos, Vector2f scale, CheckOpt flags = 0)
     Vector2f scaledScale = scale * mWindowRatio;
     bool released = GetMouseReleased(MouseButton_Left);
     mWasHovered = PointBoxIntersection(scaledPos, scaledPos + scaledScale, mousePos);
+    mAnyElementClicked |= mWasHovered && released;
+
+    if (!!(flags & CheckOpt_WhileMouseDown) && 
+        GetMouseDown(MouseButton_Left)) 
+        return mWasHovered;
+
+    return mWasHovered && released;
+}
+
+bool uClickCheckCircle(Vector2f pos, float radius, uClickOpt flags)
+{
+    Vector2f mousePos;
+    GetMouseWindowPos(&mousePos.x, &mousePos.y);
+    
+    Vector2f scaledPos = pos * mWindowRatio;
+    bool released = GetMouseReleased(MouseButton_Left) || GetMouseReleased(MouseButton_Right);
+    mWasHovered = Vector2f::Distance(scaledPos, mousePos) < radius * mUIScale;
     mAnyElementClicked |= mWasHovered && released;
 
     if (!!(flags & CheckOpt_WhileMouseDown) && 
@@ -1048,7 +1064,7 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     }
     bool elementFocused = uGetElementFocused();
     bool entered = elementFocused && GetKeyPressed(Key_ENTER);
-    bool pressed = entered || ClickCheck(pos, scale);
+    bool pressed = entered || uClickCheck(pos, scale);
     if (pressed) PlayButtonClickSound();
 
     uint quadColor = uGetColor(uColorQuad);
@@ -1099,7 +1115,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
     
     bool enabled = *isEnabled;
     bool entered = elementFocused && GetKeyPressed(Key_ENTER);
-    if (entered || ClickCheck(pos, boxScale, CheckOpt_BigColission)) {
+    if (entered || uClickCheck(pos, boxScale, CheckOpt_BigColission)) {
         enabled = !enabled;
         PlayButtonClickSound();
     }
@@ -1223,7 +1239,7 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
-    bool clicked = ClickCheck(pos, size);
+    bool clicked = uClickCheck(pos, size);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     bool elementFocused = uGetElementFocused();
@@ -1314,7 +1330,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
-    bool clicked = ClickCheck(pos, size);
+    bool clicked = uClickCheck(pos, size);
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
 
@@ -1359,7 +1375,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
         for (int i = 0; i < numNames; i++)
         {
             uText(names[i], textPos, uTextFlags_NoNewLine);
-            clicked = ClickCheck(pos, size);
+            clicked = uClickCheck(pos, size);
             
             if (mWasHovered) {
                 uQuad(pos, size, uGetColor(uColorHovered));
@@ -1409,9 +1425,9 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     //pos.y -= size.y * 0.1f; // < move triangles little bit up
     pos.x += arrowSize.x * 0.41f;
 
-    const CheckOpt chkOpt = CheckOpt_BigColission;
+    const uClickOpt chkOpt = CheckOpt_BigColission;
     bool goLeft = elementFocused && GetKeyPressed(Key_LEFT);
-    if (ClickCheck(pos, arrowSize, chkOpt) || goLeft)
+    if (uClickCheck(pos, arrowSize, chkOpt) || goLeft)
     {
         PlayButtonHoverSound();
         if (current > 0) current--;
@@ -1425,7 +1441,7 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     uHorizontalTriangle(pos, arrowSize.x * 0.82f, 0.8f, iconColor);
     
     bool goRight = elementFocused && GetKeyPressed(Key_RIGHT);
-    if (ClickCheck(pos, arrowSize, chkOpt) || goRight)
+    if (uClickCheck(pos, arrowSize, chkOpt) || goRight)
     {
         PlayButtonHoverSound();
         if (current < numNames-1) current++;
@@ -1449,7 +1465,7 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     uBorder(pos, size);
     uPopColor(uColorBorder);
 
-    bool edited = ClickCheck(pos, size, CheckOpt_WhileMouseDown);
+    bool edited = uClickCheck(pos, size, CheckOpt_WhileMouseDown);
     
     // fix: doesn't work with different scales
     if (edited && elementFocused) {
@@ -1492,7 +1508,7 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int ma
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
-    bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
+    bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     bool elementFocused = uGetElementFocused();
@@ -1578,7 +1594,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
-    bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
+    bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
     uQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     bool elementFocused = uGetElementFocused();
@@ -1790,7 +1806,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
-    bool clicked = ClickCheck(pos, size, CheckOpt_BigColission);
+    bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
     uQuad(pos, size, *colorPtr);
 
     bool elementFocused = uGetElementFocused();
@@ -1843,7 +1859,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
         alphaSize.x *= 0.12f;
         alphaSize.y *= 0.88f;
 
-        if (ClickCheck(alphaPos, alphaSize, CheckOpt_WhileMouseDown))
+        if (uClickCheck(alphaPos, alphaSize, CheckOpt_WhileMouseDown))
         {
             edited = true;
             mousePos -= alphaPos * mWindowRatio; 
@@ -1863,7 +1879,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
         Vector2f svSize = mColorPick.size;
         svSize *= 0.88f;
 
-        if (ClickCheck(svPosition, svSize, CheckOpt_WhileMouseDown))
+        if (uClickCheck(svPosition, svSize, CheckOpt_WhileMouseDown))
         {
             edited = true;
             mousePos -= svPosition * mWindowRatio; 
@@ -1878,7 +1894,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
         hueSize.y *= 0.12f;
         huePosition.y += mColorPick.size.y - hueSize.y; // start of hue select
 
-        if (ClickCheck(huePosition, hueSize, CheckOpt_WhileMouseDown))
+        if (uClickCheck(huePosition, hueSize, CheckOpt_WhileMouseDown))
         {
             edited = true;
             mousePos -= huePosition * mWindowRatio;
@@ -1995,7 +2011,11 @@ void uCircle(Vector2f center, float radius, uint color, uint32 properties)
     else
         numSegments = (int)(10.0f / (radius / 30.0f)) * 2; // < auto detect
 
-    Vector2f posPrev  = { center.x, center.y - radius};
+    Vector2f posPrev  = { 0.0f, -1.0f};
+    posPrev *= mWindowRatio; // < correct aspect ratio
+    posPrev *= radius;
+    posPrev += center;
+
     uint8 hasInvertFade = 255 * !!(properties & uFadeInvertBit); // if has invert this is 255 otherwise 0
     uint8    fadePrev = hasInvertFade;
 
@@ -2003,9 +2023,11 @@ void uCircle(Vector2f center, float radius, uint color, uint32 properties)
     {
         float t = TwoPI * (i / float(numSegments));
         Vector2f posNew = { -Sin(t), -Cos(t) };
-        uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
+        posNew *= mWindowRatio; // < correct aspect ratio
+
         posNew *= radius;
         posNew += center;
+        
         if (properties & uEmptyInsideBit) {
             uVertex(center ,  hasInvertFade, color, properties);
             uVertex(posPrev, ~hasInvertFade, color, properties);
@@ -2013,13 +2035,14 @@ void uCircle(Vector2f center, float radius, uint color, uint32 properties)
         }
         else
         {
+            uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
             fadeNew = hasInvertFade ? 255-fadeNew : fadeNew;
             uVertex(center , fadeNew, color, properties);
             uVertex(posPrev, fadePrev, color, properties);
             uVertex(posNew , fadeNew, color, properties);
+            fadePrev = fadeNew;
         }
         posPrev = posNew;
-        fadePrev = fadeNew;
     }
 }
 
@@ -2371,7 +2394,7 @@ void uRender()
         mLastFloatWriting = false, mFloatDigits = 3;
 
     bool released = GetMouseReleased(1);
-    if (mColorPick.isOpen && released && !ClickCheck(mColorPick.pos, mColorPick.size, CheckOpt_BigColission))
+    if (mColorPick.isOpen && released && !uClickCheck(mColorPick.pos, mColorPick.size, CheckOpt_BigColission))
     {
         mColorPick.isOpen = false;
     }

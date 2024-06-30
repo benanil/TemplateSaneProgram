@@ -9,6 +9,7 @@ layout(location = 5) in lowp    vec4  aWeights;
 out mediump vec2 vTexCoords;
 out highp   vec4 vLightSpaceFrag;
 out lowp    mat3 vTBN;
+// out flat    lowp int  vBoneIdx;
 
 uniform highp mat4 uModel;
 uniform highp mat4 uLightMatrix;
@@ -25,6 +26,7 @@ void main()
 {
     highp mat4 model = uModel;
 
+    // vBoneIdx = -1;
     if (uHasAnimation > 0) 
     {
         mediump mat4 animMat = mat4(0.0);
@@ -37,7 +39,7 @@ void main()
             animMat[1] += texelFetch(uAnimTex, ivec2(matIdx + 1, 0), 0) * aWeights[i];
             animMat[2] += texelFetch(uAnimTex, ivec2(matIdx + 2, 0), 0) * aWeights[i]; 
         }
-        
+        // vBoneIdx = int(aJoints[0]);
         model = model * transpose(animMat);
     }
 

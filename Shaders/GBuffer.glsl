@@ -10,6 +10,7 @@ layout(location = 2) out lowp float oRoughness; // TextureType_R8
 in mediump vec2 vTexCoords;
 in highp   vec4 vLightSpaceFrag;
 in lowp    mat3 vTBN;
+// in flat lowp int  vBoneIdx;
 
 uniform lowp sampler2D uAlbedo;
 uniform lowp sampler2D uNormalMap;
@@ -80,10 +81,13 @@ void main()
         normal  = normalize(vTBN * normal);  // this normal is in tangent space
     }
     #endif
+
     lowp vec2 metallicRoughness = texture(uMetallicRoughnessMap, vTexCoords).rg;
     color.w = ShadowCalculation();
     oRoughness = metallicRoughness.y;
     oFragColorShadow = color;
     oNormalMetallic.xyz = normalize(normal) + vec3(1.0) * vec3(0.5); // convert to 0-1 range
     oNormalMetallic.w = metallicRoughness.x;
+    // if (vBoneIdx > 58)
+    //     oFragColorShadow = vec4(1.0);
 }

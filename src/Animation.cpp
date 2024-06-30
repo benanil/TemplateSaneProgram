@@ -3,59 +3,15 @@
 #include "include/Scene.hpp"
 #include "include/SceneRenderer.hpp"
 #include "include/Platform.hpp"
-#include "../ASTL/String.hpp" // StrCmp16
 
+// todo play animation reversely
 
 void StartAnimationSystem()
 { }
 
-int FindRootNodeIndex(Prefab* prefab)
-{
-    if (prefab->skins == nullptr)
-        return 0;
-
-    ASkin skin = prefab->skins[0];
-    if (skin.skeleton != -1) 
-        return skin.skeleton;
-    
-    // search for Armature name, and also record the node that has most children
-    int armatureIdx = -1;
-    int maxChilds   = 0;
-    int maxChildIdx = 0;
-    // maybe recurse to find max children
-    for (int i = 0; i < prefab->numNodes; i++)
-    {
-        if (StrCMP16(prefab->nodes[i].name, "Armature")) {
-            armatureIdx = i;
-            break;
-        }
-    
-        int numChildren = prefab->nodes[i].numChildren;
-        if (numChildren > maxChilds) {
-            maxChilds = numChildren;
-            maxChildIdx = i;
-        }
-    }
-    
-    int skeletonNode = armatureIdx != -1 ? armatureIdx : maxChildIdx;
-    return skeletonNode;
-}
-
-static int FindNodeIndex(Prefab* prefab, const char* name)
-{
-    int len = StringLength(name);
-    for (int i = 0; i < prefab->numNodes; i++)
-    {
-        if (StringEqual(prefab->nodes[i].name, name, len))
-            return i;
-    }
-    ASSERT(0);
-    return 0;
-}
-
 static void SetBoneNode(Prefab* prefab, ANode*& node, int& index, const char* name)
 {
-    index = FindNodeIndex(prefab, name);
+    index = Prefab::FindNodeFromName(prefab, name);
     node = &prefab->nodes[index];
 }
 
@@ -70,19 +26,19 @@ __forceinline Matrix4 GetNodeMatrix(ANode* node)
     return Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale);
 }
 
-void CreateAnimationController(Prefab* prefab, AnimationController* result, bool humanoid)
+void CreateAnimationController(Prefab* prefab, AnimationController* result, bool humanoid, int lowerBodyStart)
 {
     ASkin* skin = &prefab->skins[0];
-    ASSERTR(skin != nullptr, AX_LOG("skin is null"); return);
-    ASSERTR(skin->numJoints < MaxBonePoses, AX_LOG("number of joints is greater than max capacity"); return);
+    ASSERTR(skin != nullptr, AX_WARN("skin is null"); return);
+    ASSERTR(skin->numJoints < MaxBonePoses, AX_WARN("number of joints is greater than max capacity"); return);
 
     result->mMatrixTex = rCreateTexture(skin->numJoints*3, 1, nullptr, TextureType_RGBA16F, TexFlags_RawData);
-    result->mRootNodeIndex = FindRootNodeIndex(prefab);
+    result->mRootNodeIndex = Prefab::FindAnimRootNodeIndex(prefab);
     result->mPrefab = prefab;
     result->mState = AnimState_Update;
     result->mNumNodes = prefab->numNodes;
     result->mTrigerredNorm = 0.0f;
-    result->lowerBodyIdxStart = 60;
+    result->lowerBodyIdxStart = lowerBodyStart;
 
     ASSERT(result->mRootNodeIndex < MaxBonePoses);
     ASSERT(prefab->GetNodePtr(result->mRootNodeIndex)->numChildren > 0); // root node has to have children nodes
@@ -118,9 +74,9 @@ static void MergeAnims(Pose* pose0, Pose* pose1, float animBlend, int numNodes)
     for (int i = 0; i < numNodes; i++)
     {
         pose0[i].translation = VecLerp(pose0[i].translation, pose1[i].translation, animBlend);
-        pose0[i].scale       = VecLerp(pose0[i].scale, pose1[i].scale, animBlend);
+        // pose0[i].scale       = VecLerp(pose0[i].scale, pose1[i].scale, animBlend);
         
-        vec_t q = QSlerp(pose0[i].rotation, pose1[i].rotation, animBlend); // QNLerp
+        vec_t q = QNLerp(pose0[i].rotation, pose1[i].rotation, animBlend); // QSlerp
         pose0[i].rotation = QNormEst(q);
     }
 }
@@ -132,7 +88,7 @@ static void InitNodes(ANode* nodes, Pose* pose, int begin, int numNodes)
     {
         VecStore(nodes[i].translation, pose[i].translation);
         VecStore(nodes[i].rotation, pose[i].rotation);
-        VecStore(nodes[i].scale, pose[i].scale);
+        // VecStore(nodes[i].scale, pose[i].scale);
     }
 }
 
@@ -142,7 +98,7 @@ static void InitPose(Pose* pose, ANode* nodes, int numNodes)
     {
         pose[i].translation = VecLoad(nodes[i].translation);
         pose[i].rotation    = VecLoad(nodes[i].rotation);
-        pose[i].scale       = VecLoad(nodes[i].scale);
+        // pose[i].scale       = VecLoad(nodes[i].scale);
     }
 }
 
@@ -213,16 +169,16 @@ void AnimationController::UploadAnimationPose(Pose* pose)
     InitNodes(mPrefab->nodes, pose, 0, mPrefab->numNodes);
 
     ANode* rootNode = mPrefab->GetNodePtr(mRootNodeIndex);
-    Matrix4 rootMatrix = GetNodeMatrix(rootNode);
-    mBoneMatrices[mRootNodeIndex] = rootMatrix;
+    mBoneMatrices[mRootNodeIndex] = GetNodeMatrix(rootNode);
 
-    RecurseNodeMatrices(rootNode, rootMatrix);
+    RecurseNodeMatrices(rootNode, mBoneMatrices[mRootNodeIndex]);
     UploadBoneMatrices();
 }
 
 // when we want to play different animations with lower body and upper body
 void AnimationController::UploadPoseUpperLower(Pose* lowerPose, Pose* uperPose)
 {
+    // apply posess to lower body and upper body seperately, so both of it has diferrent animations
     InitNodes(mPrefab->nodes, lowerPose, lowerBodyIdxStart, mPrefab->numNodes - lowerBodyIdxStart);
     InitNodes(mPrefab->nodes, uperPose, 0, lowerBodyIdxStart);
 
@@ -313,52 +269,46 @@ void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
     }
     
     // if trigerred animation is not standing, we don't have to sample walking or running animations
-    if (IsTrigerred() && !mTrigerredStanding)
-        goto walk_run_end;
-
-    // play and blend walking and running anims
-    y = Abs(y);
-    float yBlend = Fract(y);
-    
-    int yi = int(y);
-    // sample y anim
-    ASSERTR(yi <= 3, return); // must be between 1 and 4
-    int sign = Sign(yi);
-    int yIndex = GetAnim(aMiddle, yi);
-    AAnimation* animStart = &mPrefab->animations[yIndex];
-    
-    SampleAnimationPose(mAnimPoseA, animStart, mAnimTime.y, mPrefab->nodes, mNumNodes);
-    
-    bool shouldAnimBlendY = yi != 3 && yBlend > 0.00002f;
-    if (shouldAnimBlendY)
+    if (!IsTrigerred() || (IsTrigerred() && mTrigerredStanding))
     {
-        yIndex = GetAnim(aMiddle, yi + sign);
-        AAnimation* animEnd = &mPrefab->animations[yIndex];
-        SampleAnimationPose(mAnimPoseB, animEnd, mAnimTime.y, mPrefab->nodes, mNumNodes);
-        MergeAnims(mAnimPoseA, mAnimPoseB, EaseOut(yBlend), mNumNodes);
+        // play and blend walking and running anims
+        y = Abs(y);
+        float yBlend = Fract(y);
+
+        int yi = int(y);
+        // sample y anim
+        ASSERTR(yi <= 3, return); // must be between 1 and 4
+        int sign = Sign(yi);
+        int yIndex = GetAnim(aMiddle, yi);
+        AAnimation* animStart = &mPrefab->animations[yIndex];
+
+        SampleAnimationPose(mAnimPoseA, animStart, mAnimTime.y, mPrefab->nodes, mNumNodes);
+
+        bool shouldAnimBlendY = yi != 3 && yBlend > 0.00002f;
+        if (shouldAnimBlendY)
+        {
+            yIndex = GetAnim(aMiddle, yi + sign);
+            AAnimation* animEnd = &mPrefab->animations[yIndex];
+            SampleAnimationPose(mAnimPoseB, animEnd, mAnimTime.y, mPrefab->nodes, mNumNodes);
+            MergeAnims(mAnimPoseA, mAnimPoseB, EaseOut(yBlend), mNumNodes);
+        }
+
+        // if anim is two seconds animStep is 0.5 because we are using normalized value
+        float yAnimStep = 1.0f / mPrefab->animations[yIndex].duration;
+        mAnimTime.y += animSpeed * yAnimStep * deltaTime;
+        mAnimTime.y  = Fract(mAnimTime.y);
+
+        mLastAnim = yIndex;
     }
-    
-    // if anim is two seconds animStep is 0.5 because we are using normalized value
-    float yAnimStep = 1.0f / mPrefab->animations[yIndex].duration;
-    mAnimTime.y += animSpeed * yAnimStep * deltaTime;
-    mAnimTime.y  = Fract(mAnimTime.y);
-    
-    mLastAnim = yIndex;
 
     if (!IsTrigerred()) {
         UploadAnimationPose(mAnimPoseA);
     }
-    else 
-    {
-        walk_run_end:{}
+    else {
         if (mTrigerredStanding)
-        {
             UploadPoseUpperLower(mAnimPoseA, mAnimPoseC);
-        }
         else
-        {
             UploadAnimationPose(mAnimPoseC);
-        }
     }
 }
 

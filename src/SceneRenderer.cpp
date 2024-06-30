@@ -498,7 +498,7 @@ static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight, AnimationC
     rBindMesh(prefab->bigMesh);
     if (!hasScene)
     {
-        Matrix4 model = Matrix4::CreateScale(prefab->scale);
+        Matrix4 model = Matrix4::FromScale(prefab->scale);
         rSetShaderValue(model.GetPtr(), lShadowModel, GraphicType_Matrix4);
         rRenderMeshIndexed(prefab->bigMesh); // render all scene with one draw call
     }
