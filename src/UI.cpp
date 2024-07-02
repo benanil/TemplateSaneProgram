@@ -694,7 +694,7 @@ uint uGetColor(uColor color) {
 }
 
 void uSetTheme(uint* colors) {
-    SmallMemCpy(mColors, colors, sizeof(colors));
+    SmallMemCpy(mColors, colors, sizeof(mColors));
 }
 
 void uPushColor(uColor color, uint val) {

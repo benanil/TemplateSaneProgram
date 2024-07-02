@@ -10,25 +10,25 @@ if "%1"=="Debug" (
 )
 
 REM Compile the C++ code using clang++
-REM External/zstddeclib.c ^
-REM clang++ -std=c++14 -O3 -mavx2 -mfma -march=native -msse4.2 -mwindows -luser32 ^
+REM clang++ -std=c++14 -O3 -mavx2 -march=native -mfma -msse4.2 -mwindows -luser32 ^
 REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS  ^
-REM src/SaneProgram.cpp ^
+REM External/zstddeclib.c ^
 REM ASTL/Additional/GLTFParser.cpp ^
 REM ASTL/Additional/OBJParser.cpp ^
-REM External/zstddeclib.c ^ 
-REM src/PlatformWindows.cpp ^
-REM src/AssetManager.cpp ^
+REM ASTL/Additional/Profiler.cpp ^
+REM External/vulkan/shVulkan.c ^
 REM src/Animation.cpp ^
-REM src/CharacterController.cpp ^
+REM src/AssetManager.cpp ^
+REM src/SaneProgram.cpp ^
 REM src/Renderer.cpp ^
 REM src/UI.cpp ^
-REM src/Menu.cpp^
+REM src/Menu.cpp ^
+REM src/PlatformWindows.cpp ^
+REM src/VulkanBackend.cpp ^
 REM src/Scene.cpp ^
 REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
-REM External/ProcessDxtc.cpp ^
-REM External/ufbx.c ^
+REM src/CharacterController.cpp ^
 REM -o SaneProgram.exe ^
 REM -lopengl32 -lgdi32  SaneProgram.res
 

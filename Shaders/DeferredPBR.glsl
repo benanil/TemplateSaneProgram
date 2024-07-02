@@ -42,7 +42,6 @@ uniform mediump vec3 uSunDir;
 uniform highp mat4 uInvView;
 uniform highp mat4 uInvProj;
 
-const float gamma = 2.2;
 const float PI = 3.1415926535;
 
 mediump vec3 toLinear(mediump vec3 sRGB)
@@ -115,25 +114,12 @@ vec3 GetViewRay(vec3 viewPos, vec3 worldSpacePos)
     return dir * inversesqrt(dot(dir, dir));
 }
 
-half3 GammaCorrect(half3 x) {
-    return pow(x, vec3(1.0 / gamma)); //  sqrt(x); // with sqrt gamma is 2.0
-}
-
 // https://www.shadertoy.com/view/WdjSW3
+// equivalent to reinhard tone mapping but no need to gamma correction
 half3 CustomToneMapping(half3 x)
 {
-    return GammaCorrect(x / (1.0 + x)); // reinhard
-    #ifdef __ANDROID__
-    return x / (x + 0.155) * 1.019; // < doesn't require gamma correction
-    #else
-    //return  x / (x + 0.0832) * 0.982;
-    const float16 a = 2.51;
-    const float16 b = 0.03;
-    const float16 c = 2.43;
-    const float16 d = 0.59;
-    const float16 e = 0.14;
-    return GammaCorrect((x * (a * x + b)) / (x * (c * x + d) + e));
-    #endif
+    x += 0.0125;
+    return x / (x + 0.15) * 0.88;
 }
 
 // https://www.shadertoy.com/view/lsKSWR
@@ -194,7 +180,7 @@ void main()
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
-    const half3 sunColor = vec3(0.982f, 0.972, 0.966);
+    const half3 sunColor = vec3(1.0); // 0.982f, 0.972, 0.966);
     
     half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, normalMetallic.xyz, viewRay, metallic, roughness);
 
@@ -216,7 +202,6 @@ void main()
         lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness) * intensity;
         shadow = min(shadow + intensity, 1.0);
     }
-    
     for (int i = 0; i < uNumSpotLights; i++)
     {
         LightInstance spotLight = uSpotLights[i];
@@ -227,22 +212,22 @@ void main()
         
         if (angle > spotLight.cutoff && len < spotLight.range)
         {
-            angle = angle * (1.0 / spotLight.cutoff);
-            angle = 1.0 - angle;
+            angle = (angle-spotLight.cutoff) * (1.0 / (1.0 - spotLight.cutoff));
             len = min(len, spotLight.range) / spotLight.range;
             len = 1.0 - len;
-            float16 effect = len * len * angle * angle;
-            float16 intensity = spotLight.intensity * effect;
+            
+            float16 intensity = spotLight.intensity * len * angle;
             half3 lightColor = unpackUnorm4x8(spotLight.color).xyz;
             lightColor = lightColor * lightColor;
             half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
-    
-            lighting *= 0.18 + intensity;
-            lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness) * intensity;
-            shadow += min(shadow + intensity, 1.0);
+            lighting *= max(intensity, 0.25);
+
+            half3 sl = Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness);
+            lighting += sl * intensity;
+            shadow += shadow + intensity;
         }
     }
     
+    shadow = max(min(shadow, 1.0), 0.0);
     oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetShadow(shadow, pos);
-    // oFragColor = vec4(roughness);
 }

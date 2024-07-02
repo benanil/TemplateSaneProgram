@@ -10,7 +10,7 @@ struct Pose
 {
     vec_t translation;
     vec_t rotation;
-    vec_t scale;
+    // vec_t scale;
 };
 
 struct Matrix3x4f16
@@ -25,6 +25,13 @@ enum eAnimLocation_
     aLeft, aMiddle, aRight
 };
 
+enum eAnimTriggerOpt_
+{
+    eAnimTriggerOpt_Standing   = 1,
+    // reverse the animation when transitionning out instead of lerping to previous animation
+    eAnimTriggerOpt_ReverseOut = 2, 
+};
+
 enum eAnimControllerState_
 {
     AnimState_Update         = 1,
@@ -34,8 +41,10 @@ enum eAnimControllerState_
     AnimState_None           = 16,// < doesn't do any calculations
     AnimState_TriggerMask = AnimState_TriggerIn | AnimState_TriggerOut | AnimState_TriggerPlaying
 };
+typedef int eAnimTriggerOpt;
 typedef int eAnimLocation;
 typedef int eAnimState;
+typedef int eAnimControllerState;
 
 constexpr int MaxBonePoses = 128; // make 192 or 256 if we use more joints
 
@@ -53,10 +62,11 @@ struct AnimationController
     int mTriggerredAnim;
     float mTrigerredNorm;
     float mTransitionTime; // trigger time
+    float mTransitionOutTime; // trigger time
     float mCurTransitionTime; // trigger time
     int mLastAnim;
-    bool mTrigerredStanding;
-    
+    eAnimTriggerOpt mTriggerOpt;
+
     ANode* mSpineNode; // < upper body root bone 
     ANode* mNeckNode;
 
@@ -89,10 +99,10 @@ struct AnimationController
 
     // two posses for blending
     Pose mAnimPoseA[MaxBonePoses]; // < the result bone array that we send to GPU
-    Pose mAnimPoseB[MaxBonePoses]; // < used for blending between animations
+    Pose mAnimPoseB[MaxBonePoses]; // < blend target
     
-    Pose mAnimPoseC[MaxBonePoses]; // < used for Upper Body begin
-    Pose mAnimPoseD[MaxBonePoses]; // < used for Upper Body end
+    Pose mAnimPoseC[MaxBonePoses]; // < Trigerred animations result
+    Pose mAnimPoseD[MaxBonePoses]; // < Trigerred Animations blend target
 
     Matrix4 mBoneMatrices[MaxBonePoses];
     Matrix3x4f16 mOutMatrices[MaxBonePoses];
@@ -100,7 +110,7 @@ struct AnimationController
     void SetAnim(int x, int y, int index)
     {
         if (y >= 0) mLocomotionIndices[y][x] = index;
-        else        mLocomotionIndicesInv[Abs(y)][x] = index;
+        else        mLocomotionIndicesInv[Abs(y-1)][x] = index;
     }
 
     int GetAnim(int x, int y)
@@ -111,7 +121,7 @@ struct AnimationController
     
     bool IsTrigerred()
     {
-        return (mState & AnimState_TriggerMask) > 0;
+        return (mState & AnimState_TriggerMask) != 0;
     }
 
     // x, y has to be between -1.0 and 1.0 (normalized)
@@ -122,22 +132,28 @@ struct AnimationController
                             float y,
                             float animSpeed);
 
+    bool TriggerTransition(float dt, int targetAnim);
+
     // play the given animation, norm is the animation progress between 0.0 and 1.0
     void PlayAnim(int index, float norm);
 
     // trigger time is the animation transition time
     // standing anims are animations that we can play when walking or running
-    void TriggerAnim(int animIndex, float triggerTime, bool standing = false);
+    void TriggerAnim(int animIndex, float triggerInTime, float triggerOutTime, eAnimTriggerOpt triggerOpt);
 
     // after this line all of the functions are private but feel free to use
     // upload to gpu. internal usage only for now
     void UploadAnimationPose(Pose* nodeMatrices);
     
-    void RecurseNodeMatrices(ANode* node, Matrix4 parentMatrix);
+    void RecurseBoneMatrices(ANode* node, Matrix4 parentMatrix);
 
     void UploadBoneMatrices();
     
+    // when we want to play different animations with lower body and upper body
     void UploadPoseUpperLower(Pose* lowerPose, Pose* uperPose);
+
+    // use negative normTime to sample animation reversely
+    void SampleAnimationPose(Pose* pose, int animIdx, float normTime);
 };
 
 // no constructors and deconstructors hehe

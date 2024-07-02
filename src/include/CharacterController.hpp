@@ -29,6 +29,7 @@ struct CharacterController
 
     // animation indices
     int mAtackIndex;
+    int mComboIndex;
     int mIdle2Index;
     int mJumpIndex;
     int mKickIndex;

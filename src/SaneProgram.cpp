@@ -74,7 +74,7 @@ int AXStart()
     spotLight.position  = MakeVec3(-17.0f, 2.0f, -1.0f);
     spotLight.direction = MakeVec3(-1.0f, -0.0f, 0.0f);
     spotLight.color     = PackColorRGBU32(0.88f, 0.10f, 0.18f);
-    spotLight.intensity = 20.0f;
+    spotLight.intensity = 0.8f;
     spotLight.cutoff    = 0.8f;
     spotLight.range     = 25.0f;
     g_CurrentScene.AddLight(spotLight);
@@ -100,7 +100,6 @@ void AXLoop(bool canRender)
         currentScene->Update();
     
         float deltaTime = (float)GetDeltaTime();
-        deltaTime = MIN(deltaTime, 0.2f);
             
         // animate and control the movement of character
         const bool isSponza = true;

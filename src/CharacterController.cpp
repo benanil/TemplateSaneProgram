@@ -54,9 +54,10 @@ void CharacterController::Start(Prefab* _character)
     // int a_diagonal_left  = FindAnimIndex(_character, "Jog_Forward_Left");
     // int a_diagonal_right = FindAnimIndex(_character, "Jog_Forward_Right");
     int a_strafe_left    = FindAnimIndex(_character, "StrafeLeft");
-    int a_strafe_right   = a_strafe_left;
+    int a_strafe_right   = FindAnimIndex(_character, "StrafeRight");
 
     mAtackIndex  = FindAnimIndex(_character, "Slash2");
+    mComboIndex  = FindAnimIndex(_character, "SwordCombo");
     mIdle2Index  = FindAnimIndex(_character, "Idle2");
     mJumpIndex   = FindAnimIndex(_character, "Jump");
     mImpactIndex = FindAnimIndex(_character, "Impact");
@@ -118,19 +119,23 @@ void CharacterController::RespondInput()
 {
 #ifndef PLATFORM_ANDROID
     if (GetMousePressed(MouseButton_Left)) {
-        mAnimController.TriggerAnim(mAtackIndex, 0.25f, true);
+        mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing);
     }
 
     if (GetKeyPressed(Key_SPACE)) {
-        mAnimController.TriggerAnim(mJumpIndex, 0.2f, false);
+        mAnimController.TriggerAnim(mJumpIndex, 0.0f, 0.0f, 0);
     }
 
     if (GetKeyPressed('F')) {
-        mAnimController.TriggerAnim(mKickIndex, 0.25f, false);
+        mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0);
     }
 
     if (GetKeyPressed('C')) {
-        mAnimController.TriggerAnim(mImpactIndex, 1.0f, false);
+        mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0);
+    }
+
+    if (GetKeyPressed('X')) {
+        mAnimController.TriggerAnim(mComboIndex, 0.5f, 3.0f, eAnimTriggerOpt_ReverseOut);
     }
 #else
     Vector2f pos = { 1731.0f, 840.0f };
@@ -140,14 +145,14 @@ void CharacterController::RespondInput()
     uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mAtackIndex, 0.25f, true);
+        mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing);
     }
 
     pos.x -= buttonPadding;
     uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mKickIndex, 0.2f, false);
+        mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0);
     }
 
     pos.x += buttonPadding;
@@ -155,7 +160,7 @@ void CharacterController::RespondInput()
     uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mImpactIndex, 0.25f, false);
+        mAnimController.TriggerAnim(mImpactIndex, 0.35f, 0.35f, 0);
     }
 #endif
 }
@@ -251,7 +256,7 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         Vector3f progress = forward * mMovementSpeed * deltaTime;
         progress *= Clamp(-mCurrentMovement.LengthSafe(), -1.0f, targetMovement.y);
         Vector3f oldPos = mPosition;
-        float runAddition = 1.0f + (float(isRunning) * 0.55f);
+        float runAddition = 1.0f + (float(isRunning) * 1.55f);
         mPosition += progress * runAddition * 1.5f;
         
         if (isSponza)
@@ -280,7 +285,7 @@ void CharacterController::Update(float deltaTime, bool isSponza)
 
     if (mIdleTime >= mIdleLimit)
     {
-        mAnimController.TriggerAnim(mIdle2Index, 0.25f, true);
+        mAnimController.TriggerAnim(mIdle2Index, 0.25f, 0.25f, eAnimTriggerOpt_Standing);
         mIdleTime = 0.0f;
         mIdleLimit = 6.0f + (Random::NextFloat01(Random::PCG2Next(mRandomState)) * 15.0f);
     }

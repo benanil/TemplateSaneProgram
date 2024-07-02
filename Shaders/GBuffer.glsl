@@ -29,7 +29,7 @@ float ShadowLookup(vec4 loc, vec2 offset)
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const vec4 minShadow = vec4(0.30);
+    const vec4 minShadow = vec4(0.2);
     #ifdef __ANDROID__
     vec2 offset;
     const vec2 mixer = vec2(1.037, 1.137);

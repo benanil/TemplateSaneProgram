@@ -836,8 +836,7 @@ void rDeleteShader(Shader shader)
 
 void GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
                             GLsizei length, const GLchar* msg, const void* data) {
-    AX_ERROR("OpenGL error: %s", msg);
-    AX_LOG("\n");
+    AX_ERROR("OpenGL error: %s \n", msg);
 }
 
 static void CreateDefaultTexture()

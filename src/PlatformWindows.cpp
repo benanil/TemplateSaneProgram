@@ -356,7 +356,7 @@ void FatalError(const char* format, ...)
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    printf(buffer);
+    puts(buffer);
     OutputDebugString(buffer);
     // Display the message box
     MessageBoxA(NULL, buffer, "Fatal Error", MB_ICONERROR | MB_OK);
@@ -371,7 +371,7 @@ void DebugLog(const char* format, ...)
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    printf(buffer);
+    puts(buffer);
     MessageBoxA(NULL, buffer, "DebugLog", MB_ICONWARNING | MB_OK);
     OutputDebugString(buffer);
 }
