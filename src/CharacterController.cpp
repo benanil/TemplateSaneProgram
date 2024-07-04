@@ -1,6 +1,4 @@
 
-#include <math.h> // atan2f
-
 #include "include/CharacterController.hpp"
 #include "include/Platform.hpp"
 #include "include/SceneRenderer.hpp"
@@ -28,24 +26,26 @@ void CharacterController::Start(Prefab* _character)
     mCharacter  = _character;
     mTouchStart = MakeVec2(0.0f, 0.0f);
     // we don't need to set zero the poses
-    constexpr size_t poseSize = sizeof(AnimationController::mAnimPoseA) + sizeof(AnimationController::mAnimPoseB);
+    constexpr size_t poseSize = sizeof(AnimationController::mAnimPoseA) * 4 
+                              + sizeof(AnimationController::mBoneMatrices) + sizeof(AnimationController::mOutMatrices);
     MemsetZero(&mAnimController, sizeof(AnimationController) - poseSize);
     CreateAnimationController(_character, &mAnimController, true, 58);
-    
     mRandomState = Random::Seed32();
-
-    mPosition.y = -0.065f; // make foots touch the ground
-    mMovementSpeed = 2.7f;
-    mIdleLimit = 8.0f;
-    mIdleTime = 0.0f;
-    {
-        mRootNodeIdx = Prefab::FindAnimRootNodeIndex(_character);
-        float* posPtr = _character->nodes[mRootNodeIdx].translation;
-        float* rotPtr = _character->nodes[mRootNodeIdx].rotation;
+    mState = eCharacterControllerState_Idle;
     
-        mStartPos = MakeVec3(posPtr);
-        mStartRotation = VecLoad(rotPtr);
-    }
+    mRotation = QIdentity();
+    mPosition.y     = -0.065f; // make foots touch the ground
+    mMovementSpeed  = 2.7f;
+    mIdleLimit      = 8.0f;
+    mIdleTime       = 0.0f;
+    mLastInputAngle = 0.0f;
+
+    mRootNodeIdx = Prefab::FindAnimRootNodeIndex(_character);
+    mPosPtr = _character->nodes[mRootNodeIdx].translation;
+    mRotPtr = _character->nodes[mRootNodeIdx].rotation;
+    
+    mStartPos = MakeVec3(mPosPtr);
+    mStartRotation = VecLoad(mRotPtr);
     
     int a_idle           = FindAnimIndex(_character, "Idle");
     int a_walk           = FindAnimIndex(_character, "Walk");
@@ -63,6 +63,10 @@ void CharacterController::Start(Prefab* _character)
     mImpactIndex = FindAnimIndex(_character, "Impact");
     mKickIndex   = FindAnimIndex(_character, "Kick");
 
+    mTurnLeft90Index  = FindAnimIndex(_character, "TurnLeft90");
+    mTurnRight90Index = FindAnimIndex(_character, "TurnRight90");
+    mTurn180Index     = FindAnimIndex(_character, "Turn180");
+
     // idle, left&right strafe
     mAnimController.SetAnim(aLeft  , 0, a_strafe_left);
     mAnimController.SetAnim(aMiddle, 0, a_idle);
@@ -72,8 +76,8 @@ void CharacterController::Start(Prefab* _character)
     mAnimController.SetAnim(aMiddle, 2, a_jog_forward);
 
     // set second row to idle 
-    mAnimController.SetAnim(aLeft  , 1, a_jog_forward);//a_diagonal_left);
-    mAnimController.SetAnim(aRight , 1, a_jog_forward);//a_diagonal_right);
+    mAnimController.SetAnim(aLeft  , 1, a_strafe_left);//a_diagonal_left);
+    mAnimController.SetAnim(aRight , 1, a_strafe_right);//a_diagonal_right);
                                     
     // set first row to idle        
     mAnimController.SetAnim(aLeft  , 0, a_jog_forward);//a_diagonal_left);
@@ -81,7 +85,7 @@ void CharacterController::Start(Prefab* _character)
  
     // copy first row to inverse first row
     SmallMemCpy(mAnimController.mLocomotionIndicesInv[0],
-                mAnimController.mLocomotionIndices[0], sizeof(int) * 5);
+                mAnimController.mLocomotionIndices[0], sizeof(int) * 3);
 
     mAnimController.SetAnim(aLeft  , -1, a_jog_forward); //a_diagonal_left);
     mAnimController.SetAnim(aMiddle, -1, a_jog_backward);
@@ -128,14 +132,17 @@ void CharacterController::RespondInput()
 
     if (GetKeyPressed('F')) {
         mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0);
+        mCurrentMovement = Vector2f::Zero();
     }
 
     if (GetKeyPressed('C')) {
         mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0);
+        mCurrentMovement = Vector2f::Zero();
     }
 
     if (GetKeyPressed('X')) {
-        mAnimController.TriggerAnim(mComboIndex, 0.5f, 3.0f, eAnimTriggerOpt_ReverseOut);
+        mAnimController.TriggerAnim(mComboIndex, 0.5f, 4.0f, eAnimTriggerOpt_ReverseOut);
+        mCurrentMovement = Vector2f::Zero();
     }
 #else
     Vector2f pos = { 1731.0f, 840.0f };
@@ -160,21 +167,38 @@ void CharacterController::RespondInput()
     uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mImpactIndex, 0.35f, 0.35f, 0);
+        mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0);
     }
 #endif
 }
 
-void CharacterController::Update(float deltaTime, bool isSponza)
+void CharacterController::TurningState()
+{
+    mAnimController.EvaluateLocomotion(0.0f, 0.0f, 1.0f);
+    
+    if (!mAnimController.IsTrigerred())
+    {
+        // turning animation ended
+        Camera* camera = SceneRenderer::GetCamera();
+        // angle we have turned + camera look angle
+        float x = camera->angle.x * -TwoPI;
+        mRotation = QFromYAngle(x - mTurnRotation + PI);
+
+        mCurrentMovement.y = Sin(mTurnRotation + HalfPI);
+        mCurrentMovement.x = Sin(mTurnRotation);
+        mState = eCharacterControllerState_Movement;
+    }
+}
+
+Vector2f CharacterController::GetTargetMovement()
 {
     Vector2f targetMovement = {0.0f, 0.0f};
-    bool isRunning = false;
-#ifndef __ANDROID__ /* NOT android */
+    #ifndef __ANDROID__ /* NOT android */
     if (GetKeyDown('W')) targetMovement.y = +1.0f; 
     if (GetKeyDown('S')) targetMovement.y = -1.0f; 
     if (GetKeyDown('A')) targetMovement.x = -1.0f; 
     if (GetKeyDown('D')) targetMovement.x = +1.0f; 
-#else
+    #else
     // Joystick
     //------------------------------------------------------------------------
     wGetMonitorSize(&monitorSize.x, &monitorSize.y);
@@ -211,76 +235,111 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     targetMovement = Min(targetMovement, MakeVec2( 1.0f,  1.0f));
     targetMovement = Max(targetMovement, MakeVec2(-1.0f, -1.0f));
     targetMovement.x = -targetMovement.x;
-    //------------------------------------------------------------------------
-#endif
+    #endif
+    return targetMovement;
+}
 
-    float* posPtr = mCharacter->nodes[mRootNodeIdx].translation;
-    float* rotPtr = mCharacter->nodes[mRootNodeIdx].rotation;
-    
-    SmallMemCpy(posPtr, &mStartPos.x, sizeof(Vector3f));
-    VecStore(rotPtr, mStartRotation);
-
+void CharacterController::MovementState(bool isSponza)
+{
     const float animSpeed = 1.0f;
-    mAnimController.EvaluateLocomotion(mCurrentMovement.x,
-                                       mCurrentMovement.y,
-                                       animSpeed);
+    float deltaTime = (float)GetDeltaTime();
+    Vector2f targetMovement = GetTargetMovement();
+    float animY = mCurrentMovement.y;
+    float animX = mCurrentMovement.x;
+    if (Abs(animX) > Abs(animY)) animY = animX;
 
-    isRunning |= GetKeyDown(Key_SHIFT);
-    targetMovement.y += (float)isRunning;
+    mAnimController.EvaluateLocomotion(animX, animY, animSpeed);
+
+    bool isRunning = GetKeyDown(Key_SHIFT);
+    if (isRunning) targetMovement *= Sign(targetMovement.y) * 2.0f;
     
     const float smoothTime = 0.25f;
-    mCurrentMovement.y = SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime); //
+    const float acceleration = 3.0f;
+    mCurrentMovement.y = Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime);//SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // ; //
     mCurrentMovement.x = Lerp(mCurrentMovement.x, targetMovement.x, 4.0f * deltaTime);
 
     Camera* camera = SceneRenderer::GetCamera();
     // angle of user input, (keyboard or joystick)
     float x = camera->angle.x * -TwoPI;
-    float inputAngle = atan2f(targetMovement.x, MIN(targetMovement.y, 1.0f));
-    x += -inputAngle / 2.0f;
+    float inputAngle = ATan2(targetMovement.x, Clamp(targetMovement.y, -1.0f, 1.0f));
+    float movementValue = targetMovement.LengthSquared();
+    if (movementValue < 0.001f) inputAngle = 0.0f;
+    x += -inputAngle;
 
-    // handle camera rotation
-    if (mCurrentMovement.y > 0.1f)
+    // handle character rotation
+    if (movementValue > 0.1f)
     {
         const float rotationSpeed = 12.0f;
-        Quaternion targetRotation = QFromAxisAngle(MakeVec3(0.0f, 1.0f, 0.0f), x + PI);
-        mRotation = QSlerp(mRotation, targetRotation, deltaTime * rotationSpeed);
-        mRotation = QMul(QFromXAngle(mCurrentMovement.y * 0.005f), mRotation);
+        mLastInputAngle = inputAngle;
+        mOldInputAngle = x;
+        mRotation = QSlerp(mRotation, QFromYAngle(x + PI), deltaTime * rotationSpeed);
     }
 
-    // mRotation = QMul(QFromZAngle(mCurrentMovement.x * 0.2f), mRotation);
-
-    x += -inputAngle / 2.0f;
     // handle character position
-    {   
-        Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
-        Vector3f progress = forward * mMovementSpeed * deltaTime;
-        progress *= Clamp(-mCurrentMovement.LengthSafe(), -1.0f, targetMovement.y);
-        Vector3f oldPos = mPosition;
-        float runAddition = 1.0f + (float(isRunning) * 1.55f);
-        mPosition += progress * runAddition * 1.5f;
-        
-        if (isSponza)
-            ColissionDetection(oldPos);
-        
-        // animatedPos.y = 8.15f; // if you want to walk on top floor
-        camera->targetPos = mPosition;
+    Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
+    Vector3f progress = forward * mMovementSpeed * deltaTime;
+    
+    float movementAmount = mCurrentMovement.LengthSafe();
+    progress *= Clamp(-movementAmount, -1.0f, 1.0f);
+    Vector3f oldPos = mPosition;
+    float runAddition = 1.0f + (float(isRunning) * 1.55f);
+    mPosition += progress * runAddition * 1.5f;
+    
+    if (isSponza) ColissionDetection(oldPos);
+    
+    // animatedPos.y = 8.15f; // if you want to walk on top floor
+    camera->targetPos = mPosition;
+    mNonStopDuration += float(Abs(movementAmount) < 0.002f) * deltaTime;
+    mNonStopDuration *= Abs(movementAmount) < 0.002f; 
+    if (mNonStopDuration > 0.25f) {
+        mNonStopDuration = 0.0f;
+        mState = eCharacterControllerState_Idle;
     }
+}
 
-    RespondInput();
+void CharacterController::IdleState()
+{
+    Vector2f targetMovement = GetTargetMovement();
+    float deltaTime = (float)GetDeltaTime();
+    float movementAmount = targetMovement.LengthSquared();
 
-    if (!mAnimController.IsTrigerred() && Abs(mCurrentMovement.x) + Abs(mCurrentMovement.y) < 0.05f)
+    mNonStopDuration += float(movementAmount > 0.01f) * deltaTime;
+    mIdleTime += !mAnimController.IsTrigerred() * deltaTime;
+    mNonStopDuration = movementAmount > 0.1f; // reset duration if player stopped
+    mCurrentMovement.y = MAX(mCurrentMovement.y - (deltaTime * 0.5f), 0.0f);
+    mAnimController.EvaluateLocomotion(0.0f, mCurrentMovement.y, 1.0f);
+    // naughty dog was also waiting quarter of second before running turning animation
+    // https://www.gdcvault.com/play/1012300/Animation-and-Player-Control-in
+
+    if (mNonStopDuration > 0.25f)
     {
-        mIdleTime += deltaTime;
-    }
-    else {
-        mIdleTime = 0.0f;
-    }
+        // no longer stopping
+        mNonStopDuration = 0.0f;
+        mTurnRotation = 0.0f;
+        bool hasVerticalMovement   = Abs(targetMovement.y) > 0.1f;
+        bool hasHorizontalMovement = Abs(targetMovement.x) > 0.1f;
+        bool horizontalFull        = Abs(targetMovement.x) > 0.9f;
+        bool goingBack = targetMovement.y < -0.9f;
 
-    if (mAnimController.IsTrigerred() &&
-       (mAnimController.mTriggerredAnim == mImpactIndex || 
-        mAnimController.mTriggerredAnim == mKickIndex))
-    {
-        mCurrentMovement = Vector2f::Zero();
+        if (horizontalFull && !hasVerticalMovement)
+        {
+            int anim = targetMovement.x > 0.0f ? mTurnRight90Index : mTurnLeft90Index;
+            mTurnRotation = HalfPI * Sign(targetMovement.x);
+            mAnimController.TriggerAnim(anim, 0.0f, 0.0f, 0);
+        }
+
+        if (!hasHorizontalMovement && goingBack)
+        {
+            mTurnRotation = PI;
+            mAnimController.TriggerAnim(mTurn180Index, 0.0f, 0.0f, 0);
+        }
+
+        if (mTurnRotation != 0.0f) {
+            mState = eCharacterControllerState_Turning;
+        }
+        else {
+            mState = eCharacterControllerState_Movement;
+        }
     }
 
     if (mIdleTime >= mIdleLimit)
@@ -289,10 +348,58 @@ void CharacterController::Update(float deltaTime, bool isSponza)
         mIdleTime = 0.0f;
         mIdleLimit = 6.0f + (Random::NextFloat01(Random::PCG2Next(mRandomState)) * 15.0f);
     }
+}
 
-    VecStore(rotPtr, mRotation);
+// Rotates the character's head and body to the looking direction
+void CharacterController::HandleNeckAndSpineRotation(float deltaTime)
+{
+    if (!mAnimController.IsTrigerred()) 
+    {
+        Camera* camera = SceneRenderer::GetCamera();
+        
+        float neckYTarget = -mLastInputAngle + camera->angle.x * -TwoPI;
+        const float yMinAngle = -PI / 3.0f, yMaxAngle = PI / 3.0f;
+        // take differance of character forward direction and camera direction
+        neckYTarget = Clamp(neckYTarget - mOldInputAngle, yMinAngle, yMaxAngle);
+        
+        const float rotateSpeed = 2.0f;
+        mAnimController.mNeckYAngle  = Lerp(mAnimController.mNeckYAngle, neckYTarget, deltaTime * rotateSpeed);
+        mAnimController.mSpineYAngle = Lerp(mAnimController.mSpineYAngle, neckYTarget * 0.5f, deltaTime * rotateSpeed);
+        
+        const float neckMaxXAngle = 1.25f, spineMaxAngle = 1.85f;
+        mAnimController.mNeckXAngle  = Lerp(mAnimController.mNeckXAngle, camera->angle.y * neckMaxXAngle, deltaTime * rotateSpeed);
+        mAnimController.mSpineXAngle = Lerp(mAnimController.mSpineXAngle, camera->angle.y * spineMaxAngle, deltaTime * rotateSpeed);
+    }
+    else 
+    {
+        // don't want to rotate the neck while animation playing,
+        // triggerred animations look bad when we rotate neck but rotating spine is fine
+        mAnimController.mNeckYAngle  *= Abs(mAnimController.mNeckYAngle) > 0.08f;
+        mAnimController.mNeckXAngle  *= Abs(mAnimController.mNeckXAngle) > 0.08f;
+        mAnimController.mNeckYAngle  = Lerp(mAnimController.mNeckYAngle , 0.0f, deltaTime * 4.0f);
+        mAnimController.mNeckXAngle  = Lerp(mAnimController.mNeckXAngle , 0.0f, deltaTime * 4.0f);
+    }
+}
+
+void CharacterController::Update(float deltaTime, bool isSponza)    
+{
+    SmallMemCpy(mPosPtr, &mStartPos.x, sizeof(Vector3f));
+    VecStore(mRotPtr, mStartRotation);
+
+    HandleNeckAndSpineRotation(deltaTime);
+
+    switch (mState)
+    {
+        case eCharacterControllerState_Idle:     IdleState(); break;
+        case eCharacterControllerState_Movement: MovementState(isSponza); break;
+        case eCharacterControllerState_Turning:  TurningState(); break;
+    };
+
+    RespondInput();
+
+    VecStore(mRotPtr, mRotation);
     // set animated pos for the renderer
-    SmallMemCpy(posPtr, &mPosition.x, sizeof(Vector3f));
+    SmallMemCpy(mPosPtr, &mPosition.x, sizeof(Vector3f));
     SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
 }
 

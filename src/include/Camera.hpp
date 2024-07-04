@@ -207,12 +207,12 @@ struct Camera
 		nearClip = 0.1f;
 		farClip = 500.0f;
 		senstivity = 0.1f;
-		angle = MakeVec2(3.12f, 0.0f);
+        angle = Vector2f::Zero(); //MakeVec2(3.12f, 0.0f);
 		viewportSize = xviewPortSize;
 		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
 		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
-		direction = Vector3f::Normalize(MakeVec3(Cos(angle.x * TwoPI), 0.0f, Sin(angle.x * TwoPI)));
+		direction = Vector3f::Normalize(MakeVec3(Sin(angle.x * TwoPI), 0.0f, Cos(angle.x * TwoPI)));
 
 		RecalculateView();
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
@@ -237,13 +237,12 @@ struct Camera
 		float x = angle.x * TwoPI;
 		float y = angle.y * PI;
 
-		Quaternion rot = QFromAxisAngle(MakeVec3(1.0f, 0.0f, 0.0f), -y);
-		rot = QMul(rot, QFromAxisAngle(MakeVec3(0.0f, 1.0f, 0.0f), -x));
+		Quaternion rot = QMul(QFromXAngle(-y), QFromYAngle(-x));
 		
 		Matrix4 camera = {};
 		MatrixFromQuaternion(camera.GetPtr(), rot);
-		camera.SetPosition(targetPos + MakeVec3(0.0f, 3.8f, 0.0f)); // camera height from foot
-		camera = Matrix4::FromPosition({0.0f, 0.0f, 5.0f}) * camera; // camera distance 
+		camera.SetPosition(targetPos + MakeVec3(0.0f, 3.6f, 0.0f)); // camera height from foot
+		camera = Matrix4::FromPosition(0.0f, 0.0f, 5.0f) * camera; // camera distance 
 		camera = Matrix4::Inverse(camera);
 		view = camera;
 

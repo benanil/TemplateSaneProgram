@@ -1,10 +1,22 @@
 
+/******************************************************************************************
+*  Purpose:                                                                               *
+*    Play Blend and Mix Animations Trigger and Transition Between animations              *
+*    Can Play Seperate animations on Upper Body and Lower Body: Sword Slash while Walking *
+*    Can Rotate The Head and Spine of humanoid character independently,                   *
+*    Allows to look around and turn the body                                              *
+*  Good To Know:                                                                          *
+*    Stores bone matrices into Matrix3x4Half format and sends to GPU within Textures      *
+*    Scale interpolation is disabled for now                                              *
+*  Author:                                                                                *
+*    Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil                       *
+*******************************************************************************************/
+
 #include "include/Animation.hpp"
 #include "include/Scene.hpp"
 #include "include/SceneRenderer.hpp"
 #include "include/Platform.hpp"
 
-// todo play animation reversely
 
 void StartAnimationSystem()
 { }
@@ -13,17 +25,6 @@ static void SetBoneNode(Prefab* prefab, ANode*& node, int& index, const char* na
 {
     index = Prefab::FindNodeFromName(prefab, name);
     node = &prefab->nodes[index];
-}
-
-static inline void RotateNode(ANode* node, Vector3f axis, float angle)
-{
-    Quaternion q = QMul(QFromAxisAngle(axis, angle), VecLoad(node->rotation));
-    VecStore(node->rotation, q);
-}
-
-__forceinline Matrix4 GetNodeMatrix(ANode* node)
-{
-    return Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale);
 }
 
 void CreateAnimationController(Prefab* prefab, AnimationController* result, bool humanoid, int lowerBodyStart)
@@ -52,9 +53,17 @@ void CreateAnimationController(Prefab* prefab, AnimationController* result, bool
     
     SetBoneNode(prefab, result->mSpineNode, result->mSpineNodeIdx, "mixamorig:Spine");
     SetBoneNode(prefab, result->mNeckNode , result->mNeckNodeIdx , "mixamorig:Neck");
-    
-    result->mSpineAxis = Vector3f::Up();
-    result->mNeckAxis = Vector3f::Up();
+}
+
+static inline void RotateNode(ANode* node, float xAngle, float yAngle)
+{
+    Quaternion q = QMul(QMul(QFromXAngle(xAngle), QFromYAngle(yAngle)), VecLoad(node->rotation));
+    VecStore(node->rotation, q);
+}
+
+__forceinline Matrix4 GetNodeMatrix(ANode* node)
+{
+    return Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale);
 }
 
 void AnimationController::RecurseBoneMatrices(ANode* node, Matrix4 parentMatrix)
@@ -64,8 +73,8 @@ void AnimationController::RecurseBoneMatrices(ANode* node, Matrix4 parentMatrix)
         int childIndex = node->children[c];
         ANode* children = &mPrefab->nodes[childIndex];
 
-        if (children == mSpineNode && Abs(mSpineAngle) > Epsilon) { RotateNode(children, mSpineAxis, mSpineAngle); }
-        if (children == mNeckNode  && Abs(mNeckAngle)  > Epsilon) { RotateNode(children, mNeckAxis, mNeckAngle); }
+        if (children == mSpineNode && Abs(mSpineYAngle) + Abs(mSpineXAngle) > Epsilon) { RotateNode(children, mSpineXAngle, mSpineYAngle); }
+        if (children == mNeckNode && Abs(mNeckYAngle) + Abs(mSpineXAngle) > Epsilon) { RotateNode(children, mNeckXAngle, mNeckYAngle); }
 
         mBoneMatrices[childIndex] = GetNodeMatrix(children) * parentMatrix;
 
@@ -77,8 +86,7 @@ static void MergeAnims(Pose* pose0, Pose* pose1, float animBlend, int numNodes)
 {
     for (int i = 0; i < numNodes; i++)
     {
-        vec_t q = QNLerp(pose0[i].rotation, pose1[i].rotation, animBlend); // QSlerp
-        pose0[i].rotation = QNormEst(q); //QNorm(q);
+        pose0[i].rotation    = QNLerp(pose0[i].rotation, pose1[i].rotation, animBlend); // slerp+norm?
         pose0[i].translation = VecLerp(pose0[i].translation, pose1[i].translation, animBlend);
         // pose0[i].scale    = VecLerp(pose0[i].scale, pose1[i].scale, animBlend);
     }
@@ -154,9 +162,9 @@ void AnimationController::SampleAnimationPose(Pose* pose, int animIdx, float nor
                 Quaternion rot = QSlerp(begin, end, t);
                 pose[targetNode].rotation = QNorm(rot);// QNormEst
                 break;
-         // case AAnimTargetPath_Scale:
-         //     pose[targetNode].scale = VecLerp(begin, end, t);
-         //     break;
+        //  case AAnimTargetPath_Scale:
+        //      pose[targetNode].scale = VecLerp(begin, end, t);
+        //      break;
         };
     }
 }
@@ -180,7 +188,7 @@ void AnimationController::UploadBoneMatrices()
     rUpdateTexture(mMatrixTex, mOutMatrices);
 }
 
-void AnimationController::UploadAnimationPose(Pose* pose)
+void AnimationController::UploadPose(Pose* pose)
 {
     InitNodes(mPrefab->nodes, pose, 0, mPrefab->numNodes);
 
@@ -209,7 +217,7 @@ void AnimationController::UploadPoseUpperLower(Pose* lowerPose, Pose* uperPose)
 void AnimationController::PlayAnim(int index, float norm)
 {
     SampleAnimationPose(mAnimPoseA, index, norm);
-    UploadAnimationPose(mAnimPoseA);
+    UploadPose(mAnimPoseA);
 }
 
 void AnimationController::TriggerAnim(int index, float transitionInTime, float transitionOutTime, eAnimTriggerOpt triggerOpt)
@@ -228,6 +236,8 @@ void AnimationController::TriggerAnim(int index, float transitionInTime, float t
 
     mState = AnimState_TriggerIn;
     SmallMemCpy(mAnimPoseC, mAnimPoseA, sizeof(mAnimPoseA));
+    if (EnumHasBit(triggerOpt, eAnimTriggerOpt_ReverseOut))
+        mAnimTime.y = 0.0f;
 }
 
 bool AnimationController::TriggerTransition(float deltaTime, int targetAnim)
@@ -244,6 +254,7 @@ bool AnimationController::TriggerTransition(float deltaTime, int targetAnim)
 void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
 {
     const float deltaTime = (float)GetDeltaTime();
+    bool wasTriggerState = IsTrigerred();
 
     if (mState == AnimState_TriggerIn)
     {
@@ -276,22 +287,21 @@ void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
         if (mTrigerredNorm >= 1.0f)
         {
             mTrigerredNorm = 0.0f; // trigger stage complated
-            mState = mTransitionTime < 0.02f ? AnimState_Update : AnimState_TriggerOut;
             mTransitionTime = mTransitionOutTime;
             mCurTransitionTime = mTransitionOutTime;
+            mState = mTransitionTime < 0.02f ? AnimState_Update : AnimState_TriggerOut;
         }
     }
 
     int yIndex = GetAnim(aMiddle, 0);
     // if trigerred animation is not standing, we don't have to sample walking or running animations
-    if (!IsTrigerred() || (IsTrigerred() && EnumHasBit(mTriggerOpt, eAnimTriggerOpt_Standing) && Abs(y)+Abs(x) > 0.001f))
+    if (!wasTriggerState || (wasTriggerState && EnumHasBit(mTriggerOpt, eAnimTriggerOpt_Standing) && Abs(y) > 0.001f))
     {
         // play and blend walking and running anims
-        y = Abs(y);
+        y = Abs(y); 
         int yi = int(y);
         // sample y anim
         ASSERTR(yi <= 3, return); // must be between 1 and 4
-        int sign = Sign(yi);
         yIndex = GetAnim(aMiddle, yi);
 
         SampleAnimationPose(mAnimPoseA, yIndex, mAnimTime.y);
@@ -300,22 +310,9 @@ void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
         bool shouldAnimBlendY = yi != 3 && yBlend > 0.00002f;
         if (shouldAnimBlendY)
         {
-            yIndex = GetAnim(aMiddle, yi + sign);
+            yIndex = GetAnim(aMiddle, yi + 1);
             SampleAnimationPose(mAnimPoseB, yIndex, mAnimTime.y);
             MergeAnims(mAnimPoseA, mAnimPoseB, EaseOut(yBlend), mNumNodes);
-        }
-
-        bool shouldBlendX = Abs(x) > 0.01f;
-        if (shouldBlendX)
-        {
-            int xIndex = GetAnim(aMiddle + (int)Sign(x), 0);
-            x = Abs(x);
-            SampleAnimationPose(mAnimPoseB, xIndex, mAnimTime.x);
-            MergeAnims(mAnimPoseA, mAnimPoseB, EaseOut(x), mNumNodes);
-            
-            float xAnimStep = 1.0f / mPrefab->animations[xIndex].duration;
-            mAnimTime.x += animSpeed * xAnimStep * deltaTime;
-            mAnimTime.x  = Fract(mAnimTime.x);
         }
 
         // if anim is two seconds animStep is 0.5 because we are using normalized value
@@ -325,14 +322,14 @@ void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
     }
     mLastAnim = yIndex;
 
-    if (!IsTrigerred()) {
-        UploadAnimationPose(mAnimPoseA);
+    if (!wasTriggerState) {
+        UploadPose(mAnimPoseA);
     }
     else {
         if (EnumHasBit(mTriggerOpt, eAnimTriggerOpt_Standing) && y > 0.001f)
             UploadPoseUpperLower(mAnimPoseA, mAnimPoseC);
         else
-            UploadAnimationPose(mAnimPoseC);
+            UploadPose(mAnimPoseC);
     }
 }
 

@@ -27,18 +27,21 @@ enum eAnimLocation_
 
 enum eAnimTriggerOpt_
 {
+    eAnimTriggerOpt_None = 0,
+    // allows sword slash while walking,
+    // Enable if you want to play different animations on lower and upper body
     eAnimTriggerOpt_Standing   = 1,
     // reverse the animation when transitionning out instead of lerping to previous animation
-    eAnimTriggerOpt_ReverseOut = 2, 
+    eAnimTriggerOpt_ReverseOut = 2
 };
 
 enum eAnimControllerState_
 {
+    AnimState_None           = 0,
     AnimState_Update         = 1,
     AnimState_TriggerIn      = 2,
     AnimState_TriggerOut     = 4,
     AnimState_TriggerPlaying = 8,
-    AnimState_None           = 16,// < doesn't do any calculations
     AnimState_TriggerMask = AnimState_TriggerIn | AnimState_TriggerOut | AnimState_TriggerPlaying
 };
 typedef int eAnimTriggerOpt;
@@ -61,41 +64,32 @@ struct AnimationController
 
     int mTriggerredAnim;
     float mTrigerredNorm;
-    float mTransitionTime; // trigger time
-    float mTransitionOutTime; // trigger time
-    float mCurTransitionTime; // trigger time
+    float mTransitionTime; // trigger transition time
+    float mTransitionOutTime;
+    float mCurTransitionTime;
     int mLastAnim;
     eAnimTriggerOpt mTriggerOpt;
 
     ANode* mSpineNode; // < upper body root bone 
     ANode* mNeckNode;
 
-    int mSpineNodeIdx; 
+    int mSpineNodeIdx;
     int mNeckNodeIdx;
 
-    // lower body bones are starting from 60th with Brute character
+    // lower body bones are starting from 60th with Brute character and 58 with mixamo Paladin Character
     // used for animating diferrent animations for legs and uper body
-    // this value might change from character to character. 
+    // this value can change from character to character. 
+    // you can detect using 3DVert and GBuffer shader just uncomment lines with vBoneIdx, and it will visualize lower body as white
     // Maybe Add: automatic detect.
     int lowerBodyIdxStart; 
 
     // angle's recomended values are between (-PI/3, PI/3)
     // calculate the angle between target and player, then clamp the value between the limits
     // to enable spine or neck additive rotation you just have to set angle's any value which is not zero
-    float mSpineAngle;
-    float mNeckAngle;
-    Vector3f mSpineAxis; // < will rotate around this axis (normalized) default vec3::up
-    Vector3f mNeckAxis;  // < will rotate around this axis (normalized) default vec3::up
-
-    // animation indexes to blend coordinates
-    // Given xy blend coordinates, we will blend animations.
-    // in typical animation system, the diagram should be like the diagran below.
-    //  #  #  #  <- DiagonalRun , ForwardRun , DiagonalRun
-    //  #  #  #  <- DiagonalJog , ForwardJog , DiagonalJog
-    //  #  #  #  <- DiagonalWalk, ForwardWalk, DiagonalWalk
-    //  #  #  #  <- StrafeLeft  , Idle       , StrafeRight 
-    int mLocomotionIndices   [4][3];
-    int mLocomotionIndicesInv[3][3];
+    float mSpineYAngle;
+    float mNeckYAngle;
+    float mSpineXAngle; // < will rotate around this axis (normalized) default vec3::up
+    float mNeckXAngle;  // < will rotate around this axis (normalized) default vec3::up
 
     // two posses for blending
     Pose mAnimPoseA[MaxBonePoses]; // < the result bone array that we send to GPU
@@ -106,6 +100,16 @@ struct AnimationController
 
     Matrix4 mBoneMatrices[MaxBonePoses];
     Matrix3x4f16 mOutMatrices[MaxBonePoses];
+
+    // animation indexes to blend coordinates
+    // Given xy blend coordinates, we will blend animations.
+    // in typical animation system, the diagram should be like the diagran below.
+    //  #  #  #  <- DiagonalRun , ForwardRun , DiagonalRun
+    //  #  #  #  <- DiagonalJog , ForwardJog , DiagonalJog
+    //  #  #  #  <- DiagonalWalk, ForwardWalk, DiagonalWalk
+    //  #  #  #  <- StrafeLeft  , Idle       , StrafeRight 
+    int mLocomotionIndices   [4][3];
+    int mLocomotionIndicesInv[3][3];
 
     void SetAnim(int x, int y, int index)
     {
@@ -128,9 +132,7 @@ struct AnimationController
     // xspeed and yspeed is between 0 and infinity speed of animation
     // normTime should be between 0 and 1
     // runs the walking running etc animations from given inputs
-    void EvaluateLocomotion(float x,
-                            float y,
-                            float animSpeed);
+    void EvaluateLocomotion(float x, float y, float animSpeed);
 
     bool TriggerTransition(float dt, int targetAnim);
 
@@ -143,7 +145,7 @@ struct AnimationController
 
     // after this line all of the functions are private but feel free to use
     // upload to gpu. internal usage only for now
-    void UploadAnimationPose(Pose* nodeMatrices);
+    void UploadPose(Pose* nodeMatrices);
     
     void RecurseBoneMatrices(ANode* node, Matrix4 parentMatrix);
 

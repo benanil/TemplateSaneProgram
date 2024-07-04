@@ -5,6 +5,15 @@
 #include "Scene.hpp"
 #include "../../ASTL/Random.hpp"
 
+enum eCharacterControllerState_
+{
+    eCharacterControllerState_Idle,
+    eCharacterControllerState_Movement,
+    eCharacterControllerState_Turning,
+};
+
+typedef int eCharacterControllerState;
+
 struct CharacterController
 {
     Quaternion mStartRotation;
@@ -12,6 +21,8 @@ struct CharacterController
     int mRootNodeIdx;
     
     Prefab* mCharacter;
+    float* mPosPtr;
+    float* mRotPtr;
     AnimationController mAnimController;
 
     Vector2f mAnimTime;
@@ -25,7 +36,6 @@ struct CharacterController
     Vector3f   mPosition;
 
     Vector2f mTouchStart;
-    bool mWasPressing;
 
     // animation indices
     int mAtackIndex;
@@ -34,11 +44,20 @@ struct CharacterController
     int mJumpIndex;
     int mKickIndex;
     int mImpactIndex;
+    int mTurnLeft90Index;
+    int mTurnRight90Index;
+    int mTurn180Index;
 
     float mIdleTime;
     float mIdleLimit;
 
-    uint mRandomState;
+    eCharacterControllerState mState;
+    uint mRandomState; // < for random number generation
+    float mNonStopDuration;
+    float mTurnRotation; // in radians
+    float mLastInputAngle;
+    float mOldInputAngle;
+    bool mWasPressing;
 
 //------------------------------------------------------------------------
     void Start(Prefab* _character);
@@ -49,5 +68,15 @@ struct CharacterController
 
     void ColissionDetection(Vector3f oldPos);
     
+    void TurningState();
+
+    void MovementState(bool isSponza);
+
+    void IdleState();
+
+    Vector2f GetTargetMovement();
+
+    void HandleNeckAndSpineRotation(float deltaTime);
+
     void Destroy();
 };

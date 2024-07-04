@@ -1,23 +1,23 @@
-/********************************************************************************
-*    Purpose:                                                                   *
-*        Gets all of the textures in GLTF or FBX scene compresses them to       *
-*        to make textures smaller on GPU and Disk I'm compressing them          *
-*        using BCn texture compression on Windows                               *
-*        and using ASTC texture compression for storing textures on android     *
-*        also compressing further with zstd to reduce the size on disk.         *
-*                                                                               *
-*    Textures and Corresponding Formats:                                        *
-*        R  = BC4                                                               *
-*        RG = BC5                                                               *
-*        RGB, RGBA = DXT5                                                       *
-*    Android:                                                                   *
-*        All Textures are using ASTC 4X4 format because:                        *
-*        android doesn't have normal maps I haven't use other than ASTC4X4      *
-*        but in feature I might use ETC2 format because it has                  *
-*        faster compile times and faster compress speed. (etcpak)               *
-*    Author:                                                                    *
-*        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil         *
-********************************************************************************/
+/****************************************************************************
+*  Purpose:                                                                 *
+*    Gets all of the textures in GLTF or FBX scene compresses them to       *
+*    to make textures smaller on GPU and Disk I'm compressing them          *
+*    using BCn texture compression on Windows                               *
+*    and using ASTC texture compression for storing textures on android     *
+*    also compressing further with zstd to reduce the size on disk.         *
+*                                                                           *
+*  Textures and Corresponding Formats:                                      *
+*    R  = BC4                                                               *
+*    RG = BC5                                                               *
+*    RGB, RGBA = DXT5                                                       *
+*  Android:                                                                 *
+*    All Textures are using ASTC 4X4 format because:                        *
+*    android doesn't have normal maps I haven't use other than ASTC4X4      *
+*    but in feature I might use ETC2 format because it has                  *
+*    faster compile times and faster compress speed. (etcpak)               *
+*  Author:                                                                  *
+*    Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil         *
+****************************************************************************/
 
 #include <thread>
 #include <bitset>

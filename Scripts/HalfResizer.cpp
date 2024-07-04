@@ -24,7 +24,7 @@ static void MakeRGBA(const unsigned char* RESTRICT from, unsigned char* rgba, in
     static_assert(channelsBefore < 4, "image can't have more than 3 components before resizing");
     for (int i = 0; i < numPixels; i++)
     {
-        MemsetZero(rgba, 4 * sizeof(char));
+        SmallMemSet(rgba, 255, 4 * sizeof(char));
         for (int p = 0; p < channelsBefore; p++)
         {
             rgba[p] = from[p];
