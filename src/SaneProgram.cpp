@@ -31,11 +31,8 @@ static void KeyPressCallback(unsigned key)
 void AXInit()
 {
     wSetWindowName("Engine");
-
     wSetWindowPosition(0, 0);
     wSetVSync(true);
-    wSetWindowResizeCallback(WindowResizeCallback);
-    wSetKeyPressCallback(KeyPressCallback);
 }
 
 // return 1 if success
@@ -43,7 +40,8 @@ int AXStart()
 {
     g_CurrentScene.Init();
 
-    if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -65,22 +63,10 @@ int AXStart()
     characterController.Start(paladin);
 
     SceneRenderer::Init();
-    SceneRenderer::BeginUpdateLights();
-
-    g_CurrentScene.AddPointLight(MakeVec3(-13.0f, 7.0f, -1.5f), PackColorRGBU32(0.58f, 0.52f, 0.40f), 0.380f, 12.0f);
-    SceneRenderer::UpdateLight(0, &g_CurrentScene.m_PointLights[0]);
+ 
+    wSetWindowResizeCallback(WindowResizeCallback);
+    wSetKeyPressCallback(KeyPressCallback);
     
-    LightInstance spotLight;
-    spotLight.position  = MakeVec3(-17.0f, 2.0f, -1.0f);
-    spotLight.direction = MakeVec3(-1.0f, -0.0f, 0.0f);
-    spotLight.color     = PackColorRGBU32(0.88f, 0.10f, 0.18f);
-    spotLight.intensity = 0.8f;
-    spotLight.cutoff    = 0.8f;
-    spotLight.range     = 25.0f;
-    g_CurrentScene.AddLight(spotLight);
-    SceneRenderer::UpdateLight(0, &spotLight);
-    
-    SceneRenderer::EndUpdateLights();
     return 1;
 }
 
@@ -102,7 +88,7 @@ void AXLoop(bool canRender)
         float deltaTime = (float)GetDeltaTime();
             
         // animate and control the movement of character
-        const bool isSponza = true;
+        const bool isSponza = false;
         characterController.Update(deltaTime, isSponza);
         AnimationController* animController = &characterController.mAnimController;
 
@@ -122,13 +108,15 @@ void AXLoop(bool canRender)
         bool renderToBackBuffer = !pauseMenuOpened;
         EndRendering(renderToBackBuffer);
         pauseMenuOpened = false;
+    
+        SceneRenderer::ShowEditor();
     }
     else
     {
         DrawLastRenderedFrame();
     }
     pauseMenuOpened = ShowMenu(); // < from Menu.cpp
-    
+
     uRender(); // < user interface end 
     // RenderScene(&FBXScene);
     // todo material system

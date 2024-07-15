@@ -1,4 +1,6 @@
 
+#extension GL_ARB_shading_language_packing : enable
+
 #ifdef __ANDROID__
 #define MEDIUMP_FLT_MAX    65504.0
 #define saturateMediump(x) min(x, MEDIUMP_FLT_MAX)
@@ -81,7 +83,12 @@ float16 F_Schlick(float16 u, half3 albedo, float16 metallic) {
     return F0 + (1.0 - F0) * (x * x * x * x); // * x
 }
 
-half3 Lighting(half3 albedo, half3 l, half3 n, half3 v, float16 metallic, float16 roughness)
+float computeSpecularAO(float NoV, float ao, float roughness) {
+    return clamp(pow(NoV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
+half3 Lighting(half3 albedo, half3 l, half3 n, half3 v,
+               float16 metallic, float16 roughness, float16 ao)
 {
     half3 h = normalize(l + v);
     float16 ndl = max(dot(n, l), 0.10);
@@ -90,10 +97,11 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v, float16 metallic, float1
     float16 ldh = max(dot(l, h), 0.0);
 
     float16 D = D_GGX(ndh, roughness);
-    float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl); // V_Neubelt(ndv, ndl); //;
+    float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl) * ao; // V_Neubelt(ndv, ndl); 
     float16 F = F_Schlick(ldh, albedo, metallic);
-    float16 Fr = F * (D * V); // specular BRDF
-    return (albedo / PI) + vec3(Fr); //albedo * ndl + (r * 0.08);
+    float16 Fr = F * (D * V) * 0.92f; // specular BRDF
+    half3   Fd = (albedo / PI) * ao;
+    return Fd + Fr; //albedo * ndl + (r * 0.08);
 }
 
 vec3 WorldSpacePosFromDepthBuffer()
@@ -107,19 +115,32 @@ vec3 WorldSpacePosFromDepthBuffer()
 }
 
 // Direction vector from the surface point to the viewer (normalized).
+// direction between WorldSpacePos and 3rd row of invView(viewPos)
 vec3 GetViewRay(vec3 viewPos, vec3 worldSpacePos)
 {
-    // calculate direction between WorldSpacePos and 3rd row of invView(viewPos)
-    vec3 dir = viewPos - worldSpacePos;
-    return dir * inversesqrt(dot(dir, dir));
+    return normalize(viewPos - worldSpacePos);
+}
+
+half3 ACESFilm(half3 x)
+{
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
 }
 
 // https://www.shadertoy.com/view/WdjSW3
 // equivalent to reinhard tone mapping but no need to gamma correction
 half3 CustomToneMapping(half3 x)
 {
+    #ifdef __ANDROID__
     x += 0.0125;
     return x / (x + 0.15) * 0.88;
+    #else
+    return pow(ACESFilm(x), vec3(1.0 / 2.2));
+    #endif
 }
 
 // https://www.shadertoy.com/view/lsKSWR
@@ -131,14 +152,12 @@ float16 Vignette(half2 uv)
     return vig; 
 }
 
-#ifdef __ANDROID__
 // gaussian blur
 lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp float e) 
 {
     const lowp float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
-    return Weights5[0]*a + Weights5[1]*(b+c) + Weights5[2]*(d+e);
+    return Weights5[0] * a + Weights5[1] * (b + c) + Weights5[2] * (d + e);
 }
-#endif
 
 float16 EaseInCirc(float16 x)
 {
@@ -148,18 +167,11 @@ float16 EaseInCirc(float16 x)
 // get shadow and ao
 float GetShadow(float shadow, vec3 surfPos)
 {
-    // lowp float ao = 0.0;
-    // #ifdef __ANDROID__
-    // ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
-    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2(-1, 0)).r,
-    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2( 1, 0)).r,
-    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2(-2, 0)).r,
-    //      textureOffset(uAmbientOclussionTex, texCoord, ivec2( 2, 0)).r);
-    // #endif
+    // if (gl_FragCoord.x > 900.0f) ao = 1.0f;
     // fake player shadow, works like point light but darkens instead of lighting
-    vec3 playerPos = uPlayerPos + vec3(0.0, 0.3, 0.0);
+    vec3 playerPos = uPlayerPos + vec3(0.0, 0.15, 0.0);
     vec3 surfDir = playerPos - surfPos;
-    surfDir *= 4.0; // scale down the shadow by 4.0x
+    surfDir *= 6.0; // scale down the shadow by 6.0x
     float len = inversesqrt(dot(surfDir, surfDir));
     float playerShadow = 1.0 - min(len, 1.0);
     return shadow * EaseInCirc(playerShadow);
@@ -167,6 +179,13 @@ float GetShadow(float shadow, vec3 surfPos)
 
 void main()
 {
+    // vertical blur
+    lowp float ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
+                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0, -1)).r,
+                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0,  1)).r,
+                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0, -2)).r,
+                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0,  2)).r);
+
     float16 roughness    = texture(uRoughnessTex, texCoord).r;
     half4 normalMetallic = texture(uNormalMetallicTex, texCoord);
     half4 albedoShadow   = texture(uAlbedoShadowTex, texCoord); 
@@ -176,31 +195,36 @@ void main()
     
     float16 shadow    = albedoShadow.w;
     float16 metallic  = normalMetallic.w;
+    ao *= min(shadow * 3.0, 1.0);
+    ao += 0.05;
+    ao = min(1.0, ao * 1.1);
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
     const half3 sunColor = vec3(1.0); // 0.982f, 0.972, 0.966);
     
-    half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, normalMetallic.xyz, viewRay, metallic, roughness);
+    half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, 
+                              normalMetallic.xyz, viewRay, metallic, roughness, ao);
 
     for (int i = 0; i < uNumPointLights; i++)
     {
         half3 lightDir = pos - uPointLights[i].position;
         float16 len = length(lightDir);
         float16 range = uPointLights[i].range;
-        float16 intensity = min(len, range) / range;
+        float16 mIntensity = min(len, range) / range;
     
-        intensity = intensity * intensity;
-        intensity = 1.0 - intensity;
-        intensity *= uPointLights[i].intensity;
+        mIntensity = mIntensity * mIntensity;
+        mIntensity = 1.0 - mIntensity;
+        mIntensity *= uPointLights[i].intensity;
     
         lightDir = lightDir / len; // < normalize
         half3 lightColor = unpackUnorm4x8(uPointLights[i].color).xyz;
         lightColor = lightColor * lightColor; // convert to linear space
         half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
-        lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness) * intensity;
-        shadow = min(shadow + intensity, 1.0);
+        lighting += Lighting(color, lightDir, normalMetallic.xyz, viewRay, 
+                             metallic, roughness, ao) * mIntensity;
+        shadow = min(shadow + mIntensity, 1.0);
     }
     for (int i = 0; i < uNumSpotLights; i++)
     {
@@ -216,15 +240,16 @@ void main()
             len = min(len, spotLight.range) / spotLight.range;
             len = 1.0 - len;
             
-            float16 intensity = spotLight.intensity * len * angle;
+            float16 mIntensity = spotLight.intensity * len * angle;
             half3 lightColor = unpackUnorm4x8(spotLight.color).xyz;
             lightColor = lightColor * lightColor;
             half3 color = mix(albedoShadow.rgb, lightColor, 0.55);
-            lighting *= max(intensity, 0.25);
-
-            half3 sl = Lighting(color, lightDir, normalMetallic.xyz, viewRay, metallic, roughness);
-            lighting += sl * intensity;
-            shadow += shadow + intensity;
+            lighting *= max(mIntensity, 0.25);
+    
+            half3 sl = Lighting(color, lightDir, normalMetallic.xyz, viewRay, 
+                                metallic, roughness, ao);
+            lighting += sl * mIntensity;
+            shadow += shadow + mIntensity;
         }
     }
     

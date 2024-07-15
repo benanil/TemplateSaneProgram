@@ -16,6 +16,14 @@
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
 
+// from HBAO.hpp
+extern Texture mBlurResultTX;
+extern void HBAOInit(int width, int height);
+extern void HBAOResize(int width, int height);
+extern void HBAORender(Camera* camera, Texture* depthTex, Texture* normalTex);
+extern void HBAOEdit(Vector2f pos, int* currElement, float textPadding);
+extern void HBAODestroy();
+
 namespace SceneRenderer
 {
     Camera      m_Camera;
@@ -44,14 +52,6 @@ namespace SceneRenderer
     };
 
     MainFrameBuffer m_MainFrameBuffer;
-    // MainFrameBuffer m_MainFrameBufferHalf;
-    Shader m_MainFrameBufferCopyShader;
-    
-    Shader      m_SSAOShader; 
-    Shader      m_RedUpsampleShader; 
-    FrameBuffer m_SSAOFrameBuffer;
-    Texture     m_SSAOHalfTexture;
-    Texture     m_SSAOTexture;
 
     FrameBuffer m_ResultFrameBuffer;
     Texture m_ResultTexture;
@@ -104,13 +104,13 @@ namespace SceneRenderer
 
 namespace ShadowSettings
 {
-    const int ShadowMapSize = 1 << (11 + !IsAndroid()); // mobile 2k, pc 4k
-    const float OrthoSize   = 32.0f; 
-    const float NearPlane   = 1.0f;
-    const float FarPlane    = 192.0f;
+    const int ShadowMapSize = 1 << (11 + (!IsAndroid() << 1)); // mobile 2k, pc 4k
+    float OrthoSize   = 128.0f; 
+    float NearPlane   = 1.0f;
+    float FarPlane    = 128.0f;
     
-    const float Bias = 0.001f;
-    const Vector3f OrthoOffset{};
+    float Bias = 0.001f;
+    Vector3f OrthoOffset={32.0f, 56.0f, 5.0f};
 
     inline Matrix4 GetOrthoMatrix()
     {
@@ -120,6 +120,94 @@ namespace ShadowSettings
 
 namespace SceneRenderer 
 {
+
+    
+void ShowEditor()
+{
+    static bool open = false;
+    if (GetKeyPressed('B')) open = !open;
+    if (!open) return;
+    Vector2f bgPos   = { 20.0f, 90.0f };
+    Vector2f bgScale = { 450.0f, 600.0f };
+    Vector2f pos = bgPos;
+
+    uDrawQuad(pos, bgScale, uGetColor(uColorQuad) & 0x77FFFFFFu);
+    uBorder(pos, bgScale);
+
+    const float textPadding = 13.0f;
+    Vector2f zero2 = { 0.0f, 0.0f };
+
+    // uSetFloat(ufContentStart, uGetFloat(ufContentStart) * 2.0f);
+    float settingElementWidth = bgScale.x / 1.15f;
+    float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
+
+    Vector2f textSize = uCalcTextSize("Graphics");
+    uPushFloat(ufContentStart, settingElementWidth);
+ 
+    // uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.0f);
+    float settingsXStart = 20.0f;
+    pos.y += textSize.y + textPadding;
+    pos.x += settingsXStart;
+    uDrawText("Graphics", pos);
+    // uPopFloat(ufTextScale);
+
+    float lineLength = bgScale.x * 0.85f;
+    float xoffset = (bgScale.x - lineLength) * 0.5f; // where line starts
+    pos.x += xoffset;
+    pos.y += 20.0f; // line padding
+    pos.x -= settingsXStart;
+
+    uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
+    uLineHorizontal(pos, lineLength, uTriEffect_None);
+    uPopColor(uColorLine);
+
+    pos.x -= xoffset;
+    pos.x += elementsXOffset;
+    pos.y += textSize.y + textPadding;
+
+    static int CurrElement = 0;
+    const int numElements = 11; // number of options plus back button
+
+    uPushFloat(ufTextScale, 0.6f);
+    uPushFloat(ufFieldWidth, uGetFloat(ufFieldWidth) * 0.8f);
+
+    uSetElementFocused(CurrElement == 0);
+    if (uFloatField("Ortho Size", pos, &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
+    {
+        CurrElement = 0;
+        m_RedrawShadows = 1;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 1);
+    static int orthoIndex = 0;
+    if (uFloatVecField("Ortho Offset", pos, &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
+    {
+        CurrElement = 1;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 2);
+    if (uFloatField("Sun Angle", pos, &g_CurrentScene.m_SunAngle, -PI, PI+0.15f, 0.04f))
+    {
+        m_RedrawShadows = 1;
+        CurrElement = 2;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 3);
+    if (uFloatField("Far Plane", pos, &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
+    {
+        m_RedrawShadows = 1;
+        CurrElement = 3;
+    }
+
+    HBAOEdit(pos, &CurrElement, textSize.y + textPadding);
+
+    uPopFloat(ufTextScale);
+    uPopFloat(ufFieldWidth);
+    uPopFloat(ufContentStart);
+}
 
 void DrawLastRenderedFrame()
 {
@@ -191,28 +279,12 @@ static void DeleteMainFrameBuffer(MainFrameBuffer& frameBuffer)
     rDeleteFrameBuffer(frameBuffer.Buffer);
 }
 
-static void DeleteSSAOFrameBuffer()
-{
-    rDeleteFrameBuffer(m_SSAOFrameBuffer);
-    rDeleteTexture(m_SSAOHalfTexture);
-    rDeleteTexture(m_SSAOTexture);
-}
-
-static void CreateSSAOFrameBuffer(int width, int height)
-{
-    width  = GetRBWidth(width, height);
-    height = GetRBHeight(width, height);
-    m_SSAOFrameBuffer = rCreateFrameBuffer();
-    m_SSAOHalfTexture = rCreateTexture(width / 2, height / 2, nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
-    m_SSAOTexture     = rCreateTexture(width    , height    , nullptr, TextureType_R8, TexFlags_ClampToEdge | TexFlags_Nearest);
-}
-
 static void CreateFrameBuffers(int width, int height)
 {
     __const DepthType depthType = IsAndroid() ? DepthType_24 : DepthType_32;
 
     m_ResultFrameBuffer = rCreateFrameBuffer();
-    m_ResultTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_ClampToEdge | TexFlags_Nearest);
+    m_ResultTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_RawData);
     m_ResultDepthTexture = rCreateDepthTexture(width, height, depthType);
     rBindFrameBuffer(m_ResultFrameBuffer);
     rFrameBufferAttachColor(m_ResultTexture, 0);
@@ -221,8 +293,6 @@ static void CreateFrameBuffers(int width, int height)
     rFrameBufferCheck();
     
     CreateMainFrameBuffer(m_MainFrameBuffer, width, height, false);
-    // CreateMainFrameBuffer(m_MainFrameBufferHalf, width / 2, height / 2, true); // last arg ishalf true
-    CreateSSAOFrameBuffer(width, height);
 }
 
 static void DeleteFrameBuffers()
@@ -232,8 +302,6 @@ static void DeleteFrameBuffers()
     rDeleteFrameBuffer(m_ResultFrameBuffer);
 
     DeleteMainFrameBuffer(m_MainFrameBuffer);
-    // DeleteMainFrameBuffer(m_MainFrameBufferHalf);
-    DeleteSSAOFrameBuffer();
 }
 
 void WindowResizeCallback(int width, int height)
@@ -245,6 +313,7 @@ void WindowResizeCallback(int width, int height)
     rSetViewportSize(smallerWidth, smallerHeight);
     m_Camera.RecalculateProjection(width, height);
     DeleteFrameBuffers();
+    HBAOResize(smallerWidth, smallerHeight);
     CreateFrameBuffers(width, height);
     m_RedrawShadows = 2;
     m_ShouldReRender = true;
@@ -267,16 +336,6 @@ static void GetUniformLocations()
     lHasAnimation   = rGetUniformLocation("uHasAnimation");
     lViewProj       = rGetUniformLocation("uViewProj");
     lAnimTex        = rGetUniformLocation("uAnimTex");
-
-    // SSAO uniform locations
-    sDepthMap  = rGetUniformLocation(m_SSAOShader, "uDepthMap");
-    sNormalTex = rGetUniformLocation(m_SSAOShader, "uNormalTex");
-    sView      = rGetUniformLocation(m_SSAOShader, "uView");
-
-    // SSAO downsample uniform locations
-    rBindShader(m_MainFrameBufferCopyShader);
-    dNormalTex = rGetUniformLocation("uNormalTex"); 
-    dDepthTex  = rGetUniformLocation("uDepthTex");
 
     rBindShader(m_DeferredPBRShader);
     lPlayerPos                  = rGetUniformLocation("uPlayerPos");
@@ -309,19 +368,9 @@ static void GetUniformLocations()
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lRanges     , MaxNumLights, "uSpotLights[0].range");
 }
 
-inline Shader FullScreenShaderFromPath(const char* path)
-{
-    ScopedText fragSource = ReadAllText(path, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    Shader shader = rCreateFullScreenShader(fragSource);
-    return shader;
-}
-
 static void CreateShaders()
 {
-    m_SSAOShader                = FullScreenShaderFromPath("Shaders/SSAO.glsl");
-    m_RedUpsampleShader         = FullScreenShaderFromPath("Shaders/UpscaleRed.glsl");
-    m_MainFrameBufferCopyShader = FullScreenShaderFromPath("Shaders/MainFrameBufferCopy.glsl");
-    m_DeferredPBRShader         = FullScreenShaderFromPath("Shaders/DeferredPBR.glsl");
+    m_DeferredPBRShader = rImportFullScreenShader("Shaders/DeferredPBR.glsl");
 
     ScopedText gbufferVertexShader   = ReadAllText("Shaders/3DVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     ScopedText gbufferFragmentShader = ReadAllText("Shaders/GBuffer.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
@@ -344,9 +393,6 @@ static void CreateShaders()
 static void DeleteShaders()
 {
     rDeleteShader(m_GBufferShader);
-    rDeleteShader(m_SSAOShader);
-    rDeleteShader(m_RedUpsampleShader);
-    rDeleteShader(m_MainFrameBufferCopyShader);
     rDeleteShader(m_DeferredPBRShader);
     rDeleteShader(m_ShadowShader);
 }
@@ -358,7 +404,7 @@ static void SetupShadowRendering()
 
     m_ShadowShader      = rCreateShader(shadowVertexShader.text, shadowFragmentShader);
     m_ShadowFrameBuffer = rCreateFrameBuffer();
-    m_ShadowTexture     = rCreateDepthTexture(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize, DepthType_16);
+    m_ShadowTexture     = rCreateDepthTexture(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize, DepthType_24);
 
     lShadowModel       = rGetUniformLocation(m_ShadowShader, "model");
     lShadowLightMatrix = rGetUniformLocation(m_ShadowShader, "lightMatrix");
@@ -430,16 +476,27 @@ void Init()
 
     m_Camera.Init(windowStartSize);
 
+    HBAOInit(GetRBWidth(windowStartSize.x, windowStartSize.y), 
+             GetRBHeight(windowStartSize.x, windowStartSize.y));
+
     SetupShadowRendering();
 
     MemsetZero(&m_defaultMaterial, sizeof(AMaterial));
     m_defaultMaterial.metallicFactor  = 1256;
     m_defaultMaterial.roughnessFactor = 1256;
-    m_defaultMaterial.diffuseColor    = 0xFCBD8733; 
-    m_defaultMaterial.specularColor   = 0xFCBD8733; 
+    m_defaultMaterial.diffuseColor    = 0xFCBD8733;
+    m_defaultMaterial.specularColor   = 0xFCBD8733;
     m_defaultMaterial.baseColorFactor = 0xFFFFFFFF;
     m_defaultMaterial.baseColorTexture.index = -1;
     m_defaultMaterial.GetNormalTexture().index = -1;
+
+    // SSAOParams.Radius = 1.f;
+    // SSAOParams.Bias = 0.2f;
+    // SSAOParams.PowerExponent = 1.5f;
+    // SSAOParams.Blur.Enable = true;
+    // SSAOParams.Blur.Radius = GFSDK_SSAO_BLUR_RADIUS_4;
+    // SSAOParams.Blur.SharpnessProfile.Enable = true;
+    // SSAOParams.Blur.Sharpness = 6.f;
 }
 
 void BeginRendering()
@@ -523,7 +580,7 @@ void BeginShadowRendering(Scene* scene)
     rSetViewportSize(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize);
     rClearDepth();
 
-    Vector3f offset = m_ShadowFollowCamera ? m_Camera.targetPos : Vector3f::Zero();
+    Vector3f offset = ShadowSettings::OrthoOffset; // m_ShadowFollowCamera ? m_Camera.targetPos : Vector3f::Zero();
     Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 50.0f + offset, -sunLight.dir, Vector3f::Up());
     Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
     m_LightMatrix = view * ortho;
@@ -569,11 +626,11 @@ bool ShouldReRender()
 static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& primitive)
 {
     int baseColorIndex = material.baseColorTexture.index;
-    if (prefab->numTextures > 0 && baseColorIndex != -1)
+    if (prefab->numTextures > 0 && baseColorIndex != UINT16_MAX)
         rSetTexture(prefab->GetGPUTexture(baseColorIndex), 0, lAlbedo);
 
     int normalIndex  = material.GetNormalTexture().index;
-    int hasNormalMap = EnumHasBit(primitive.attributes, AAttribType_TANGENT) && normalIndex != -1;
+    int hasNormalMap = EnumHasBit(primitive.attributes, AAttribType_TANGENT) && normalIndex != UINT16_MAX;
 
     if (prefab->numTextures > 0 && hasNormalMap)
         rSetTexture(prefab->GetGPUTexture(normalIndex), 1, lNormalMap);
@@ -581,7 +638,10 @@ static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& pri
     rSetShaderValue(hasNormalMap, lHasNormalMap);
 
     int metalicRoughnessIndex = material.metallicRoughnessTexture.index;
-    if (prefab->textures && metalicRoughnessIndex != -1 && prefab->gpuTextures[metalicRoughnessIndex].width != 0)
+    if (metalicRoughnessIndex == UINT16_MAX)
+        metalicRoughnessIndex = material.specularTexture.index;
+
+    if (prefab->textures && metalicRoughnessIndex != UINT16_MAX && prefab->gpuTextures[metalicRoughnessIndex].width != 0)
         rSetTexture(prefab->gpuTextures[metalicRoughnessIndex], 2, lMetallicMap);
     else
     if (!IsAndroid())
@@ -620,10 +680,12 @@ static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, bool r
         bool shouldDraw = true;
 
         shouldDraw &= CheckAABBCulled(aabbMin, aabbMax, m_Camera.frustumPlanes, model);
-        // shouldDraw &= primitive.numIndices != 0;
+        shouldDraw &= primitive.numIndices != 0;
+        bool isAlpha = (material.alphaMode == AMaterialAlphaMode_Mask ||
+                        material.alphaMode == AMaterialAlphaMode_Blend);
 
         // if alpha blended render after all meshes for performance
-        if (shouldDraw && material.alphaMode == AMaterialAlphaMode_Mask) { 
+        if (shouldDraw && isAlpha) {
             m_DelayedAlphaCutoffs.EmplaceBack(&mesh.primitives[j], model);
             shouldDraw = false;
         }
@@ -734,42 +796,44 @@ void RenderAllSceneContent(Scene* scene)
     // }
 }
 
+#if 0
 static void DownscaleMainFrameBuffer()
 {
     // Downscale main frame buffer
-    // rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
-    // rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
-    // {
-    //     rClearDepth();
-    //     rBindShader(m_MainFrameBufferCopyShader);
-    // 
-    //     rSetTexture(m_MainFrameBuffer.ColorTexture , 0, dColorTex);
-    //     rSetTexture(m_MainFrameBuffer.NormalTexture, 1, dNormalTex);
-    //     rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
-    //     rRenderFullScreen();
-    // }
+    rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
+    rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
+    {
+        rClearDepth();
+        rBindShader(m_MainFrameBufferCopyShader);
+    
+        rSetTexture(m_MainFrameBuffer.ColorTexture , 0, dColorTex);
+        rSetTexture(m_MainFrameBuffer.NormalTexture, 1, dNormalTex);
+        rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
+        rRenderFullScreen();
+    }
 }
 
 static void SSAOPass()
 {
-    // // SSAO pass
-    // rBindFrameBuffer(m_SSAOFrameBuffer);
-    // rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
-    // rBindShader(m_SSAOShader);
-    // {
-    //     rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
-    //     rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
-    //     rRenderFullScreen();
-    // }
-    // // Upsample SSAO
-    // rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
-    // rFrameBufferAttachColor(m_SSAOTexture, 0);
-    // rBindShader(m_RedUpsampleShader);
-    // {
-    //     rSetTexture(m_SSAOHalfTexture, 0, rGetUniformLocation("halfTex"));
-    //     rRenderFullScreen();
-    // }
+    // SSAO pass
+    rBindFrameBuffer(m_SSAOFrameBuffer);
+    rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
+    rBindShader(m_SSAOShader);
+    {
+        rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
+        rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
+        rRenderFullScreen();
+    }
+    // Upsample SSAO
+    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
+    rFrameBufferAttachColor(m_SSAOTexture, 0);
+    rBindShader(m_RedUpsampleShader);
+    {
+        rSetTexture(m_SSAOHalfTexture, 0, rGetUniformLocation("halfTex"));
+        rRenderFullScreen();
+    }
 }
+#endif
 
 static void LightingPass()
 {
@@ -786,11 +850,11 @@ static void LightingPass()
         rSetShaderValue(invView.GetPtr(), lInvView, GraphicType_Matrix4);
         rSetShaderValue(invProj.GetPtr(), lInvProj, GraphicType_Matrix4);
 
-        rSetTexture(m_MainFrameBuffer.ColorTexture              , 0, lAlbedoTex);
+        rSetTexture(m_MainFrameBuffer.ColorTexture    , 0, lAlbedoTex);
         rSetTexture(m_MainFrameBuffer.RoughnessTexture, 1, lRoughnessTex);
-        rSetTexture(m_MainFrameBuffer.NormalTexture             , 2, lNormalTex);
-        rSetTexture(m_MainFrameBuffer.DepthTexture              , 3, lDepthMap);
-        rSetTexture(m_SSAOTexture                               , 4, lAmbientOclussionTex);
+        rSetTexture(m_MainFrameBuffer.NormalTexture   , 2, lNormalTex);
+        rSetTexture(m_MainFrameBuffer.DepthTexture    , 3, lDepthMap);
+        rSetTexture(mBlurResultTX                     , 4, lAmbientOclussionTex);
 
         rSetShaderValue(g_CurrentScene.m_PointLights.Size(), lNumPointLights);
         rSetShaderValue(g_CurrentScene.m_SpotLights.Size(), lNumSpotLights);
@@ -813,6 +877,8 @@ static void DrawSkybox()
 
 void EndRendering(bool renderToBackBuffer)
 {
+    HBAORender(&m_Camera, &m_MainFrameBuffer.DepthTexture, &m_MainFrameBuffer.NormalTexture);
+
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
     rSetViewportSize(windowSize.x, windowSize.y);
@@ -826,12 +892,11 @@ void EndRendering(bool renderToBackBuffer)
         rBindFrameBuffer(m_ResultFrameBuffer);
     }
 
+    rSetDepthTest(true);
+    rSetDepthWrite(true);
     // copy depth buffer to back buffer
     rRenderFullScreen(m_DepthCopyShader, m_MainFrameBuffer.DepthTexture.handle);
 
-    // DownscaleMainFrameBuffer();
-    //SSAOPass();
-    
     // screen space passes, no need depth
     rSetDepthTest(false);
     rSetDepthWrite(false);
@@ -860,6 +925,7 @@ void Destroy()
 
     rDeleteTexture(m_ShadowTexture);
     rDeleteFrameBuffer(m_ShadowFrameBuffer);
+    HBAODestroy();
 }
 
 } // scene renderer namespace endndndnd

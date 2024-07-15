@@ -28,7 +28,7 @@ typedef int TextureType;
 
 struct Texture
 {
-    int width, height;
+    int width, height, depth;
     unsigned int handle;
     TextureType type;
     unsigned char* buffer;
@@ -195,11 +195,11 @@ void rDestroyRenderer();
 
 void rSetBlending(bool val);
 
+void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst);
+
 void rDrawLine(Vector3f start, Vector3f end, uint color);
 
 void rDrawAllLines(float* viewProj);
-
-void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst);
 
 void rSetClockWise(bool val);
 
@@ -257,6 +257,8 @@ void rUnpackAlignment(int n);
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags);
 
+Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, void* data, TextureType type, TexFlags flags);
+
 Texture rCreateDepthTexture(int width, int height, DepthType depthType);
 
 // Imports texture from disk and loads to GPU
@@ -269,6 +271,8 @@ void rUpdateTexture(Texture texture, void* data);
 void rDeleteTexture(Texture texture);
 
 void rSetTexture(Texture texture, int index, unsigned int loc);
+
+void rSetTexture2DArray(Texture texture, int index, unsigned int loc);
 
 void rSetTexture(unsigned int textureHandle, int index, unsigned int loc);
 
@@ -283,7 +287,7 @@ struct FrameBuffer {
 };
 
 // don't forget to bind framebuffer after you create it
-FrameBuffer rCreateFrameBuffer();
+FrameBuffer rCreateFrameBuffer(bool bind = false);
 
 void rDeleteFrameBuffer(FrameBuffer frameBuffer);
      
@@ -297,6 +301,8 @@ void rFrameBufferAttachDepth(Texture texture);
      
 void rFrameBufferAttachColor(Texture texture, int index);
      
+void rFrameBufferAttachColorFrom2DArray(Texture texture, int attachmentIdx, int layerIdx);
+
 void rFrameBufferSetNumColorBuffers(int numBuffers);
      
 void rFrameBufferInvalidate(int numAttachments);
@@ -305,7 +311,9 @@ void rFrameBufferInvalidate(int numAttachments);
 /*//////////////////////////////////////////////////////////////////////////*/
 
 struct ComputeBuffer {
-    unsigned int handle; int index; 
+    unsigned int handle; 
+    int index; 
+    bool dynamic;
 };
 
 enum TextureAccess_ { 
@@ -319,19 +327,22 @@ void rBindShader(Shader shader);
 Shader rCreateShader(const char* vertexSource, const char* fragmentSource);
 Shader rImportShader(const char* vertexSource, const char* fragmentSource);
 Shader rCreateFullScreenShader(const char* fragmentSource);
+Shader rImportFullScreenShader(const char* path);
 
 // ComputeShader
+// note: use rBindShader function to bind compute shader
 Shader rCreateComputeShader(const char* source);
 Shader rImportComputeShader(const char* path);
-ComputeBuffer rComputeShaderCreateBuffer(Shader compute, int size, const char* name, const void* data = nullptr);
+ComputeBuffer rComputeCreateBuffer(Shader compute, int size, const char* name, const void* data = nullptr, bool dynamic = false);
+void rComputeUpdateBuffer(ComputeBuffer buffer, void* data, size_t size);
 
-void rComputeShaderBindBuffer(int binding, int buffer);
+void rComputeBindBuffer(int binding, int buffer);
 
-void rBindTextureToCompute(Texture texture, int unit, TextureAccess access);
+void rComputeBindTexture(Texture texture, int unit, TextureAccess access);
 // Don't forget bind before this function
-void rDispatchComputeShader(Shader shader, int workGroupsX, int workGroupsY, int workGroupsZ);
+void rDispatchCompute(Shader shader, int workGroupsX, int workGroupsY, int workGroupsZ);
 
-void rComputeShaderBarier();
+void rComputeBarier();
 
 void rDeleteShader(Shader shader);
 
@@ -403,12 +414,13 @@ enum TextureType_
     TextureType_RGBA8UI        = 34,
     TextureType_RGBA16UI       = 35,
     TextureType_RGBA32UI       = 36,
+    TextureType_RGBA16_SNORM   = 37,
     // Compressed Formats
-    TextureType_CompressedR    = 37,
-    TextureType_CompressedRG   = 38,
-	TextureType_CompressedRGB  = 39,
-	TextureType_CompressedRGBA = 40,
+    TextureType_CompressedR    = 38,
+    TextureType_CompressedRG   = 39,
+	TextureType_CompressedRGB  = 40,
+	TextureType_CompressedRGBA = 41,
     // Depth Formats
-    TextureType_DepthStencil24 = 41,
-    TextureType_DepthStencil32 = 42
+    TextureType_DepthStencil24 = 42,
+    TextureType_DepthStencil32 = 43
 };

@@ -1,5 +1,5 @@
 
-out vec4 result;
+layout(location = 0) out vec4 result;
 in vec3 pos;
 
 float Ease(float x) {

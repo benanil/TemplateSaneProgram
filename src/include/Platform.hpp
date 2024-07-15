@@ -8,6 +8,7 @@
 
 #pragma once
 
+// enables logging no matter what
 #define AX_ENABLE_LOGGING
 
 #if defined(AX_ENABLE_LOGGING) || defined(_DEBUG) || defined(DEBUG) || defined(Debug)
@@ -108,6 +109,7 @@ bool wSetClipboardString(const char* str); // returns true if success
 
 typedef int ASound;
 int LoadSound(const char* path);
+void SetGlobalVolume(float v);
 void SoundPlay(ASound sound);
 void SoundRewind(ASound sound); // seeks to beginning of the sound
 void SoundSetVolume(ASound sound, float volume);

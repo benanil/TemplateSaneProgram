@@ -1,6 +1,6 @@
 out vec4 Result;
 
-in mediump vec2 vTexCoord;
+layout(location = 0) in mediump vec2 vTexCoord;
 
 uniform vec3 uHSV;
 uniform vec2 uSize;

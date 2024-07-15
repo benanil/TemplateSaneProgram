@@ -61,7 +61,7 @@ static inline void RotateNode(ANode* node, float xAngle, float yAngle)
     VecStore(node->rotation, q);
 }
 
-__forceinline Matrix4 GetNodeMatrix(ANode* node)
+purefn Matrix4 GetNodeMatrix(ANode* node)
 {
     return Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale);
 }
@@ -220,9 +220,9 @@ void AnimationController::PlayAnim(int index, float norm)
     UploadPose(mAnimPoseA);
 }
 
-void AnimationController::TriggerAnim(int index, float transitionInTime, float transitionOutTime, eAnimTriggerOpt triggerOpt)
+bool AnimationController::TriggerAnim(int index, float transitionInTime, float transitionOutTime, eAnimTriggerOpt triggerOpt)
 {
-    if (IsTrigerred()) return; // already trigerred
+    if (IsTrigerred()) return false; // already trigerred
 
     mTriggerredAnim = index;
     mTriggerOpt = triggerOpt;
@@ -231,13 +231,14 @@ void AnimationController::TriggerAnim(int index, float transitionInTime, float t
     mTransitionOutTime = transitionOutTime;
     if (transitionInTime < 0.02f) { // no transition requested
         mState = AnimState_TriggerPlaying;
-        return;
+        return true;
     }
 
     mState = AnimState_TriggerIn;
     SmallMemCpy(mAnimPoseC, mAnimPoseA, sizeof(mAnimPoseA));
     if (EnumHasBit(triggerOpt, eAnimTriggerOpt_ReverseOut))
         mAnimTime.y = 0.0f;
+    return true;
 }
 
 bool AnimationController::TriggerTransition(float deltaTime, int targetAnim)
@@ -340,4 +341,4 @@ void ClearAnimationController(AnimationController* animSystem)
 
 void DestroyAnimationSystem()
 { }
-
+    

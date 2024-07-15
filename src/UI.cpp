@@ -264,9 +264,9 @@ namespace
         Vector2f pos, scale;
         int handle;
     };
-    const int MaxSprites = 16;
+    const int MaxSprites = 128;
     int mNumSprites = 0;
-    Sprite mSprites[16];
+    Sprite mSprites[MaxSprites];
     Shader mTextureDrawShader;
     
     //------------------------------------------------------------------------
@@ -318,13 +318,13 @@ static void ImportShaders()
     mColorPick.shader = rImportShader("Shaders/SingleQuadVert.glsl", "Shaders/ColorPickFrag.glsl");
     mColorPick.alpha = 1.0f;
 
-    ScopedText textureDrawVertTxt   = ReadAllText("Shaders/SingleQuadVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText spriteDrawVertTxt   = ReadAllText("Shaders/SingleQuadVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     const char* textureDrawFragTxt = AX_SHADER_VERSION_PRECISION() R"(
     in vec2 vTexCoord; out vec4 color; uniform sampler2D tex;
     void main() {
-        color = texture(tex, vTexCoord);
+        color = vec4(texture(tex, vec2(vTexCoord.x, 1.0-vTexCoord.y)).rgb, 1.0);
     })";
-    mTextureDrawShader = rCreateShader(textureDrawVertTxt.text, textureDrawFragTxt);
+    mTextureDrawShader = rCreateShader(spriteDrawVertTxt.text, textureDrawFragTxt);
 }
 
 static void InitSounds()
@@ -407,7 +407,7 @@ static void SaveFontAtlasBin(char* path, int pathLen,
 {
     // .bft = Binary Font Type
     ChangeExtension(path, pathLen, "bft");
-    AFile file = AFileOpen(path, AOpenFlag_Write);
+    AFile file = AFileOpen(path, AOpenFlag_WriteBinary);
     AFileWrite(&AtlasVersion, sizeof(int), file);
     AFileWrite(&atlas->cellCount, sizeof(int), file);
     AFileWrite(&atlas->charSize, sizeof(int), file);
@@ -424,7 +424,7 @@ static void LoadFontAtlasBin(const char* path,
                              unsigned char (&image)[AtlasWidth][AtlasWidth])
 {
     int version;
-    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFile file = AFileOpen(path, AOpenFlag_ReadBinary);
     AFileRead(&version, sizeof(int), file);
     AFileRead(&atlas->cellCount, sizeof(int), file);
     AFileRead(&atlas->charSize, sizeof(int), file);
@@ -439,7 +439,7 @@ static void LoadFontAtlasBin(const char* path,
 static bool BFTLastVersion(const char* path)
 {
     int version;
-    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFile file = AFileOpen(path, AOpenFlag_ReadBinary);
     AFileRead(&version, sizeof(int), file);
     AFileClose(file);
     return version == AtlasVersion;
@@ -706,7 +706,7 @@ void uPushColor(uColor color, uint val) {
 void uPushFloat(uFloat what, float val) {
     int& index = mFloatStackCnt[what];
     ASSERTR(index < StackSize, return);
-    mFloatStack[what][index++] = val;    
+    mFloatStack[what][index++] = val;
 }
 
 void uPopColor(uColor color) {
@@ -736,7 +736,7 @@ inline ushort MakeFixed(float f)
 
 // reference resolution is always 1920x1080,
 // we will remap input position and scale according to current window size
-void uText(const char* text, Vector2f position, uTextFlags flags)
+void uDrawText(const char* text, Vector2f position, uTextFlags flags)
 {
     if (text == nullptr) return;
     ASSERTR(mInitialized == true, return);
@@ -944,7 +944,7 @@ int CalcTextNumLines(const char* text, uTextFlags flags)
 
 //------------------------------------------------------------------------
 // Quad Drawing
-void uQuad(Vector2f position, Vector2f scale, uint color, uint properties)
+void uDrawQuad(Vector2f position, Vector2f scale, uint color, uint properties)
 {
     ASSERTR(mQuadIndex < MaxQuads, return);
     position *= mWindowRatio;
@@ -1039,11 +1039,11 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered)
 
         float lineHeight = textSize.y / (float)numLines;
         mousePos.y += lineHeight;
-        uText(text, mousePos + (textSize * 0.05f), textFlag);
+        uDrawText(text, mousePos + (textSize * 0.05f), textFlag);
         
         mousePos.y -= lineHeight;
         textSize.y += lineHeight * 0.5f;
-        uQuad(mousePos, textSize, uGetColor(uColorQuad), uButtonOpt_Border);
+        uDrawQuad(mousePos, textSize, uGetColor(uColorQuad), uButtonOpt_Border);
         uBorder(mousePos, textSize);
 
         uPopFloat(ufTextScale);
@@ -1071,7 +1071,7 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     if (mWasHovered || !!(opt & uButtonOpt_Hovered))
         quadColor = mColors[uColorHovered];
 
-    uQuad(pos, scale, quadColor, opt & 0xFF);
+    uDrawQuad(pos, scale, quadColor, opt & 0xFF);
     if (!!(opt & uButtonOpt_Border)) {
         uBorder(pos, scale);
     }
@@ -1082,15 +1082,28 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     Vector2f padding = (scale - textSize) * 0.5f;
     pos.y += textSize.y;
     pos += padding;
-    uText(text, pos);
+    uDrawText(text, pos);
     return pressed;
+}
+
+inline Vector2f uLabel(const char* label, Vector2f pos) {
+    Vector2f labelSize;
+    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
+    if (label != nullptr) {
+        labelSize = uCalcTextSize(label);
+        uDrawText(label, pos);
+    } else {
+        labelSize.y = uCalcTextSize("A").y;
+        labelSize.x = labelSize.y;
+    }
+    uPopFloat(ufTextScale);
+    return labelSize * 1.2f;
 }
 
 bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMark)
 {
-    Vector2f textSize = uCalcTextSize(text);
-    uText(text, pos);
-    float checkboxHeight = uCalcTextSize("a").y;
+    Vector2f textSize = uLabel(text, pos);
+    float checkboxHeight = textSize.y;
     // detect box position
     float checkboxStart = uGetFloat(ufContentStart);
     if (checkboxStart < 0.01f) {
@@ -1105,7 +1118,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
     pos.y -= boxScale.y - 4.0f;
     boxScale /= mWindowRatio;
     boxScale *= 0.80f;
-    uQuad(pos, boxScale, uGetColor(uColorCheckboxBG));
+    uDrawQuad(pos, boxScale, uGetColor(uColorCheckboxBG));
 
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
@@ -1124,7 +1137,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
         float scale = uGetFloat(ufTextScale);
         pos.y += boxScale.y - 4.0f;
         uPushFloat(ufTextScale, scale * 0.85f);
-        uText(IC_CHECK_MARK, pos); // todo properly scale the checkmark
+        uDrawText(IC_CHECK_MARK, pos); // todo properly scale the checkmark
         uPopFloat(ufTextScale);
     }
     else if (enabled && cubeCheckMark)
@@ -1132,7 +1145,7 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
         Vector2f slightScale = boxScale * 0.17f;
         uint color = uGetColor(uColorSliderInside);
         float lineThickness = uGetFloat(ufLineThickness);
-        uQuad(pos + slightScale + lineThickness, boxScale - (slightScale * 2.0f)-lineThickness, color);
+        uDrawQuad(pos + slightScale + lineThickness, boxScale - (slightScale * 2.0f)-lineThickness, color);
     }
     
     bool changed = enabled != *isEnabled;
@@ -1149,26 +1162,26 @@ inline LineThicknesBorderColor GetLineData()
 
 void uLineVertical(Vector2f begin, float size, uint properties) {
     LineThicknesBorderColor data = GetLineData();
-    uQuad(begin, MakeVec2(data.thickness, size), data.color, properties);
+    uDrawQuad(begin, MakeVec2(data.thickness, size), data.color, properties);
 }
 
 void uLineHorizontal(Vector2f begin, float size, uint properties) {
     LineThicknesBorderColor data = GetLineData();
-    uQuad(begin, MakeVec2(size, data.thickness), data.color, properties);
+    uDrawQuad(begin, MakeVec2(size, data.thickness), data.color, properties);
 }
 
 void uBorder(Vector2f begin, Vector2f scale)
 {
     LineThicknesBorderColor data = { uGetFloat(ufLineThickness), uGetColor(uColorBorder) };
-    uQuad(begin, MakeVec2(scale.x, data.thickness), data.color);
-    uQuad(begin, MakeVec2(data.thickness, scale.y), data.color);
+    uDrawQuad(begin, MakeVec2(scale.x, data.thickness), data.color);
+    uDrawQuad(begin, MakeVec2(data.thickness, scale.y), data.color);
     
     begin.y += scale.y;
-    uQuad(begin, MakeVec2(scale.x + data.thickness, data.thickness), data.color);
+    uDrawQuad(begin, MakeVec2(scale.x + data.thickness, data.thickness), data.color);
     
     begin.y -= scale.y;
     begin.x += scale.x;
-    uQuad(begin, MakeVec2(data.thickness, scale.y), data.color);
+    uDrawQuad(begin, MakeVec2(data.thickness, scale.y), data.color);
 }
 
 inline char* utf8_prev_char(const char* start, char *s) {
@@ -1210,25 +1223,13 @@ void uKeyPressCallback(unsigned unicode)
     }
 }
 
-inline Vector2f Label(const char* label, Vector2f pos) {
-    Vector2f labelSize;
-    if (label != nullptr) {
-        labelSize = uCalcTextSize(label);
-        uText(label, pos);
-    } else {
-        labelSize.y = uCalcTextSize("A").y;
-        labelSize.x = labelSize.y;
-    }
-    return labelSize;
-}
-
 // maybe feature: TextBox cursor horizontal vertical movement (arrow keys)
 // maybe feature: TextBox control shift fast move
 // maybe feature: TextBox Shift Arrow select. (paste works copy doesnt)
 // feature:       TextBox multiline text
 bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
 {
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
 
     if (size.x + size.y < Epsilon) // if size is not determined generate it
     {
@@ -1240,7 +1241,7 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size);
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uDrawQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
@@ -1312,7 +1313,7 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
         }
     }
 
-    uText(text, pos, uTextFlags_NoNewLine);
+    uDrawText(text, pos, uTextFlags_NoNewLine);
     
     uEndScissor(uScissorMask_Text);
     uPopFloat(ufTextScale);
@@ -1321,7 +1322,7 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
 
 int uDropdown(const char* label, Vector2f pos, const char** names, int numNames, int current)
 {
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     Vector2f size;
     size.x = uGetFloat(ufTextBoxWidth);
     size.y = labelSize.y * 0.85f;
@@ -1353,7 +1354,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
     
     uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.9f);
     
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uDrawQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     uPushColor(uColorBorder, borderColor);
     uBorder(pos, size);
@@ -1365,7 +1366,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
     if (!(mDropdownOpen && isCurrentDropdown))
     {
         current = Clamp(current, 0, numNames - 1);
-        uText(names[current], textPos, uTextFlags_NoNewLine);
+        uDrawText(names[current], textPos, uTextFlags_NoNewLine);
     }
     else if (!newlyOpenned) // < if dropdown is newly clicked, it will select first element, to avoid it we should do this test
     {
@@ -1374,11 +1375,11 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
 
         for (int i = 0; i < numNames; i++)
         {
-            uText(names[i], textPos, uTextFlags_NoNewLine);
+            uDrawText(names[i], textPos, uTextFlags_NoNewLine);
             clicked = uClickCheck(pos, size);
             
             if (mWasHovered) {
-                uQuad(pos, size, uGetColor(uColorHovered));
+                uDrawQuad(pos, size, uGetColor(uColorHovered));
                 if (mLastHoveredDropdown != i) 
                     PlayButtonHoverSound(), mLastHoveredDropdown = i;
             }
@@ -1402,7 +1403,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
 
 int uChoice(const char* label, Vector2f pos, const char** names, int numNames, int current)
 {   
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     Vector2f size = { uGetFloat(ufTextBoxWidth), uGetFloat(ufSliderHeight) };
 
     float contentStart = uGetFloat(ufContentStart);
@@ -1416,7 +1417,7 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     
     pos.x += centerOffset;
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
-        uText(names[current], pos);
+        uDrawText(names[current], pos);
     uPopFloat(ufTextScale);
     pos.x -= centerOffset + arrowSize.x;
 
@@ -1435,10 +1436,10 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
     }
 
     uint iconColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorText);
-    uHorizontalTriangle(pos, arrowSize.x * 0.82f, -0.8f, iconColor);
+    uDrawHorizontalTriangle(pos, arrowSize.x * 0.82f, -0.8f, iconColor);
     pos.x += size.x;
     pos.x += arrowSize.x;
-    uHorizontalTriangle(pos, arrowSize.x * 0.82f, 0.8f, iconColor);
+    uDrawHorizontalTriangle(pos, arrowSize.x * 0.82f, 0.8f, iconColor);
     
     bool goRight = elementFocused && GetKeyPressed(Key_RIGHT);
     if (uClickCheck(pos, arrowSize, chkOpt) || goRight)
@@ -1452,7 +1453,7 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
 
 bool uSlider(const char* label, Vector2f pos, float* val, float scale)
 {
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     Vector2f size = { scale, uGetFloat(ufSliderHeight) };
     
     float contentStart = uGetFloat(ufContentStart);
@@ -1475,20 +1476,22 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
         *val = Remap(mousePos.x, 0.0f, size.x * mWindowRatio.x, 0.0f, 1.0f);
     }
 
-    if (elementFocused && GetKeyReleased(Key_LEFT))  
+    if (elementFocused && GetKeyReleased(Key_LEFT))
         *val -= 0.1f,  edited = true, PlayButtonHoverSound();
     if (elementFocused && GetKeyReleased(Key_RIGHT)) 
         *val += 0.1f,  edited = true, PlayButtonHoverSound();
 
+    if (*val < 0.01f) *val = 0.0f;
+
     *val = Clamp(*val, 0.0f, 1.0f);
     
-    if (*val > 0.001f)
+    if (*val > 0.01f)
     {
         float lineThickness = uGetFloat(ufLineThickness);
         size.x *= *val;
         pos    += lineThickness;
         size   -= lineThickness;
-        uQuad(pos, size, uGetColor(uColorSliderInside));
+        uDrawQuad(pos, size, uGetColor(uColorSliderInside));
         
         uPushFloat(ufLineThickness, 3.0f);
         pos.x += size.x;
@@ -1500,7 +1503,7 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
 
 FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int maxVal, float dragSpeed)
 {
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
@@ -1509,7 +1512,7 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int ma
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uDrawQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
@@ -1565,7 +1568,7 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int ma
     IntToString(valText, value);
     float textScale = uGetFloat(ufTextScale);
     uPushFloat(ufTextScale, textScale * 0.7f);
-        uText(valText, pos);
+        uDrawText(valText, pos);
     uPopFloat(ufTextScale);
     return result;
 }
@@ -1586,7 +1589,7 @@ inline float SetFloatFract0(float val, int n)
 
 FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVal, float maxVal, float dragSpeed)
 {
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
@@ -1595,7 +1598,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uDrawQuad(pos, size, uGetColor(uColorTextBoxBG));
 
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
@@ -1694,7 +1697,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
     
     float textScale = uGetFloat(ufTextScale);
     uPushFloat(ufTextScale, textScale * 0.7f);
-        uText(valText, pos);
+        uDrawText(valText, pos);
     uPopFloat(ufTextScale);
     return result;
 }
@@ -1702,7 +1705,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
 bool uIntVecField(const char* label, Vector2f pos, int* vecPtr, int N, int* index, int minVal, int maxVal, float dragSpeed)
 {
     AX_ASSUME(N <= 8);
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     const float fieldWidth = uGetFloat(ufFieldWidth);
     const float padding = fieldWidth * 0.07f;
     // start it from left
@@ -1735,7 +1738,7 @@ bool uIntVecField(const char* label, Vector2f pos, int* vecPtr, int N, int* inde
 bool uFloatVecField(const char* label, Vector2f pos, float* vecPtr, int N, int* index, float minVal, float maxVal, float dragSpeed)
 {
     AX_ASSUME(N <= 8);
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     const float fieldWidth = uGetFloat(ufFieldWidth);
     const float padding = fieldWidth * 0.07f;
     // start it from left
@@ -1798,7 +1801,7 @@ inline void HSVToRGB(Vector3f hsv, float* dst)
 
 bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 {
-    Vector2f labelSize = Label(label, pos);
+    Vector2f labelSize = uLabel(label, pos);
     Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
@@ -1807,7 +1810,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
-    uQuad(pos, size, *colorPtr);
+    uDrawQuad(pos, size, *colorPtr);
 
     bool elementFocused = uGetElementFocused();
     uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
@@ -1821,7 +1824,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     {
         PlayButtonClickSound();
         Vector3f colorf; 
-        UnpackColorRGBf(*colorPtr, colorf.arr);
+        UnpackColor3Uint(*colorPtr, colorf.arr);
         mColorPick.hsv = RGBToHSV(colorf);
         mColorPick.isOpen ^= 1; // change the open value
     }
@@ -1914,7 +1917,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
             float color[4];
             HSVToRGB(mColorPick.hsv, color);
             color[3] = mColorPick.alpha;
-            *colorPtr = PackColorRGBAU32(color);
+            *colorPtr = PackColor4ToUintPtr(color);
         }
 
         huePosition.x += hueSize.x * mColorPick.hsv.x;
@@ -1931,17 +1934,17 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 
 bool uColorField3(const char* label, Vector2f pos, float* colorPtr)
 {
-    uint ucolor = PackColorRGBU32(colorPtr);
+    uint ucolor = PackColor3ToUintPtr(colorPtr);
     bool res = uColorField(label, pos, &ucolor);
-    UnpackColorRGBf(ucolor, colorPtr);
+    UnpackColor3Uint(ucolor, colorPtr);
     return res;
 }
 
 bool uColorField4(const char* label, Vector2f pos, float* colorPtr)
 {
-    uint ucolor = PackColorRGBAU32(colorPtr);
+    uint ucolor = PackColor4ToUintPtr(colorPtr);
     bool res = uColorField(label, pos, &ucolor);
-    UnpackColorRGBAf(ucolor, colorPtr);
+    UnpackColor4Uint(ucolor, colorPtr);
     return res;
 }
 
@@ -1956,7 +1959,7 @@ void uSprite(Vector2f pos, Vector2f scale, Texture* texturePtr)
 
 //------------------------------------------------------------------------
 // Triangle Tendering
-void uVertex(Vector2f pos, uint8 fade, uint color, uint32 properties)
+void uDrawVertex(Vector2f pos, uint8 fade, uint color, uint32 properties)
 {
     TriangleVert& vert = mTriangles[mCurrentTriangle++];
     pos *= mWindowRatio; // multiply on gpu?
@@ -1969,41 +1972,41 @@ void uVertex(Vector2f pos, uint8 fade, uint color, uint32 properties)
     vert.color  = color;
 }
 
-void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color)
+void uDrawHorizontalTriangle(Vector2f pos, float size, float axis, uint color)
 {
     if (axis > 0.0f) {
-        uVertex(pos, 255, color); pos.y += size;
-        uVertex(pos, 255, color); pos.y -= size * 0.5f; pos.x += axis * size;
-        uVertex(pos, 255, color);
+        uDrawVertex(pos, 255, color); pos.y += size;
+        uDrawVertex(pos, 255, color); pos.y -= size * 0.5f; pos.x += axis * size;
+        uDrawVertex(pos, 255, color);
     }
     else {
         pos.y += size;
-        uVertex(pos, 255, color); 
+        uDrawVertex(pos, 255, color); 
         pos.y -= size;
-        uVertex(pos, 255, color);
+        uDrawVertex(pos, 255, color);
         pos.y += size * 0.5f; pos.x += axis * size;
-        uVertex(pos,  255, color);        
+        uDrawVertex(pos,  255, color);        
     }
 }
 
-void uVerticalTriangle(Vector2f pos, float size, float axis, uint color)
+void uDrawVerticalTriangle(Vector2f pos, float size, float axis, uint color)
 {
     if (axis > 0.0f) {
-        uVertex(pos, 255, color); pos.x += size;
-        uVertex(pos, 255, color); pos.x -= size * 0.5f; pos.y += axis * size;
-        uVertex(pos, 255, color);
+        uDrawVertex(pos, 255, color); pos.x += size;
+        uDrawVertex(pos, 255, color); pos.x -= size * 0.5f; pos.y += axis * size;
+        uDrawVertex(pos, 255, color);
     }
     else {
         pos.x += size;
-        uVertex(pos, 255, color); 
+        uDrawVertex(pos, 255, color); 
         pos.x -= size;
-        uVertex(pos, 255, color);
+        uDrawVertex(pos, 255, color);
         pos.x += size * 0.5f; pos.y += axis * size;
-        uVertex(pos, 255, color);
+        uDrawVertex(pos, 255, color);
     }
 }
 
-void uCircle(Vector2f center, float radius, uint color, uint32 properties)
+void uDrawCircle(Vector2f center, float radius, uint color, uint32 properties)
 {
     uint numSegments = 0xFFu & (properties >> 16); // skip TriEffect and CutStart bytes
      if (numSegments != 0)
@@ -2029,24 +2032,24 @@ void uCircle(Vector2f center, float radius, uint color, uint32 properties)
         posNew += center;
         
         if (properties & uEmptyInsideBit) {
-            uVertex(center ,  hasInvertFade, color, properties);
-            uVertex(posPrev, ~hasInvertFade, color, properties);
-            uVertex(posNew , ~hasInvertFade, color, properties);
+            uDrawVertex(center ,  hasInvertFade, color, properties);
+            uDrawVertex(posPrev, ~hasInvertFade, color, properties);
+            uDrawVertex(posNew , ~hasInvertFade, color, properties);
         }
         else
         {
             uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
             fadeNew = hasInvertFade ? 255-fadeNew : fadeNew;
-            uVertex(center , fadeNew, color, properties);
-            uVertex(posPrev, fadePrev, color, properties);
-            uVertex(posNew , fadeNew, color, properties);
+            uDrawVertex(center , fadeNew, color, properties);
+            uDrawVertex(posPrev, fadePrev, color, properties);
+            uDrawVertex(posNew , fadeNew, color, properties);
             fadePrev = fadeNew;
         }
         posPrev = posNew;
     }
 }
 
-void uCapsule(Vector2f center, float radius, float width, uint color, uint32 properties)
+void uDrawCapsule(Vector2f center, float radius, float width, uint color, uint32 properties)
 {
     uint numSegments = 0xFFu & (properties >> 16); // skip TriEffect and CutStart bytes
     if (numSegments == 0) 
@@ -2062,15 +2065,15 @@ void uCapsule(Vector2f center, float radius, float width, uint color, uint32 pro
         float t = PI * (i / float(numSegments));
         Vector2f p1 = { -Sin0pi(t) * radius, -Cos0pi(t) * radius};
         p1 += center;
-        uVertex(center, hasInvertFade, color, properties);
-        uVertex(p0, hasInvertFade, color, properties);
-        uVertex(p1, hasInvertFade, color, properties);
+        uDrawVertex(center, hasInvertFade, color, properties);
+        uDrawVertex(p0, hasInvertFade, color, properties);
+        uDrawVertex(p1, hasInvertFade, color, properties);
         p0 = p1;
     }
     uint hasInvert = properties & uFadeInvertBit;
     properties ^= hasInvert; // invert hasInvert bit because triangleQuad using it too
     // draw connecting quad
-    uQuad(center + MakeVec2(0.0f, -radius), MakeVec2(width, radius * 2.0f), color, properties);
+    uDrawQuad(center + MakeVec2(0.0f, -radius), MakeVec2(width, radius * 2.0f), color, properties);
     properties |= hasInvert; // replace the invert bit
 
     center.x += width;
@@ -2082,14 +2085,14 @@ void uCapsule(Vector2f center, float radius, float width, uint color, uint32 pro
         float t = PI * (i / float(numSegments));
         Vector2f p1 = { Sin0pi(t) * radius, Cos0pi(t) * radius };
         p1 += center;
-        uVertex(center, hasInvertFade, color, properties);
-        uVertex(p0, hasInvertFade, color, properties);
-        uVertex(p1, hasInvertFade, color, properties);
+        uDrawVertex(center, hasInvertFade, color, properties);
+        uDrawVertex(p0, hasInvertFade, color, properties);
+        uDrawVertex(p1, hasInvertFade, color, properties);
         p0 = p1;
     }   
 }
 
-void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties)
+void uDrawRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties)
 {
     const int numSegments = 8;
     const float roundRatio = 0.15f, invRoundRatio = 1.0f - roundRatio;
@@ -2102,29 +2105,29 @@ void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint
     Vector2f center = pos + MakeVec2(width * 0.5f + radius * 0.5f, height * 0.5f + radius * 0.5f);
     Vector2f triPos = {pos.x, pos.y + radius};
 
-    uVertex(center, hasInvertFade, color, properties); // left triangle
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(center, hasInvertFade, color, properties); // left triangle
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
     triPos.y += height * invRoundRatio;
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
 
     triPos += radius;
-    uVertex(center, hasInvertFade, color, properties); // bottom triangle
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(center, hasInvertFade, color, properties); // bottom triangle
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
     triPos.x += width * invRoundRatio;
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
 
     triPos.y -= radius;
     triPos.x += radius;
-    uVertex(center, hasInvertFade, color, properties); // right triangle
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(center, hasInvertFade, color, properties); // right triangle
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
     triPos.y -= height * invRoundRatio ;
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
     
     triPos -= radius;
-    uVertex(center, hasInvertFade, color, properties); // up triangle
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(center, hasInvertFade, color, properties); // up triangle
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
     triPos.x -= width * invRoundRatio;
-    uVertex(triPos, ~hasInvertFade, color, properties);
+    uDrawVertex(triPos, ~hasInvertFade, color, properties);
     
     Vector2f samplePos  = { pos.x + radius, pos.y + radius };
     Vector2f posPrev = { samplePos.x, samplePos.y - radius};
@@ -2136,9 +2139,9 @@ void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint
         uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
         posNew *= radius;
         posNew += samplePos;
-        uVertex(center ,  hasInvertFade, color, properties);
-        uVertex(posPrev, ~hasInvertFade, color, properties);
-        uVertex(posNew , ~hasInvertFade, color, properties);
+        uDrawVertex(center ,  hasInvertFade, color, properties);
+        uDrawVertex(posPrev, ~hasInvertFade, color, properties);
+        uDrawVertex(posNew , ~hasInvertFade, color, properties);
         posPrev = posNew;
         fadePrev = fadeNew;
     }
@@ -2151,9 +2154,9 @@ void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint
         uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
         posNew *= radius;
         posNew += samplePos;
-        uVertex(center,  hasInvertFade, color, properties);
-        uVertex(posPrev, ~hasInvertFade, color, properties);
-        uVertex(posNew , ~hasInvertFade, color, properties);
+        uDrawVertex(center,  hasInvertFade, color, properties);
+        uDrawVertex(posPrev, ~hasInvertFade, color, properties);
+        uDrawVertex(posNew , ~hasInvertFade, color, properties);
         posPrev = posNew;
         fadePrev = fadeNew;
     }
@@ -2166,9 +2169,9 @@ void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint
         uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
         posNew *= radius;
         posNew += samplePos;
-        uVertex(center,  hasInvertFade, color, properties);
-        uVertex(posPrev, ~hasInvertFade, color, properties);
-        uVertex(posNew , ~hasInvertFade, color, properties);
+        uDrawVertex(center,  hasInvertFade, color, properties);
+        uDrawVertex(posPrev, ~hasInvertFade, color, properties);
+        uDrawVertex(posNew , ~hasInvertFade, color, properties);
         posPrev = posNew;
         fadePrev = fadeNew;
     }
@@ -2181,19 +2184,19 @@ void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint
         uint8 fadeNew = uint8((t / TwoPI) * 255.0f);
         posNew *= radius;
         posNew += samplePos;
-        uVertex(center,  hasInvertFade, color, properties);
-        uVertex(posPrev, ~hasInvertFade, color, properties);
-        uVertex(posNew , ~hasInvertFade, color, properties);
+        uDrawVertex(center,  hasInvertFade, color, properties);
+        uDrawVertex(posPrev, ~hasInvertFade, color, properties);
+        uDrawVertex(posNew , ~hasInvertFade, color, properties);
         posPrev = posNew;
         fadePrev = fadeNew;
     }
 }
 
-void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
+void uDrawTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
 {
-    uVertex(pos0, 255, color);
-    uVertex(pos1, 255, color);
-    uVertex(pos2, 255, color);
+    uDrawVertex(pos0, 255, color);
+    uDrawVertex(pos1, 255, color);
+    uDrawVertex(pos2, 255, color);
 }
 
 //------------------------------------------------------------------------
@@ -2353,8 +2356,8 @@ static void uRenderSprites(Vector2i windowSize)
     {
         Vector2f size = mSprites[i].scale * mWindowRatio;
         Vector2f pos  = mSprites[i].pos * mWindowRatio;
-        rSetShaderValue(pos.arr  , posLoc    , GraphicType_Vector2f);
-        rSetShaderValue(size.arr , sizeLoc   , GraphicType_Vector2f);
+        rSetShaderValue(pos.arr , posLoc , GraphicType_Vector2f);
+        rSetShaderValue(size.arr, sizeLoc, GraphicType_Vector2f);
         rSetTexture(mSprites[i].handle, 0, texLoc);
         rRenderMeshNoVertex(6);
     }
@@ -2377,7 +2380,7 @@ void uRender()
     rSetBlendingFunction(rBlendFunc_Alpha, rBlendFunc_OneMinusAlpha);
 
     rUnpackAlignment(4);
-    rClearDepth();
+    rClearDepth(); // we don't care about depth before UI
 
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);

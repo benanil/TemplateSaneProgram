@@ -141,7 +141,8 @@ struct AnimationController
 
     // trigger time is the animation transition time
     // standing anims are animations that we can play when walking or running
-    void TriggerAnim(int animIndex, float triggerInTime, float triggerOutTime, eAnimTriggerOpt triggerOpt);
+    // returns true if triggered successfully (wasn't trigerred already)
+    bool TriggerAnim(int animIndex, float triggerInTime, float triggerOutTime, eAnimTriggerOpt triggerOpt);
 
     // after this line all of the functions are private but feel free to use
     // upload to gpu. internal usage only for now

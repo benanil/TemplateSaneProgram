@@ -3,6 +3,7 @@
 #include "../ASTL/Math/Vector.hpp"
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Memory.hpp"
+#include "../ASTL/String.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -23,20 +24,36 @@ float rgb2vibrance(Vector3f c)
     return q * q;
 }
 
-int main(int argc, const char* argv[])
+void MakeMetallicRoughness(const char* source)
 {
-    if (!FileExist(argv[1])) {
-        printf("file is not exist!");
-        return 0;
+    printf("source: %s\n", source);
+
+    if (!FileHasExtension(source, StringLength(source), ".png"))
+    {
+        printf("file doesn't have png extension: %s\n", source);
+        return;
+    }
+
+    if (StringContains(source, "Normal") != -1 || StringContains(source, "Emissive") != -1)
+    {
+        printf("source is not albedo continue: %s \n", source);
+        return;
     }
 
     int width, height, numComp;
-    unsigned char* diffuse = stbi_load(argv[1], &width, &height, &numComp, 0);
+    unsigned char* diffuse = stbi_load(source, &width, &height, &numComp, 0);
     
     if (diffuse == nullptr) {
-        printf("load failed! path: %s", argv[1]);
-        return 0;
+        printf("load failed! path: %s", source);
+        return;
     }
+
+    if (width <= 64 && height <= 64) {
+        printf("image is too small returning: %i, %i\n", width, height);
+        stbi_image_free(diffuse);
+        return;
+    }
+
 
     printf("width: %i, height: %i \n", width, height);
     
@@ -76,22 +93,35 @@ int main(int argc, const char* argv[])
             curr += 4;
         }
     }
-    char path[256] = {0};
-    char fileName[64] = {0};
+    char outPath[1256] = {0};
     
-    int pathLen = StringLength(argv[1]);
-    SmallMemCpy(path, argv[1], pathLen);
+    int pathLen = StringLength(source);
+    SmallMemCpy(outPath, source, pathLen);
     
-    path[pathLen + 2] = 'g';
-    path[pathLen + 1] = 'n';
-    path[pathLen    ] = 'p';
-    path[pathLen - 1] = '.';
-    path[pathLen - 2] = 'T';
-    path[pathLen - 3] = 'R';
-    path[pathLen - 4] = 'M';
+    outPath[pathLen + 2] = 'g';
+    outPath[pathLen + 1] = 'n';
+    outPath[pathLen    ] = 'p';
+    outPath[pathLen - 1] = '.';
+    outPath[pathLen - 2] = 'T';
+    outPath[pathLen - 3] = 'R';
+    outPath[pathLen - 4] = 'M';
     
-    stbi_write_png(path, width, height, 4, result.ptr, width * 4);
+    stbi_write_png(outPath, width, height, 4, result.ptr, width * 4);
     stbi_image_free(diffuse);
+}
+
+int main(int argc, const char* argv[])
+{
+    // char currentDir[256] = {};
+    // GetCurrentDirectory(sizeof(currentDir), currentDir);
+    // 
+    // VisitFolder(currentDir, MakeMetallicRoughness);
+    if (!FileExist(argv[1])) {
+        printf("file is not exist!");
+        return 0;
+    }
+
+    MakeMetallicRoughness(argv[1]);
     
     return 0;
 }

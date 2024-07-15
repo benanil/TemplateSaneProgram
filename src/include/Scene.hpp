@@ -10,7 +10,7 @@ struct Prefab : public SceneBundle
 {
     Texture* gpuTextures;
     GPUMesh bigMesh; // contains all of the vertices and indices of an prefab
-    char path[128]; // relative path
+    char path[256]; // relative path
     int firstTimeRender; // starts with 4 and decreases until its 0 we draw first time and set this to-1
 
     Texture GetGPUTexture(int index)
@@ -88,6 +88,7 @@ struct Scene
     Array<LightInstance> m_PointLights;
     Array<LightInstance> m_SpotLights;
     DirectionalLight     m_SunLight;
+    float m_SunAngle;
 
     Array<Prefab> m_LoadedPrefabs;
     static const int IsPointMask = 0x80000000;
@@ -141,10 +142,12 @@ struct Scene
     int ImportPrefab(PrefabID* prefabID, const char* inPath, float scale);
 
     void Update();
-    
+
     Prefab* GetPrefab(PrefabID prefab);
 
 private:
+
+    void ShowUI();
 
     LightId AddLight(Array<LightInstance>& array, Vector3f position, Vector3f direction, int color, float intensity, float cutoff, float range);
 };

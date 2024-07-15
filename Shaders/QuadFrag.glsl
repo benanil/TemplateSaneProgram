@@ -1,11 +1,10 @@
 out lowp vec4 Result;
 
-in lowp vec2 vTexCoord;
-in lowp vec4 vColor;
-
-in      lowp float oFade;
-in flat lowp uint  oEffect; // bitmask
-in flat lowp float oCutStart;
+layout(location = 0) in lowp vec2 vTexCoord;
+layout(location = 1) in lowp vec4 vColor;
+layout(location = 2) in      lowp float oFade;
+layout(location = 3) in flat lowp uint  oEffect; // bitmask
+layout(location = 4) in flat lowp float oCutStart;
 
 void main() 
 {

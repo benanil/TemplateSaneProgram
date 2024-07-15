@@ -130,7 +130,7 @@ void wVibrate(long miliseconds)
     env->CallVoidMethod(javaGameActivity, vibrateMethod, miliseconds);
 }
 
-__forceinline bool SwapBuffers(EGLDisplay display, EGLSurface surface)
+purefn bool SwapBuffers(EGLDisplay display, EGLSurface surface)
 {
     if (PlatformCtx.VSyncActive) return SwappyGL_swap(display, surface);
     else /* no vsync */          return eglSwapBuffers(display, surface);
@@ -146,6 +146,7 @@ ma_engine* GetMAEngine() {
 
 int LoadSound(const char* path)
 {
+    if (!FileExist(path)) AX_WARN("sound file is not exist!");
     mSounds.AddUninitialized(1);
     uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
     // in order to work with miniaudio, we have to use fopen,
@@ -164,6 +165,12 @@ int LoadSound(const char* path)
     fclose(file);
     [[maybe_unused]] int result = ma_sound_init_from_file(GetMAEngine(), internalPath, soundFlag, nullptr, nullptr, mSounds.Data() + (mSounds.Size()-1));
     return mSounds.Size()-1;
+}
+
+void SetGlobalVolume(float v)
+{
+    for (int i = 0; i < mSounds.Size(); i++)
+        ma_sound_set_volume(&mSounds[i], v);
 }
 
 void SoundPlay(ASound sound)

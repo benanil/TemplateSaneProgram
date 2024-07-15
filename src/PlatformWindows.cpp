@@ -159,11 +159,14 @@ ma_engine maEngine;
 ma_engine* GetMAEngine() {
     return &maEngine; 
 }
+
+
 int LoadSound(const char* path)
 {
     mSounds.AddUninitialized(1);
     uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
-    ma_sound_init_from_file(GetMAEngine(), path, soundFlag, nullptr, nullptr, &mSounds.Back());
+    ma_result res = ma_sound_init_from_file(GetMAEngine(), path, soundFlag, nullptr, nullptr, &mSounds.Back());
+    if (res != MA_SUCCESS) AX_WARN("couldn't load sound file");
     return mSounds.Size()-1;
 }
 
@@ -177,6 +180,12 @@ void SoundRewind(ASound sound)
     ma_sound* soundPtr = &mSounds[sound];
     if (ma_sound_is_playing(soundPtr))
         ma_sound_seek_to_pcm_frame(soundPtr, 0);
+}
+
+void SetGlobalVolume(float v)
+{
+    for (int i = 0; i < mSounds.Size(); i++)
+        ma_sound_set_volume(&mSounds[i], v);
 }
 
 void SoundSetVolume(ASound sound, float volume)
@@ -438,7 +447,7 @@ static HWND WindowCreate(HINSTANCE instance)
         0x2023,          8, // WGL_STENCIL_BITS_ARB
         0x20A9,          1, // WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB <- SRGB support
         0x2041,          1, // WGL_SAMPLE_BUFFERS_ARB           <- enable MSAA
-        0x2042,          8, // WGL_SAMPLES_ARB                  <- 4x MSAA
+        0x2042,          8, // WGL_SAMPLES_ARB                  <- x MSAA
         0
     };
     // register window class to have custom WindowProc callback
@@ -520,7 +529,7 @@ HGLRC InitOpenGL(HDC dc)
         0x2091, 4, // WGL_CONTEXT_MAJOR_VERSION_ARB
         0x2092, 3, // WGL_CONTEXT_MINOR_VERSION_ARB
         0x9126,  0x00000001, // WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB
-        #ifdef DEBUG
+        #if defined(DEBUG) || defined(__DEBUG)
         // ask for debug context for non "Release" builds
         // this is so we can enable debug callback
         0x2094, 0x00000001, // WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB
@@ -651,6 +660,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
     }
     // VMem::Destroy();
     ma_engine_uninit(&maEngine);
+    gladLoaderUnloadGL();
 
     return 0;
 }

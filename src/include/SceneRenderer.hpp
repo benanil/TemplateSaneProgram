@@ -50,4 +50,6 @@ namespace SceneRenderer
     void WindowResizeCallback(int width, int height);
 
     bool ShouldReRender();
+
+    void ShowEditor();
 }

@@ -14,6 +14,7 @@ const int SceneVersion = 0;
 
 void Scene::Init()
 {
+    m_SunAngle = -0.32f;
 }
 
 void Scene::Destroy()
@@ -51,7 +52,7 @@ void Scene::Destroy()
 
 void Scene::Save(const char* path)
 {
-    AFile file = AFileOpen(path, AOpenFlag_Write);
+    AFile file = AFileOpen(path, AOpenFlag_WriteBinary);
     AFileWrite(&SceneVersion, sizeof(int), file);
     
     int numPrefabs = m_LoadedPrefabs.m_count;
@@ -82,7 +83,7 @@ void Scene::Save(const char* path)
 void Scene::Load(const char* path)
 {
     // Todo:
-    AFile file = AFileOpen(path, AOpenFlag_Write);
+    AFile file = AFileOpen(path, AOpenFlag_WriteBinary);
     int sceneVersion;
     AFileRead(&sceneVersion, sizeof(int), file);
     ASSERT(sceneVersion == SceneVersion);
@@ -284,6 +285,7 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
             vec_t minv = VecSet1(FLT_MAX);
             vec_t maxv = VecSet1(FLT_MIN);
 
+            // todo: multi thread this
             for (int v = 0; v < primitive.numVertices; v++)
             {
                 vec_t l = VecLoad((float*)vertices); // at the begining of the vertex we have position
@@ -308,11 +310,17 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
     return parsed;
 }
 
+void Scene::ShowUI()
+{
+
+}
+
 void Scene::Update()
 {
     // float time = (float)(3.15 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11));
     // m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
-    m_SunLight.dir = Vector3f::NormalizeEst(MakeVec3(-0.20f, Abs(Cos(0.182f)) + 0.1f, Sin(0.182f)));
+    m_SunLight.dir = Vector3f::NormalizeEst(MakeVec3(-0.20f, Abs(Cos(m_SunAngle)) + 0.1f, Sin(m_SunAngle)));
+    ShowUI();
 }
 
 Prefab* Scene::GetPrefab(PrefabID scene)

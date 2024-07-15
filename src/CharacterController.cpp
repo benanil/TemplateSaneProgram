@@ -34,11 +34,12 @@ void CharacterController::Start(Prefab* _character)
     mState = eCharacterControllerState_Idle;
     
     mRotation = QIdentity();
-    mPosition.y     = -0.065f; // make foots touch the ground
+    mPosition.y     = 0.2f; // make foots touch the ground
     mMovementSpeed  = 2.7f;
     mIdleLimit      = 8.0f;
     mIdleTime       = 0.0f;
     mLastInputAngle = 0.0f;
+    mSwordSlashDelay = -1.0f;
 
     mRootNodeIdx = Prefab::FindAnimRootNodeIndex(_character);
     mPosPtr = _character->nodes[mRootNodeIdx].translation;
@@ -46,7 +47,11 @@ void CharacterController::Start(Prefab* _character)
     
     mStartPos = MakeVec3(mPosPtr);
     mStartRotation = VecLoad(mRotPtr);
-    
+    mStartPos.y = 0.2f;
+
+    mKickHuhSound    = LoadSound("Audio/KickHuh.mp3");
+    mSwordSlashSound = LoadSound("Audio/SwordSlash.wav");
+
     int a_idle           = FindAnimIndex(_character, "Idle");
     int a_walk           = FindAnimIndex(_character, "Walk");
     int a_jog_forward    = FindAnimIndex(_character, "Run");
@@ -123,51 +128,60 @@ void CharacterController::RespondInput()
 {
 #ifndef PLATFORM_ANDROID
     if (GetMousePressed(MouseButton_Left)) {
-        mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing);
+        if (mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing))
+            mSwordSlashDelay = 0.0f; // set zero to start delay
     }
 
     if (GetKeyPressed(Key_SPACE)) {
-        mAnimController.TriggerAnim(mJumpIndex, 0.0f, 0.0f, 0);
+        if (mAnimController.TriggerAnim(mJumpIndex, 0.0f, 0.0f, 0))
+            SoundPlay(mKickHuhSound);
     }
 
     if (GetKeyPressed('F')) {
-        mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0);
-        mCurrentMovement = Vector2f::Zero();
+        if (mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0)) {
+            mCurrentMovement = Vector2f::Zero();
+            SoundPlay(mKickHuhSound);
+        }
     }
 
     if (GetKeyPressed('C')) {
-        mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0);
-        mCurrentMovement = Vector2f::Zero();
+        if (mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0)) {
+            mCurrentMovement = Vector2f::Zero();
+            SoundPlay(mKickHuhSound);
+        }
     }
 
     if (GetKeyPressed('X')) {
-        mAnimController.TriggerAnim(mComboIndex, 0.5f, 4.0f, eAnimTriggerOpt_ReverseOut);
-        mCurrentMovement = Vector2f::Zero();
+        if (mAnimController.TriggerAnim(mComboIndex, 0.5f, 4.0f, eAnimTriggerOpt_ReverseOut))
+            mCurrentMovement = Vector2f::Zero();
     }
 #else
     Vector2f pos = { 1731.0f, 840.0f };
     const float buttonSize = 40.0f;
     const float buttonPadding = 120.0f;
     constexpr uint effect = uFadeBit | uEmptyInsideBit | uFadeInvertBit | uIntenseFadeBit;
-    uCircle(pos, buttonSize, ~0, effect);
+    uDrawCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing);
+        if (mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing))
+            SoundPlay(mSwordSlashSound);
     }
 
     pos.x -= buttonPadding;
-    uCircle(pos, buttonSize, ~0, effect);
+    uDrawCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0);
+        if (mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0))
+            SoundPlay(mKickHuhSound);
     }
 
     pos.x += buttonPadding;
     pos.y -= buttonPadding;
-    uCircle(pos, buttonSize, ~0, effect);
+    uDrawCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
-        mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0);
+        if (mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0))
+            SoundPlay(mKickHuhSound);
     }
 #endif
 }
@@ -251,11 +265,11 @@ void CharacterController::MovementState(bool isSponza)
     mAnimController.EvaluateLocomotion(animX, animY, animSpeed);
 
     bool isRunning = GetKeyDown(Key_SHIFT);
-    if (isRunning) targetMovement *= Sign(targetMovement.y) * 2.0f;
+    targetMovement *= float(isRunning) + 1.0f;
     
     const float smoothTime = 0.25f;
     const float acceleration = 3.0f;
-    mCurrentMovement.y = Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime);//SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // ; //
+    mCurrentMovement.y = SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime);
     mCurrentMovement.x = Lerp(mCurrentMovement.x, targetMovement.x, 4.0f * deltaTime);
 
     Camera* camera = SceneRenderer::GetCamera();
@@ -275,15 +289,19 @@ void CharacterController::MovementState(bool isSponza)
         mRotation = QSlerp(mRotation, QFromYAngle(x + PI), deltaTime * rotationSpeed);
     }
 
+    if (mAnimController.IsTrigerred() && mAnimController.mTriggerredAnim == mKickIndex)
+        mCurrentMovement = {0.0f, 0.0f  };
+
     // handle character position
     Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
     Vector3f progress = forward * mMovementSpeed * deltaTime;
     
     float movementAmount = mCurrentMovement.LengthSafe();
     progress *= Clamp(-movementAmount, -1.0f, 1.0f);
+    progress *= float(isRunning) * 1.55f + 1.0f;
+
     Vector3f oldPos = mPosition;
-    float runAddition = 1.0f + (float(isRunning) * 1.55f);
-    mPosition += progress * runAddition * 1.5f;
+    mPosition += progress * 1.5f;
     
     if (isSponza) ColissionDetection(oldPos);
     
@@ -291,7 +309,7 @@ void CharacterController::MovementState(bool isSponza)
     camera->targetPos = mPosition;
     mNonStopDuration += float(Abs(movementAmount) < 0.002f) * deltaTime;
     mNonStopDuration *= Abs(movementAmount) < 0.002f; 
-    if (mNonStopDuration > 0.25f) {
+    if (mNonStopDuration > 0.15f) {
         mNonStopDuration = 0.0f;
         mState = eCharacterControllerState_Idle;
     }
@@ -381,12 +399,15 @@ void CharacterController::HandleNeckAndSpineRotation(float deltaTime)
     }
 }
 
-void CharacterController::Update(float deltaTime, bool isSponza)    
+void CharacterController::Update(float deltaTime, bool isSponza)
 {
     SmallMemCpy(mPosPtr, &mStartPos.x, sizeof(Vector3f));
     VecStore(mRotPtr, mStartRotation);
 
     HandleNeckAndSpineRotation(deltaTime);
+
+    if (mSwordSlashDelay >= 0.0f && (mSwordSlashDelay += deltaTime) > 0.45f)
+        SoundPlay(mSwordSlashSound), mSwordSlashDelay = -1.0f;
 
     switch (mState)
     {
@@ -406,4 +427,6 @@ void CharacterController::Update(float deltaTime, bool isSponza)
 void CharacterController::Destroy()
 {
     ClearAnimationController(&mAnimController);
+    SoundDestroy(mKickHuhSound);
+    SoundDestroy(mSwordSlashSound);
 }

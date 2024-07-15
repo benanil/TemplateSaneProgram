@@ -183,6 +183,7 @@ typedef void (*GLADpostcallback)(void *ret, const char *name, GLADapiproc apipro
 #define GL_SHADER_STORAGE_BUFFER_SIZE 0x90D5
 #define GL_SHADER_STORAGE_BUFFER_START 0x90D4
 #define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
+#define GL_TEXTURE_FETCH_BARRIER_BIT 8
 
 #define GL_2D 0x0600
 #define GL_2_BYTES 0x1407
@@ -2472,9 +2473,21 @@ typedef void (GLAD_API_PTR *PFNGLTEXPARAMETERFVPROC)(GLenum target, GLenum pname
 typedef void (GLAD_API_PTR *PFNGLTEXPARAMETERIPROC)(GLenum target, GLenum pname, GLint param);
 typedef void (GLAD_API_PTR *PFNGLTEXPARAMETERIVPROC)(GLenum target, GLenum pname, const GLint * params);
 typedef void (GLAD_API_PTR *PFNGLTEXSTORAGE2DPROC)(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height);
+typedef void (GLAD_API_PTR *PFNGLTEXSTORAGE3DPROC)(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth);
 typedef void (GLAD_API_PTR *PFNGLTEXSUBIMAGE1DPROC)(GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels);
 typedef void (GLAD_API_PTR *PFNGLTEXSUBIMAGE2DPROC)(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels);
 typedef void (GLAD_API_PTR *PFNGLTEXSUBIMAGE3DPROC)(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels);
+
+typedef void (GLAD_API_PTR *PFNGLTEXTUREVIEWPROC)(
+    GLuint texture,
+    GLenum target,
+    GLuint origtexture,
+    GLenum internalformat,
+    GLuint minlevel,
+    GLuint numlevels,
+    GLuint minlayer,
+    GLuint numlayers
+);
 typedef void (GLAD_API_PTR *PFNGLTRANSFORMFEEDBACKVARYINGSPROC)(GLuint program, GLsizei count, const GLchar *const* varyings, GLenum bufferMode);
 typedef void (GLAD_API_PTR *PFNGLTRANSLATEDPROC)(GLdouble x, GLdouble y, GLdouble z);
 typedef void (GLAD_API_PTR *PFNGLTRANSLATEFPROC)(GLfloat x, GLfloat y, GLfloat z);
@@ -3695,6 +3708,8 @@ GLAD_API_CALL PFNGLTEXPARAMETERIPROC glad_glTexParameteri;
 #define glTexParameteri glad_glTexParameteri
 GLAD_API_CALL PFNGLTEXSTORAGE2DPROC glad_glTexStorage2D;
 #define glTexStorage2D glad_glTexStorage2D
+GLAD_API_CALL PFNGLTEXSTORAGE3DPROC glad_glTexStorage3D;
+#define glTexStorage3D glad_glTexStorage3D
 GLAD_API_CALL PFNGLTEXPARAMETERIVPROC glad_glTexParameteriv;
 #define glTexParameteriv glad_glTexParameteriv
 GLAD_API_CALL PFNGLTEXSUBIMAGE1DPROC glad_glTexSubImage1D;
@@ -3703,6 +3718,8 @@ GLAD_API_CALL PFNGLTEXSUBIMAGE2DPROC glad_glTexSubImage2D;
 #define glTexSubImage2D glad_glTexSubImage2D
 GLAD_API_CALL PFNGLTEXSUBIMAGE3DPROC glad_glTexSubImage3D;
 #define glTexSubImage3D glad_glTexSubImage3D
+GLAD_API_CALL PFNGLTEXTUREVIEWPROC glad_glTextureView;
+#define glTextureView glad_glTextureView
 GLAD_API_CALL PFNGLTRANSFORMFEEDBACKVARYINGSPROC glad_glTransformFeedbackVaryings;
 #define glTransformFeedbackVaryings glad_glTransformFeedbackVaryings
 GLAD_API_CALL PFNGLTRANSLATEDPROC glad_glTranslated;
@@ -4602,6 +4619,7 @@ PFNGLTEXPARAMETERIVPROC glad_glTexParameteriv = NULL;
 PFNGLTEXSUBIMAGE1DPROC glad_glTexSubImage1D = NULL;
 PFNGLTEXSUBIMAGE2DPROC glad_glTexSubImage2D = NULL;
 PFNGLTEXSUBIMAGE3DPROC glad_glTexSubImage3D = NULL;
+PFNGLTEXTUREVIEWPROC glad_glTextureView = NULL;
 PFNGLTRANSFORMFEEDBACKVARYINGSPROC glad_glTransformFeedbackVaryings = NULL;
 PFNGLTRANSLATEDPROC glad_glTranslated = NULL;
 PFNGLTRANSLATEFPROC glad_glTranslatef = NULL;
@@ -4728,6 +4746,7 @@ PFNGLVERTEXPOINTERPROC glad_glVertexPointer = NULL;
 PFNGLVIEWPORTPROC glad_glViewport = NULL;
 PFNGLWAITSYNCPROC glad_glWaitSync = NULL;
 PFNGLTEXSTORAGE2DPROC glad_glTexStorage2D = NULL;
+PFNGLTEXSTORAGE3DPROC glad_glTexStorage3D = NULL;
 PFNGLWINDOWPOS2DPROC glad_glWindowPos2d = NULL;
 PFNGLWINDOWPOS2DVPROC glad_glWindowPos2dv = NULL;
 PFNGLWINDOWPOS2FPROC glad_glWindowPos2f = NULL;
@@ -5111,6 +5130,7 @@ static void glad_gl_load_GL_VERSION_1_2( GLADuserptrloadfunc load, void* userptr
     glad_glDrawRangeElements = (PFNGLDRAWRANGEELEMENTSPROC) load(userptr, "glDrawRangeElements");
     glad_glTexImage3D = (PFNGLTEXIMAGE3DPROC) load(userptr, "glTexImage3D");
     glad_glTexSubImage3D = (PFNGLTEXSUBIMAGE3DPROC) load(userptr, "glTexSubImage3D");
+    glad_glTextureView = (PFNGLTEXTUREVIEWPROC) load(userptr, "glTextureView");
 }
 static void glad_gl_load_GL_VERSION_1_3( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_VERSION_1_3) return;
@@ -5466,6 +5486,7 @@ static void glad_gl_load_GL_VERSION_3_2( GLADuserptrloadfunc load, void* userptr
     glad_glWaitSync = (PFNGLWAITSYNCPROC) load(userptr, "glWaitSync");
     // opengl 4.2 required
     glad_glTexStorage2D = (PFNGLTEXSTORAGE2DPROC) load(userptr, "glTexStorage2D");
+    glad_glTexStorage3D = (PFNGLTEXSTORAGE3DPROC) load(userptr, "glTexStorage3D");
 }
 static void glad_gl_load_GL_ARB_debug_output( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_ARB_debug_output) return;

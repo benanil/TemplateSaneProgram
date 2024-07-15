@@ -1,4 +1,4 @@
-out vec4 Result;
+layout(location = 0) out vec4 Result;
 
 // fwidth() is not supported by default on OpenGL ES. Enable it.
 #if defined(GL_OES_standard_derivatives)

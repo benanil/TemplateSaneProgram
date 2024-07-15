@@ -48,6 +48,10 @@ struct CharacterController
     int mTurnRight90Index;
     int mTurn180Index;
 
+    int mKickHuhSound;
+    int mSwordSlashSound;
+    float mSwordSlashDelay;
+
     float mIdleTime;
     float mIdleLimit;
 

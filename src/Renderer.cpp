@@ -36,12 +36,15 @@
 
 #endif
 
+#include "include/Renderer.hpp"
+#include "include/Platform.hpp"
+
 #include "../ASTL/Common.hpp"
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Math/Matrix.hpp"
 #include "../ASTL/String.hpp"
 
-#define STBI_ASSERT(x) ASSERT(x)
+#define STBI_ASSERT(x) if (!(x)) { AX_ERROR("stbimage error"); }
 #define STBI_NO_BMP
 #define STBI_NO_PSD
 #define STBI_NO_TGA
@@ -50,11 +53,8 @@
 #define STBI_NO_PIC
 #define STBI_NO_PNM
 #define STB_IMAGE_IMPLEMENTATION
-
 #include "../External/stb_image.h"
 
-#include "include/Renderer.hpp"
-#include "include/Platform.hpp"
 
 GLuint g_DefaultTexture;
 
@@ -79,10 +79,6 @@ struct TextureFormat
     GLenum type;
 };
 
-#ifndef GL_RG16_SNORM
-    #define GL_RG16_SNORM 0x8F99
-    #define GL_R16_SNORM 0x8F98
-#endif
 
 // https://www.khronos.org/opengles/sdk/docs/man31/html/glTexImage2D.xhtml
 static const TextureFormat TextureFormatTable[] =
@@ -124,9 +120,10 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 34,
     {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 35,
     {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 36,
+    {   GL_RGBA16_SNORM   , GL_RGBA        ,    GL_SHORT                         }, // TextureType_RGBA16SNORM   = 37,
     {}, {}, {}, {},{},                                                              // Compressed Formats
-    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24 = 41,
-    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32 = 42,
+    { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24 = 42,
+    { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32 = 43,
 };
 
 const char* GetGLErrorString(GLenum error) 
@@ -184,7 +181,6 @@ void rUnpackAlignment(int n)
     glPixelStorei(GL_UNPACK_ALIGNMENT, n);
 }
 
-// type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags)
 {
     Texture texture;
@@ -225,12 +221,14 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
             glTexStorage2D(GL_TEXTURE_2D, 1, format.internalFormat, width, height);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format.format, format.type, data);
         }
-        else glTexImage2D(GL_TEXTURE_2D, 0, format.internalFormat, width, height, 0, format.format, format.type, data);
+        else
+        {
+            glTexImage2D(GL_TEXTURE_2D, 0, format.internalFormat, width, height, 0, format.format, format.type, data);
+        }
     }
     else
     #ifndef __ANDROID__ 
     {
-
         int blockSize = width * height;
         blockSize >>= int(type == TextureType_CompressedR); // bc4 is 0.5 byte per pixel
 
@@ -265,7 +263,52 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     return texture;
 }
 
-//-
+Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, void* data, TextureType type, TexFlags flags)
+{
+    Texture texture;
+    glGenTextures(1, &texture.handle);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, texture.handle);
+    int wrapMode = (flags & TexFlags_ClampToEdge) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+    // mipmaps are not implemented
+    bool mipmap     = false; // !!(flags & TexFlags_MipMap);
+    bool nearest    = !!(flags & TexFlags_Nearest);
+    bool compressed = !!(flags & TexFlags_Compressed);
+
+    __const int mipmapFilter = GL_LINEAR_MIPMAP_NEAREST; // < higher | lower quality > GL_NEAREST_MIPMAP_NEAREST
+    int defaultMagFilter = IsAndroid() ? GL_NEAREST : GL_LINEAR;
+    defaultMagFilter = (flags & TexFlags_Linear) ? GL_LINEAR : defaultMagFilter;
+
+    int minFilter = nearest ? GL_NEAREST : GL_LINEAR;
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : defaultMagFilter);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, mipmap ? mipmapFilter : minFilter);
+
+    TextureFormat format = TextureFormatTable[type];
+    glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, format.internalFormat, width, height, depth);
+    glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width, height, depth, format.format, format.type, data);
+
+    if (views) for (int i = 0; i < depth; i++)
+    {
+        glGenTextures(1, &views[i].handle);
+        glTextureView(views[i].handle, GL_TEXTURE_2D, texture.handle, format.internalFormat, 0, 1, i, 1);
+        glBindTexture(GL_TEXTURE_2D, views[i].handle);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    texture.width  = width;
+    texture.height = height;
+    texture.depth  = depth;
+    texture.buffer = (unsigned char*)data;
+    texture.type   = type;
+
+    CHECK_GL_ERROR();
+    return texture;
+}
+
+
 void rUpdateTexture(Texture texture, void* data)
 {
     TextureFormat format = TextureFormatTable[texture.type];
@@ -309,7 +352,7 @@ Texture rLoadTexture(const char* path, bool mipmap)
         return defTexture;
     }
 
-    AFile asset = AFileOpen(path, AOpenFlag_Read);
+    AFile asset = AFileOpen(path, AOpenFlag_ReadBinary);
     uint64_t size = AFileSize(asset);
 
     rResizeTextureLoadBufferIfNecessarry(size);
@@ -351,10 +394,11 @@ void rDeleteTexture(Texture texture)
 /*                                 Frame Buffer                             */
 /*//////////////////////////////////////////////////////////////////////////*/
 
-FrameBuffer rCreateFrameBuffer()
+FrameBuffer rCreateFrameBuffer(bool bind)
 {
     FrameBuffer frameBuffer;
     glGenFramebuffers(1, &frameBuffer.handle);
+    if (bind) glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer.handle);
     return frameBuffer;
 }
 
@@ -399,11 +443,18 @@ void rFrameBufferAttachDepthStencil(Texture texture)
 
 void rFrameBufferAttachColor(Texture texture, int index)
 {
-    glBindTexture(GL_TEXTURE_2D, texture.handle);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + index,
                            GL_TEXTURE_2D, texture.handle, 0);
     CHECK_GL_ERROR();
 }
+
+void rFrameBufferAttachColorFrom2DArray(Texture texture, int attachmentIdx, int layerIdx)
+{
+    glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachmentIdx, 
+                              texture.handle, 0, layerIdx);
+    CHECK_GL_ERROR();
+}
+
 
 static const int glAtt = GL_COLOR_ATTACHMENT0;
 static const unsigned int glAttachments[8] = {glAtt, glAtt + 1, glAtt+2, glAtt+3, glAtt+4, glAtt+5, glAtt+6, glAtt+7};
@@ -734,28 +785,34 @@ Shader rImportComputeShader(const char* path)
     return shader;
 }
 
-ComputeBuffer rComputeShaderCreateBuffer(Shader compute, int size, const char* name, const void* data)
+ComputeBuffer rComputeCreateBuffer(Shader compute, int size, const char* name, const void* data, bool dynamic)
 {
     ComputeBuffer res;
     glGenBuffers(1, &res.handle);
     glBindBuffer(GL_UNIFORM_BUFFER, res.handle);
-    glBufferData(GL_UNIFORM_BUFFER, size, data, GL_STATIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, size, data, dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
     
+    res.dynamic = dynamic;
     res.index = glGetUniformBlockIndex(compute.handle, name);
     glUniformBlockBinding(compute.handle, res.index, 0);
     return res;
 }
 
-void rComputeShaderBindBuffer(int binding, int buffer)
+void rComputeUpdateBuffer(ComputeBuffer buffer, void* data, size_t size)
+{
+    glBindBuffer(GL_UNIFORM_BUFFER, buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, size, data, buffer.dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+}
+
+void rComputeBindBuffer(int binding, int buffer)
 {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buffer);
     CHECK_GL_ERROR();
 }
 
-void rBindTextureToCompute(Texture texture, int unit, TextureAccess access)
+void rComputeBindTexture(Texture texture, int unit, TextureAccess access)
 {
     const int accessMap[3] = { GL_READ_ONLY, GL_WRITE_ONLY, GL_READ_WRITE };
-    // For example
     glBindImageTexture(unit,          /* unit, note that we're not offsetting GL_TEXTURE0 */
                        texture.handle,/* a 2D texture for example */
                        0,             /* miplevel */
@@ -766,13 +823,13 @@ void rBindTextureToCompute(Texture texture, int unit, TextureAccess access)
     CHECK_GL_ERROR();
 }
 
-void rDispatchComputeShader(Shader shader, int workGroupsX, int workGroupsY, int workGroupsZ)
+void rDispatchCompute(Shader shader, int workGroupsX, int workGroupsY, int workGroupsZ)
 {
     glDispatchCompute(workGroupsX, workGroupsY, workGroupsZ);
     CHECK_GL_ERROR();
 }
 
-void rComputeShaderBarier() {
+void rComputeBarier() {
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
 
@@ -815,6 +872,13 @@ Shader rCreateFullScreenShader(const char* fragmentSource)
         gl_Position = vec4(x, y, 0.0, 1.0);\n\
     }";
     return rCreateShader(vertexShaderSource, fragmentSource);
+}
+
+Shader rImportFullScreenShader(const char* path)
+{
+    ScopedText fragSource = ReadAllText(path, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    Shader shader = rCreateFullScreenShader(fragSource);
+    return shader;
 }
 
 Shader rImportShader(const char* vertexPath, const char* fragmentPath)
@@ -882,10 +946,15 @@ static void SetupLineRenderer()
     const char* VertexShaderSource =
     AX_SHADER_VERSION_PRECISION()
     R"(
-        layout(location = 0) in highp vec3 aPos;
-        layout(location = 1) in highp uint aColor;
+        in highp vec3 aPos;
+        in highp uint aColor;
         out lowp vec4 vColor;
         uniform mat4 uViewProj;
+
+        vec4 unpackUnorm4x8(highp uint color)
+        {
+            return vec4(uvec4(color) << uvec4(0, 8, 16, 24)) / 255.0f;
+        }
 
         void main() { 
             vColor = unpackUnorm4x8(aColor);
@@ -1093,6 +1162,14 @@ void rBindShader(Shader shader)
 {
     glUseProgram(shader.handle);
     currentShader = shader.handle;
+    CHECK_GL_ERROR();
+}
+
+void rSetTexture2DArray(Texture texture, int index, unsigned int loc)
+{
+    glActiveTexture(GL_TEXTURE0 + index);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, texture.handle);
+    glUniform1i(loc, index);
     CHECK_GL_ERROR();
 }
 

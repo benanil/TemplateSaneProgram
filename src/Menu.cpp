@@ -92,19 +92,18 @@ static void PauseMenu()
         wRequestQuit();
     }
 
-    uText(logText, MakeVec2(1750.0f, 920.0f));
+    uDrawText(logText, MakeVec2(1750.0f, 920.0f));
 }
 
 static void OptionsMenu()
 {
-
     Vector2f bgPos;
     Vector2f bgScale = { 940.0f, 766.0f };
     bgPos.x = (1920.0f / 2.0f) - (bgScale.x / 2.0f);
     bgPos.y = (1080.0f / 2.0f) - (bgScale.y / 2.0f);
     Vector2f pos = bgPos;
 
-    const float textPadding      = 13.0f;
+    const float textPadding = 13.0f;
     float elementScale = !IsAndroid() ? 0.8f : 1.25f;
     Vector2f zero2 = { 0.0f, 0.0f };
     
@@ -114,14 +113,14 @@ static void OptionsMenu()
 
     uPushFloat(ufContentStart, settingElementWidth);
 
-    uQuad(pos, bgScale, uGetColor(uColorQuad));
+    uDrawQuad(pos, bgScale, uGetColor(uColorQuad));
     uBorder(pos, bgScale);
 
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.2f);
     float settingsXStart = (bgScale.x/2.0f) - (textSize.x/2.0f);
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
-    uText("Settings", pos);
+    uDrawText("Settings", pos);
     uPopFloat(ufTextScale);
 
     float lineLength = bgScale.x * 0.85f;
@@ -169,6 +168,7 @@ static void OptionsMenu()
     uSetElementFocused(CurrElement == 4);
     if (uSlider("Volume", pos, &volume, uGetFloat(ufTextBoxWidth))) {
         CurrElement = 4;
+        SetGlobalVolume(volume);
     }
 
     const char* graphicsNames[] = { "Low" , "Medium", "High", "Ultra" };
@@ -252,7 +252,7 @@ static void ShowFPS()
         IntToString(fpsTxt, fps);
     }
 
-    uText(fpsTxt, MakeVec2(15.0f, 85.0f));
+    uDrawText(fpsTxt, MakeVec2(15.0f, 85.0f));
 }
 
 static void TriangleTest()
@@ -269,39 +269,41 @@ static void TriangleTest()
 
     const uint numSegments = 0;
     uint properties = MakeTriProperty(uCutBit, cutStart, numSegments);
-    uCircle(circlePos, 25.0f, color0, properties); circlePos.x += 55.0f;
+    uDrawCircle(circlePos, 25.0f, color0, properties); 
+    circlePos.x += 55.0f;
 
     properties |= uEmptyInsideBit;
-    uCircle(circlePos, 25.0f, color0, properties); circlePos.x += 55.0f;
+    uDrawCircle(circlePos, 25.0f, color0, properties); 
+    circlePos.x += 55.0f;
     
     properties |= uFadeInvertBit;
-    uCircle(circlePos, 25.0f, color0, properties);
+    uDrawCircle(circlePos, 25.0f, color0, properties);
     circlePos.x -= 55.0f * 3.0f;
     
     circlePos.y += 45.0f;
-    uCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
+    uDrawCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
 
     Vector2f quadPos = circlePos;
     Vector2f quadSize = MakeVec2(200.0f, 15.0f);
     // test with uquad
-    uint color = MakeColorRGBAU32(35, 181, 30, 255);
-    uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uTriEffect_None);
+    uint color = PackColorToUint(35, 181, 30, 255);
+    uDrawRoundedRectangle(quadPos, 50.0f, 50.0f, color, uTriEffect_None);
     quadPos.x += 60.0f;
-    uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uFadeBit);
+    uDrawRoundedRectangle(quadPos, 50.0f, 50.0f, color, uFadeBit);
     quadPos.x += 60.0f;
-    uRoundedRectangle(quadPos, 50.0f, 50.0f, ~0u, uFadeBit | uFadeInvertBit);
+    uDrawRoundedRectangle(quadPos, 50.0f, 50.0f, ~0u, uFadeBit | uFadeInvertBit);
     quadPos.x -= 60.0f * 2.0;
     quadPos.y += 65.0f;
     
     properties &= ~0xFF; // remove tri effect bits
     float width3 = 60 * 3.0f;
-    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.0f), uTriEffect_None);
+    uDrawRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.0f), uTriEffect_None);
     
     quadPos.y += 75.0f;
-    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.2f), uFadeBit);
+    uDrawRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.2f), uFadeBit);
     
     quadPos.y += 100.0f;
-    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
+    uDrawRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
 }
 
 bool ShowMenu()
@@ -324,14 +326,14 @@ bool ShowMenu()
 
         // make pause icon ||
         buttonPos += MakeVec2(10.0f, 7.0f);
-        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        uDrawQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
         buttonPos.x += 15.0f;
-        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        uDrawQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
     }
 
     if (showDetails) {
         // write to left bottom side of the screen
-        uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
+        uDrawText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
     }
 
     switch (menuState)

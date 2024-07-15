@@ -1,5 +1,5 @@
 
-out lowp vec4 OutColor;
+layout(location = 0) out lowp vec4 OutColor;
 
 in      lowp float oFade;
 in      lowp vec4  oColor;

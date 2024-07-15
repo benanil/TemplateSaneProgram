@@ -303,7 +303,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
             // concat: FbxPath/TextureName
             SmallMemCpy(fbxPath, utexture->name.data, utexture->name.length); 
             SmallMemCpy(fbxPath + utexture->name.length, ".png", 4); // FbxPath/TextureName.png
-            AFile file = AFileOpen(buffer, AOpenFlag_Write);
+            AFile file = AFileOpen(buffer, AOpenFlag_WriteBinary);
             AFileWrite(utexture->content.data, utexture->content.size, file);
             atexture.source = images.Size();
             images.Add( { buffer });
@@ -372,8 +372,8 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
         
         amaterial.specularFactor   = umaterial->features.pbr.enabled ? AMaterial::MakeFloat16(umaterial->pbr.specular_factor.value_real)
                                                                      : AMaterial::MakeFloat16(umaterial->fbx.specular_factor.value_real);
-        amaterial.diffuseColor     = PackColorRGBU32(&umaterial->fbx.diffuse_color.value_real);
-        amaterial.specularColor    = PackColorRGBU32(&umaterial->fbx.specular_color.value_real);
+        amaterial.diffuseColor     = PackColor3ToUintPtr(&umaterial->fbx.diffuse_color.value_real);
+        amaterial.specularColor    = PackColor3ToUintPtr(&umaterial->fbx.specular_color.value_real);
         
         amaterial.doubleSided = umaterial->features.double_sided.enabled;
         
@@ -588,7 +588,7 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
                 uint32_t packedWeights;
                 if (weightSize == 4) // if float, pack it directly
                 {
-                    packedWeights = PackColorRGBAU32((float*)weights);
+                    packedWeights = PackColor4ToUintPtr((float*)weights);
                     weights += weightSize * 4;
                 }
                 else
@@ -676,7 +676,7 @@ bool IsABMLastVersion(const char* path)
 {
     if (!FileExist(path))
         return false;
-    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFile file = AFileOpen(path, AOpenFlag_ReadBinary);
     if (AFileSize(file) < sizeof(short) * 16) 
         return false;
     int version = 0;
@@ -689,9 +689,9 @@ bool IsABMLastVersion(const char* path)
 
 static void WriteAMaterialTexture(AMaterial::Texture texture, AFile file)
 {
-    uint64_t data = texture.scale; data <<= sizeof(short) * 8;
-    data |= texture.strength;      data <<= sizeof(short) * 8;
-    data |= texture.index;         data <<= sizeof(short) * 8;
+    uint64_t data = texture.scale; data <<= sizeof(ushort) * 8;
+    data |= texture.strength;      data <<= sizeof(ushort) * 8;
+    data |= texture.index;         data <<= sizeof(ushort) * 8;
     data |= texture.texCoord;
     
     AFileWrite(&data, sizeof(uint64_t), file);
@@ -707,7 +707,7 @@ static void WriteGLTFString(const char* str, AFile file)
 int SaveGLTFBinary(SceneBundle* gltf, const char* path)
 {
 #if !AX_GAME_BUILD
-    AFile file = AFileOpen(path, AOpenFlag_Write);
+    AFile file = AFileOpen(path, AOpenFlag_WriteBinary);
     
     int version = ABMMeshVersion;
     AFileWrite(&version, sizeof(int), file);
@@ -718,7 +718,7 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
     AFileWrite(&gltf->scale, sizeof(float), file);
     AFileWrite(&gltf->numMeshes, sizeof(short), file);
     AFileWrite(&gltf->numNodes, sizeof(short), file);
-    AFileWrite(&gltf->numMaterials,  sizeof(short), file);
+    AFileWrite(&gltf->numMaterials,  sizeof(ushort), file);
     AFileWrite(&gltf->numTextures, sizeof(short), file);
     AFileWrite(&gltf->numImages, sizeof(short), file);
     AFileWrite(&gltf->numSamplers, sizeof(short), file);
@@ -770,7 +770,7 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
             AFileWrite(&primitive.jointType  , sizeof(short), file);
             AFileWrite(&primitive.jointCount , sizeof(short), file);
             AFileWrite(&primitive.jointStride, sizeof(short), file);
-            AFileWrite(&primitive.material   , sizeof(short), file);
+            AFileWrite(&primitive.material   , sizeof(ushort), file);
         }
     }
     
@@ -913,10 +913,10 @@ void ReadAMaterialTexture(AMaterial::Texture& texture, AFile file)
     uint64_t data;
     AFileRead(&data, sizeof(uint64_t), file);
     
-    texture.texCoord = data & 0xFFFF; data >>= sizeof(short) * 8;
-    texture.index    = data & 0xFFFF; data >>= sizeof(short) * 8;
-    texture.strength = data & 0xFFFF; data >>= sizeof(short) * 8;
-    texture.scale    = data & 0xFFFF;
+    texture.texCoord = data & 0xFFFFu; data >>= sizeof(ushort) * 8;
+    texture.index    = data & 0xFFFFu; data >>= sizeof(ushort) * 8;
+    texture.strength = data & 0xFFFFu; data >>= sizeof(ushort) * 8;
+    texture.scale    = data & 0xFFFFu;
 }
 
 void ReadGLTFString(char*& str, AFile file, FixedSizeGrowableAllocator<char>& stringAllocator)
@@ -926,14 +926,14 @@ void ReadGLTFString(char*& str, AFile file, FixedSizeGrowableAllocator<char>& st
     if (nameLen)    
     {
         str = stringAllocator.AllocateUninitialized(nameLen + 1);
-        AFileRead(str, nameLen + 1, file);    
+        AFileRead(str, nameLen + 1, file);
         str[nameLen + 1] = 0;
     }
 }
 
 int LoadGLTFBinary(const char* path, SceneBundle* gltf)
 {
-    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFile file = AFileOpen(path, AOpenFlag_ReadBinary);
     if (!AFileExist(file))
     {
         perror("Failed to open file for writing");
@@ -953,7 +953,7 @@ int LoadGLTFBinary(const char* path, SceneBundle* gltf)
     AFileRead(&gltf->scale, sizeof(float), file);
     AFileRead(&gltf->numMeshes, sizeof(short), file);
     AFileRead(&gltf->numNodes, sizeof(short), file);
-    AFileRead(&gltf->numMaterials, sizeof(short), file);
+    AFileRead(&gltf->numMaterials, sizeof(ushort), file);
     AFileRead(&gltf->numTextures, sizeof(short), file);
     AFileRead(&gltf->numImages, sizeof(short), file);
     AFileRead(&gltf->numSamplers, sizeof(short), file);

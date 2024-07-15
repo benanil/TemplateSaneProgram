@@ -22,14 +22,14 @@ uniform int uHasNormalMap;
 
 float ShadowLookup(vec4 loc, vec2 offset)
 {
-    const vec2 texmapscale = vec2(0.0006, 0.0006);
+    const vec2 texmapscale = vec2(0.0005, 0.0005);
     return textureProj(uShadowMap, vec4(loc.xy + offset * texmapscale * loc.w, loc.z, loc.w));
 }
 
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const vec4 minShadow = vec4(0.2);
+    const vec4 minShadow = vec4(0.24);
     #ifdef __ANDROID__
     vec2 offset;
     const vec2 mixer = vec2(1.037, 1.137);
@@ -64,11 +64,11 @@ void main()
     lowp vec4 color = texture(uAlbedo, vTexCoords);
 
     #if ALPHA_CUTOFF == 1
-        if (color.a < 0.001)
-            discard;
+    if (color.a < 0.8 && dot(color.rgb, color.rgb) < 0.1)
+        discard;
     #endif
 
-    mediump vec3  normal    = vTBN[2];
+    mediump vec3  normal = vTBN[2];
 
     #if !defined(__ANDROID__)
     if (uHasNormalMap == 1 )

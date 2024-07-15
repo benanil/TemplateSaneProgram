@@ -1,4 +1,6 @@
 
+#extension GL_ARB_shading_language_packing : enable
+
 // per character textures
 uniform highp usampler2D dataTex; // ivec2 uint32 = half2:size, rgba8:color
 
@@ -6,12 +8,11 @@ uniform ivec2 uScrSize;
 uniform vec2 uScale;
 uniform int uIndexStart; // vertex index of the first quad that will be rendered 
 
-out      lowp vec2 vTexCoord;
-out      lowp vec4 vColor;
-
-out      lowp float oFade;
-out flat lowp uint  oEffect;
-out flat lowp float oCutStart;
+layout (location = 0) out      lowp vec2 vTexCoord;
+layout (location = 1) out      lowp vec4 vColor;
+layout (location = 2) out      lowp float oFade;
+layout (location = 3) out flat lowp uint  oEffect;
+layout (location = 4) out flat lowp float oCutStart;
 
 void main() 
 {

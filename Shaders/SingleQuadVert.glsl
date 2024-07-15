@@ -3,7 +3,7 @@ uniform ivec2 uScrSize;
 uniform vec2 uPos;
 uniform vec2 uSize;
 
-out mediump vec2 vTexCoord;
+layout(location = 0) out mediump vec2 vTexCoord;
 
 void main() 
 {

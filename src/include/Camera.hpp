@@ -48,17 +48,10 @@ struct Camera
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
 	}
 
-	void UpdateFrustumPlanes()
-	{
-		Matrix4 viewProjection = view * projection;
-		frustumPlanes = CreateFrustumPlanes(viewProjection);
-	}
-
 	void RecalculateProjection(int width, int height)
 	{
 		viewportSize.x = width; viewportSize.y = height;
 		projection = Matrix4::PerspectiveFovRH(verticalFOV * DegToRad, (float)width, (float)height, nearClip, farClip);
-		UpdateFrustumPlanes();
 		// inverseProjection = Matrix4::Inverse(projection);
 	}
 
@@ -103,7 +96,7 @@ struct Camera
 	{
 		bool pressing = GetMouseDown(MouseButton_Right);
 		float dt = (float)GetDeltaTime();
-		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f);
+		float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 5.0f;
 
 		if (!pressing) { wasPressing = false; return; }
 
@@ -144,7 +137,8 @@ struct Camera
 
 		InfiniteMouse(mousePos);
 		RecalculateView();
-		UpdateFrustumPlanes();
+
+		frustumPlanes = CreateFrustumPlanes(view * projection);
 	}
 
 	Ray ScreenPointToRay(Vector2f pos) const
@@ -220,8 +214,7 @@ struct Camera
 
 	void UpdateFrustumPlanes()
 	{
-		Matrix4 viewProjection = view * projection;
-		frustumPlanes = CreateFrustumPlanes(viewProjection);
+		frustumPlanes = CreateFrustumPlanes(view * projection);
 	}
 
 	void RecalculateProjection(int width, int height)

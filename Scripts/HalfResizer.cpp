@@ -34,21 +34,28 @@ static void MakeRGBA(const unsigned char* RESTRICT from, unsigned char* rgba, in
     }
 }
 
-int main(int argc, const char* argv[])
+void HalfResize(const char* path)
 {
-    const char* path = argv[1];
-
-    if (!FileExist(argv[1])) {
-        printf("file is not exist!");
-        return 0;
-    }
+    printf("%s\n", path);
+    int pathLen = StringLength(path);
+    // if (!FileHasExtension(path, pathLen, ".png")) {
+    //     printf("has no png extension continue\n");
+    //     return;
+    // }
 
     int width, height, numComp;
     unsigned char* diffuse = stbi_load(path, &width, &height, &numComp, 0);
     
     if (diffuse == nullptr) {
         printf("load failed! path: %s\n", path);
-        return 0;
+        return;
+    }
+
+    if (width <= 256 && height <= 256)
+    {
+        printf("file is too small continue: %i, %i\n", width, height);
+        stbi_image_free(diffuse);
+        return;
     }
 
     printf("source width: %i, height: %i, numComp: %i \n", width, height, numComp);
@@ -71,30 +78,43 @@ int main(int argc, const char* argv[])
     if (resized == nullptr) {
         printf("stbir_resize failed");
         stbi_image_free(diffuse);
-        return 0;
+        return;
     }
     width >>= 1;
     height >>= 1;
     printf("success width: %i, height: %i \n", width, height);
 
-    char path2[64] = {0};
-    int pathLen = StringLength(path);
-    SmallMemCpy(path2, path, pathLen);
-        
-    path2[pathLen + 2] = 'g';
-    path2[pathLen + 1] = 'n';
-    path2[pathLen    ] = 'p';
-    path2[pathLen - 1] = '.';
-    path2[pathLen - 2] = 'F';
-    path2[pathLen - 3] = 'L';
-    path2[pathLen - 4] = 'H';
-    printf("write path: %s \n\n", path2);
+    // if you want to reserve the original path uncomment lines below
+    // char path2[128] = {0};
+    // pathLen = StringLength(path);
+    // SmallMemCpy(path2, path, pathLen);
+    //     
+    // path2[pathLen + 2] = 'g';
+    // path2[pathLen + 1] = 'n';
+    // path2[pathLen    ] = 'p';
+    // path2[pathLen - 1] = '.';
+    // path2[pathLen - 2] = 'F';
+    // path2[pathLen - 3] = 'L';
+    // path2[pathLen - 4] = 'H';
+    // printf("write path: %s \n\n", path2);
 
     int writeRes = stbi_write_jpg(path, width, height, numComp, resizeBuffer.ptr, 100);
     if (writeRes == 0) printf("write failed!\n");
 
     printf("Write Success\n");
     stbi_image_free(diffuse);
-    
+}
+
+int main(int argc, const char* argv[])
+{
+    char currentDir[256] = {};
+    GetCurrentDirectory(sizeof(currentDir), currentDir);
+    VisitFolder(currentDir, HalfResize);
+
+    if (!FileExist(argv[1])) {
+        printf("file is not exist!");
+        return 0;
+    }
+    HalfResize(argv[1]);
     return 0;
 }

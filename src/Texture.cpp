@@ -59,12 +59,12 @@ namespace {
     };
 }
 
-const int g_AXTextureVersion = 12349;
+const int g_AXTextureVersion = 12351;
 
 // note: maybe we will need to check for data changed or not.
 bool IsTextureLastVersion(const char* path)
 {
-    AFile file = AFileOpen(path, AOpenFlag_Read);
+    AFile file = AFileOpen(path, AOpenFlag_ReadBinary);
     if (!AFileExist(file) || AFileSize(file) < 32) 
         return false;
     int version = 0;
@@ -299,8 +299,10 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
     for (int i = 0; i < numMaterials; i++)
     {
         isMetallicRoughnessMap.set(materials[i].metallicRoughnessTexture.index & 511);
+        // mixamo animations are exporting specular instead of metallic roughness, 
+        // in our engine we don't use specular but using metallic roughess with our engine specular means metallic roughness
+        isMetallicRoughnessMap.set(materials[i].specularTexture.index & 511);
     }
-
     ScopedPtr<ImageInfo> imageInfos = new ImageInfo[numImages];
     ScopedPtr<uint64_t>  currentCompressions = new uint64_t[numImages];
     uint64_t beforeCompressedSize = 0;
@@ -324,15 +326,32 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
 
         const char* imageFileName = images[i].path;
         int res = stbi_info(imageFileName, &info.width, &info.height, &info.numComp);
-        ASSERT(res);
+        if (!res)
+        {
+            AX_ERROR("stbi_info failed %s\n", imageFileName);
+            info.width = 0;
+            info.height = 0;
+            info.numComp = 1;
+            imageInfos[currentInfo] = info;
+            currentCompressions[currentInfo++] = beforeCompressedSize;
+            continue;
+        }
+
         currentCompressions[currentInfo] = beforeCompressedSize;
         imageInfos[currentInfo++] = info;
         
         int isBC1 = (isMobile == false) && (info.numComp == 1);
         int imageSize = (info.width * info.height) >> isBC1;
+        
+        bool isUncompressed = info.width <= 128 && info.height <= 128;
+        if (isUncompressed)
+        {
+            imageSize = info.width * info.height * info.numComp;
+            isBC1 = false;
+        }
 
         // we have got to include mipmap sizes if mobile
-        if (isMobile)
+        if (isMobile && !isUncompressed)
         {
             // 512->3, 1024->4, 2049->5
             int numMips = MAX(Log2((unsigned int)info.width) >> 1u, 1u) - 1;
@@ -352,7 +371,7 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
         scene->numTextures = 0;
         return;
     }
-
+    
     ScopedPtr<unsigned char> toCompressionBuffer = new unsigned char[beforeCompressedSize];
     
     auto execFn = [&](int numTextures, uint64_t compressionStart, int i) -> void
@@ -373,6 +392,7 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
                 ScopedFree(unsigned char* x) : ptr(x) {} 
                 ~ScopedFree() { stbi_image_free(ptr); }
             };
+            
             ScopedFree stbImage = stbi_load(imagePath, &info.width, &info.height, &info.numComp, 0);
             
             if (stbImage.ptr == nullptr) {
@@ -382,6 +402,18 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
             
             int imageSize = info.width * info.height;
             textureLoadBuffer.Reserve(imageSize * 4);
+            
+            if (info.width <= 128 && info.height <= 128)
+            {
+                for (int i = 0; i < imageSize * info.numComp; i++)
+                {
+                    currentCompression[i] = stbImage.ptr[i];
+                }
+
+                currentCompression += imageSize * info.numComp;
+                
+                continue;
+            }
             
             if (isMobile)
             {
@@ -443,7 +475,6 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
             currentCompression += imageSize;
     	}
     };
-
     int numTask = numImages;
     int taskPerThread = MAX(numImages / 8, 1);
     std::thread threads[9];
@@ -452,6 +483,7 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
     for (int i = 0; i <= numTask - taskPerThread; i += taskPerThread)
     {
         int start = i;
+        // execFn(taskPerThread, currentCompressions[start], start);
         new (threads + numThreads)std::thread(execFn, taskPerThread, currentCompressions[start], start);
         numThreads++;
     }
@@ -460,16 +492,19 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
     if (remainingTasks > 0)
     {
         int start = numImages - remainingTasks;
+        // execFn(remainingTasks, currentCompressions[start], start);
         new (threads + numThreads)std::thread(execFn, remainingTasks, currentCompressions[start], start);
         numThreads++;
     }
+    
     
     for (int i = 0; i < numThreads; i++)
     {
         threads[i].join();
     }
     
-    AFile file = AFileOpen(path, AOpenFlag_Write);
+
+    AFile file = AFileOpen(path, AOpenFlag_WriteBinary);
     AFileWrite(&g_AXTextureVersion, sizeof(int), file);
     AFileWrite(imageInfos.ptr, numImages * sizeof(ImageInfo), file);
     
@@ -493,7 +528,7 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
     if (numImages == 0) {
         return;
     }
-    AFile file = AFileOpen(texturePath, AOpenFlag_Read);
+    AFile file = AFileOpen(texturePath, AOpenFlag_ReadBinary);
     int version = 0;
     AFileRead(&version, sizeof(int), file);
     ASSERT(version == g_AXTextureVersion); // probably using old version, find newer version of texture or reload the gltf or fbx scene
@@ -530,7 +565,24 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
         TextureType textureType = TextureType_CompressedR + info.numComp-1;
         imageSize >>= (int)isBC4; // BC4 is 0.5 byte per pixel
         
-        const TexFlags flags = TexFlags_Compressed | TexFlags_MipMap;
+        TexFlags flags = TexFlags_Compressed | TexFlags_MipMap;
+        if (info.width <= 128 && info.height <= 128)
+        {
+            imageSize = info.width * info.height * info.numComp;
+            flags = TexFlags_RawData;
+            isBC4 = false;
+            switch (info.numComp)
+            {
+                case 1: textureType = TextureType_R8;    break;
+                case 2: textureType = TextureType_RG8;   break;
+                case 3: textureType = TextureType_RGB8;  break;
+                case 4: textureType = TextureType_RGBA8; break;
+                default: 
+                    textureType = TextureType_R8; 
+                    AX_WARN("texture numComp is undefined");
+                    break;
+            } 
+        }
         textures[i] = rCreateTexture(info.width, info.height, currentImage, textureType, flags);
         currentImage += imageSize;
         
@@ -562,14 +614,14 @@ void SaveSceneImages(Prefab* scene, char* path)
     ChangeExtension(path, StringLength(path), "dxt");
     SaveSceneImagesGeneric(scene, path, false); // is mobile false
     
-    // save astc textures for android
-    int len = StringLength(path);
-    ChangeExtension(path, len, "astc");
-    char* astcPath = new char[len + 2] {};
-    SmallMemCpy(astcPath, path, len + 1);
-    
-    // save textures in other thread because we don't want to wait android textures while on windows platform
-    new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, scene, astcPath);
+    // // save astc textures for android
+    // int len = StringLength(path);
+    // ChangeExtension(path, len, "astc");
+    // char* astcPath = new char[len + 2] {};
+    // SmallMemCpy(astcPath, path, len + 1);
+    // 
+    // // save textures in other thread because we don't want to wait android textures while on windows platform
+    // new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, scene, astcPath);
 #endif
 }
 

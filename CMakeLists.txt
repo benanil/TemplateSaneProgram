@@ -31,6 +31,7 @@ set(SOURCES
     src/VulkanBackend.cpp
     src/Scene.cpp
     src/SceneRenderer.cpp
+    src/HBAO.cpp
     src/Texture.cpp
     src/CharacterController.cpp
 )
@@ -56,6 +57,8 @@ endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 
+# link_directories(${CMAKE_SOURCE_DIR}/libs)
+
 # Add an executable target
 add_executable(SaneProgram ${SOURCES})
 
@@ -70,6 +73,7 @@ target_link_libraries(SaneProgram
     user32
     gdi32
     opengl32
+    # GFSDK_SSAO.win64.lib
 )
 
 # Set the source files for ASTC encoder in Visual Studio

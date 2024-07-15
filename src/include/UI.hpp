@@ -4,19 +4,19 @@
 #include "../../ASTL/Math/Vector.hpp"
 
 // usefull icons. Usage:  DrawText(IC_ALARM ": 12:00pm, " IC_CIRCLE) // c string concatanation
-#define IC_LEFT_TRIANGLE "\xE2\x8F\xB4"
+#define IC_LEFT_TRIANGLE  "\xE2\x8F\xB4"
 #define IC_RIGHT_TRIANGLE "\xE2\x8F\xB5"
-#define IC_UP_TRIANGLE "\xE2\x8F\xB6"
-#define IC_DOWN_TRIANGLE "\xE2\x8F\xB7"
-#define IC_PAUSE "\xE2\x8F\xB8"
-#define IC_SQUARE "\xE2\x8F\xB9" 
-#define IC_CIRCLE "\xE2\x8F\xBA"
-#define IC_RESTART "\xE2\x86\xBA"
-#define IC_HOUR_GLASS "\xE2\x8F\xB3"
-#define IC_ALARM "\xE2\x8F\xB0"
-#define IC_CHECK_MARK "\xE2\x9C\x94"
-#define IC_HEART "\xE2\x9D\xA4"
-#define IC_STAR "\xE2\x98\x85"
+#define IC_UP_TRIANGLE    "\xE2\x8F\xB6"
+#define IC_DOWN_TRIANGLE  "\xE2\x8F\xB7"
+#define IC_PAUSE          "\xE2\x8F\xB8"
+#define IC_SQUARE         "\xE2\x8F\xB9" 
+#define IC_CIRCLE         "\xE2\x8F\xBA"
+#define IC_RESTART        "\xE2\x86\xBA"
+#define IC_HOUR_GLASS     "\xE2\x8F\xB3"
+#define IC_ALARM          "\xE2\x8F\xB0"
+#define IC_CHECK_MARK     "\xE2\x9C\x94"
+#define IC_HEART          "\xE2\x9D\xA4"
+#define IC_STAR           "\xE2\x98\x85"
 
 
 enum {
@@ -41,8 +41,8 @@ enum uColor_{
 //               otherwise it will work like clock looking fade: counter clockwise fade 0 to 1
 enum uTriEffect_ {
     uTriEffect_None = 0,
-    uFadeBit = 1, // makes Fade effect
-    uCutBit  = 2, // discards rendering pixel if fade value is below CutStart
+    uFadeBit        = 1,  // makes Fade effect
+    uCutBit         = 2,  // discards rendering pixel if fade value is below CutStart
     uFadeInvertBit  = 4,  // inverts the per vertex fade value
     uEmptyInsideBit = 8,  // whatever the shape is this will set the center fade value to 0
     uIntenseFadeBit = 16, // in fragment shader it will multiply fade value by 2.0
@@ -124,23 +124,24 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered);
 //------------------------------------------------------------------------
 
 // text is an utf8 string
-void uText(const char* text, Vector2f position, uTextFlags flags = 0);
+void uDrawText(const char* text, Vector2f position, uTextFlags flags = 0u);
 
-Vector2f uCalcTextSize(const char* text, uTextFlags flags = 0);
+Vector2f uCalcTextSize(const char* text, uTextFlags flags = 0u);
 
-int CalcTextNumLines(const char* text, uTextFlags flags = 0);
+int CalcTextNumLines(const char* text, uTextFlags flags = 0u);
 
 // returns true if clicked, make scale [0.0,0.0] if you want to scale the button according to text
 bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt = 0);
 
 // quad shaped 
-void uQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0);
+void uDrawQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0u);
 
 // returns true if changed
 // if cubeCheckMark is true, selected checkbox will look like square instead of checkmark
 bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMark = false);
 
 // val should be between 0 and 1
+// minimum value that slicer can represent is 0.01f lower than that will round to 0.0f, be aware of that
 bool uSlider(const char* label, Vector2f pos, float* val, float scale); 
 
 enum FieldRes_ { FieldRes_Changed = 1, FieldRes_Clicked = 2 };
@@ -196,9 +197,9 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
 
 bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text);
 
-void uLineVertical(Vector2f begin, float size, uint properties = 0);
+void uLineVertical(Vector2f begin, float size, uint properties = 0u);
 
-void uLineHorizontal(Vector2f begin, float size, uint properties = 0);
+void uLineHorizontal(Vector2f begin, float size, uint properties = 0u);
 
 void uBorder(Vector2f begin, Vector2f scale);
 
@@ -216,21 +217,21 @@ inline uint MakeTriProperty(uTriEffect effect, uint cutStart, uint numSegments)
 
 // ads a vertex for triangle drawing
 // properties: leave it as zero if you don't want any effects, otherwise use the instructsions above
-void uVertex(Vector2f pos, uint8 fade, uint color = ~0, uint properties = 0);
+void uDrawVertex(Vector2f pos, uint8 fade, uint color = ~0u, uint properties = 0u);
 
-void uCircle(Vector2f center, float radius, uint color, uint properties = 0);
+void uDrawCircle(Vector2f center, float radius, uint color, uint properties = 0u);
 
-void uCapsule(Vector2f center, float radius, float width, uint color, uint properties = 0);
+void uDrawCapsule(Vector2f center, float radius, float width, uint color, uint properties = 0u);
 
-void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties);
+void uDrawRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties = 0u);
 
-void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
-
-// axis is -1 or 1, you may want to scale it as well (ie: 2x)
-void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
+void uDrawTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
 
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
-void uVerticalTriangle(Vector2f pos, float size, float axis, uint color);
+void uDrawHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
+
+// axis is -1 or 1, you may want to scale it as well (ie: 2x)
+void uDrawVerticalTriangle(Vector2f pos, float size, float axis, uint color);
 
 enum uScissorMask_ {
     uScissorMask_Quad = 1, // effects the quads
