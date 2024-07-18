@@ -44,15 +44,19 @@ void main()
     }
 
     lowp mat3 normalMatrix = mat3(model);
+    normalMatrix[0] = normalize(normalMatrix[0]);
+    normalMatrix[1] = normalize(normalMatrix[1]);
+    normalMatrix[2] = normalize(normalMatrix[2]);
+
     vTBN[0] = normalize(normalMatrix * aTangent.xyz); 
     vTBN[2] = normalize(normalMatrix * aNormal);
     vTBN[1] = cross(vTBN[0], vTBN[2]) * aTangent.w;
     
     vec4 outPos = model * vec4(aPos, 1.0);
     
-    float biasPosOffset = 0.5 + (1.0 - dot(vTBN[2], uSunDir)); // clamp(tan(acos(dot(normal, uSunDir)))*0.8, 0.0, 3.0);
-    vec3 normalBias = vTBN[2] * clamp(biasPosOffset, -0.5, 1.0); // -uSunDir * 0.01;
- 
+    float scale = 1.0 / length(model[0].xyz);
+    vec3 normalBias = aNormal * scale * 0.08;
+
     vLightSpaceFrag = uLightMatrix * (model * vec4(aPos + normalBias, 1.0));
     vLightSpaceFrag.xyz = vLightSpaceFrag.xyz * 0.5 + 0.5; // [-1,1] to [0, 1]
 

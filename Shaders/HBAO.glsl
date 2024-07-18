@@ -146,7 +146,7 @@ void main()
     vec3 ViewPosition = FetchQuarterResViewPos(uv);
 
     vec3 ViewNormal = texelFetch(uTexNormal, ivec2(base), 0).xyz * 2.0 - 1.0;
-         ViewNormal = normalize((uView * vec4(-ViewNormal, 0.0)).xyz);
+         ViewNormal = normalize(mat3(uView) * -ViewNormal);
 
     // Compute projection of disk of radius control.R into screen space
     float RadiusPixels = RadiusToScreen / ViewPosition.z;

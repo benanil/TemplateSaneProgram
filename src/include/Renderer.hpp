@@ -255,14 +255,14 @@ typedef int DepthType;
 void rUnpackAlignment(int n);
 
 // type is either 0 or 1 if compressed. 1 means has alpha
-Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags);
+Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags = TexFlags_None);
 
-Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, void* data, TextureType type, TexFlags flags);
+Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, void* data, TextureType type, TexFlags flags = TexFlags_None);
 
 Texture rCreateDepthTexture(int width, int height, DepthType depthType);
 
 // Imports texture from disk and loads to GPU
-Texture rLoadTexture(const char* path, bool mipmap);
+Texture rImportTexture(const char* path, TexFlags flags = TexFlags_None);
 
 // upload image data to GPU, warning: texture should be created with TexFlaags_RawData
 // for now you can only update with same format and same width and height
@@ -271,6 +271,8 @@ void rUpdateTexture(Texture texture, void* data);
 void rDeleteTexture(Texture texture);
 
 void rSetTexture(Texture texture, int index, unsigned int loc);
+
+void rSetTexture(Texture* texture, int index, unsigned int location);
 
 void rSetTexture2DArray(Texture texture, int index, unsigned int loc);
 
@@ -299,7 +301,7 @@ void rUnbindFrameBuffer();
      
 void rFrameBufferAttachDepth(Texture texture);
      
-void rFrameBufferAttachColor(Texture texture, int index);
+void rFrameBufferAttachColor(Texture texture, int index = 0);
      
 void rFrameBufferAttachColorFrom2DArray(Texture texture, int attachmentIdx, int layerIdx);
 

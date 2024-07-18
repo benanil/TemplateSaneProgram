@@ -33,11 +33,15 @@ windres SaneProgram.rc -O coff -o SaneProgram.res
 To change icon and information of the .exe: <br>
 Visual Studio go to SolutionExplorer-> right click SaneProgram->AddExisting->SaneProgram.res
 
+# Be Aware
+By default Engine Tries to start with Bistro Scene you have to download it from
+[Google Drive](https://drive.google.com/file/d/1tUt9gtAoC_Pldk6tPZgasYpO510xMpdr/view?usp=sharing)
+Otherwise change to Sponza Scene from SaneProgram.cpp, it will work
+
 # Good to Know
 'r' prefix used for renderer functions
 'w' prefix used for windowing functions
 this is doom like thing
-
 
 # Building Android Project
 You have to move Meshes and Shaders folders to TemplateSaneProgram\Android\app\src\main\assets folder <br>
@@ -64,6 +68,7 @@ Blender Mixamo Character Import Settings:
     Transform.+yUp     :  uncheck
     
     Blender Multi Animation: https://roderickvella.wordpress.com/2023/05/18/importing-mixamo-animations-into-raylib/
+
 
 # Used Libraries
 for fbx scenes [ufbx](https://github.com/ufbx/ufbx)<br>

@@ -22,14 +22,15 @@ uniform int uHasNormalMap;
 
 float ShadowLookup(vec4 loc, vec2 offset)
 {
-    const vec2 texmapscale = vec2(0.0005, 0.0005);
+    vec2 texmapscale = 1.0 / textureSize(uShadowMap, 0);
+    texmapscale *= 1.35; // increase spread area, to make shadow softer 
     return textureProj(uShadowMap, vec4(loc.xy + offset * texmapscale * loc.w, loc.z, loc.w));
 }
 
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const vec4 minShadow = vec4(0.24);
+    const vec4 minShadow = vec4(0.25);
     #ifdef __ANDROID__
     vec2 offset;
     const vec2 mixer = vec2(1.037, 1.137);

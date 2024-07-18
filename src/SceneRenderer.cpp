@@ -8,6 +8,8 @@
 #include "include/Platform.hpp"
 #include "include/Camera.hpp"
 #include "include/UI.hpp"
+#include "include/HBAO.hpp"
+// #include "include/PostProcessing.hpp"
 
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
@@ -16,14 +18,6 @@
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
 
-// from HBAO.hpp
-extern Texture mBlurResultTX;
-extern void HBAOInit(int width, int height);
-extern void HBAOResize(int width, int height);
-extern void HBAORender(Camera* camera, Texture* depthTex, Texture* normalTex);
-extern void HBAOEdit(Vector2f pos, int* currElement, float textPadding);
-extern void HBAODestroy();
-
 namespace SceneRenderer
 {
     Camera      m_Camera;
@@ -31,7 +25,7 @@ namespace SceneRenderer
     Matrix4     m_ViewProjection;
     Matrix4     m_LightMatrix;
 
-    Texture     m_SkyTexture;
+    Texture     m_SkyNoiseTexture;
     FrameBuffer m_ShadowFrameBuffer;
     Shader      m_ShadowShader;
     
@@ -39,9 +33,14 @@ namespace SceneRenderer
     Shader      m_GBufferShaderAlpha;
     Shader      m_SkyboxShader;
     Shader      m_DepthCopyShader;
+    Shader      mPostProcessingShader; // tone-mapping, vignate
     GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
 
-    struct MainFrameBuffer
+    Shader      mGodRaysShader;
+    FrameBuffer mGodRaysFB;
+    Texture     mGodRaysTex;
+
+    struct GBuffer
     {
         FrameBuffer Buffer;
         Texture     ColorTexture; // < a component is shadow
@@ -51,14 +50,15 @@ namespace SceneRenderer
         int width, height;
     };
 
-    MainFrameBuffer m_MainFrameBuffer;
+    GBuffer m_Gbuffer;
 
-    FrameBuffer m_ResultFrameBuffer;
-    Texture m_ResultTexture;
-    Texture m_ResultDepthTexture;
+    FrameBuffer m_LightingFrameBuffer;
+    FrameBuffer m_PostProcessingFrameBuffer;
+    Texture m_LightingTexture;
 
     // deferred rendering
     Shader      m_DeferredPBRShader;
+    Shader      m_BlackShader;
 
     // Gbuffer uniform locations
     int lAlbedo, lNormalMap, lHasNormalMap, lMetallicMap, lShadowMap, lLightMatrix, 
@@ -67,6 +67,8 @@ namespace SceneRenderer
     // Deferred uniform locations
     int lSunDir, lPlayerPos, lAlbedoTex, lRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
 
+    // Skybox uniform locations
+    int lSkyTime, lSkySun, lSkyViewPos, lSkyViewProj, lSkyNoiseTex;
     // SSAO uniform locations
     int sDepthMap, sNormalTex, sView;
     
@@ -107,10 +109,10 @@ namespace ShadowSettings
     const int ShadowMapSize = 1 << (11 + (!IsAndroid() << 1)); // mobile 2k, pc 4k
     float OrthoSize   = 128.0f; 
     float NearPlane   = 1.0f;
-    float FarPlane    = 128.0f;
+    float FarPlane    = 192.0f;
     
     float Bias = 0.001f;
-    Vector3f OrthoOffset={32.0f, 56.0f, 5.0f};
+    Vector3f OrthoOffset = {32.0f, 56.0f, 5.0f};
 
     inline Matrix4 GetOrthoMatrix()
     {
@@ -121,99 +123,12 @@ namespace ShadowSettings
 namespace SceneRenderer 
 {
 
-    
-void ShowEditor()
-{
-    static bool open = false;
-    if (GetKeyPressed('B')) open = !open;
-    if (!open) return;
-    Vector2f bgPos   = { 20.0f, 90.0f };
-    Vector2f bgScale = { 450.0f, 600.0f };
-    Vector2f pos = bgPos;
-
-    uDrawQuad(pos, bgScale, uGetColor(uColorQuad) & 0x77FFFFFFu);
-    uBorder(pos, bgScale);
-
-    const float textPadding = 13.0f;
-    Vector2f zero2 = { 0.0f, 0.0f };
-
-    // uSetFloat(ufContentStart, uGetFloat(ufContentStart) * 2.0f);
-    float settingElementWidth = bgScale.x / 1.15f;
-    float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
-
-    Vector2f textSize = uCalcTextSize("Graphics");
-    uPushFloat(ufContentStart, settingElementWidth);
- 
-    // uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.0f);
-    float settingsXStart = 20.0f;
-    pos.y += textSize.y + textPadding;
-    pos.x += settingsXStart;
-    uDrawText("Graphics", pos);
-    // uPopFloat(ufTextScale);
-
-    float lineLength = bgScale.x * 0.85f;
-    float xoffset = (bgScale.x - lineLength) * 0.5f; // where line starts
-    pos.x += xoffset;
-    pos.y += 20.0f; // line padding
-    pos.x -= settingsXStart;
-
-    uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
-    uLineHorizontal(pos, lineLength, uTriEffect_None);
-    uPopColor(uColorLine);
-
-    pos.x -= xoffset;
-    pos.x += elementsXOffset;
-    pos.y += textSize.y + textPadding;
-
-    static int CurrElement = 0;
-    const int numElements = 11; // number of options plus back button
-
-    uPushFloat(ufTextScale, 0.6f);
-    uPushFloat(ufFieldWidth, uGetFloat(ufFieldWidth) * 0.8f);
-
-    uSetElementFocused(CurrElement == 0);
-    if (uFloatField("Ortho Size", pos, &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
-    {
-        CurrElement = 0;
-        m_RedrawShadows = 1;
-    }
-
-    pos.y += textSize.y + textPadding;
-    uSetElementFocused(CurrElement == 1);
-    static int orthoIndex = 0;
-    if (uFloatVecField("Ortho Offset", pos, &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
-    {
-        CurrElement = 1;
-    }
-
-    pos.y += textSize.y + textPadding;
-    uSetElementFocused(CurrElement == 2);
-    if (uFloatField("Sun Angle", pos, &g_CurrentScene.m_SunAngle, -PI, PI+0.15f, 0.04f))
-    {
-        m_RedrawShadows = 1;
-        CurrElement = 2;
-    }
-
-    pos.y += textSize.y + textPadding;
-    uSetElementFocused(CurrElement == 3);
-    if (uFloatField("Far Plane", pos, &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
-    {
-        m_RedrawShadows = 1;
-        CurrElement = 3;
-    }
-
-    HBAOEdit(pos, &CurrElement, textSize.y + textPadding);
-
-    uPopFloat(ufTextScale);
-    uPopFloat(ufFieldWidth);
-    uPopFloat(ufContentStart);
-}
+void CreateShaders();
+void DeleteShaders();
 
 void DrawLastRenderedFrame()
 {
-    rClearDepth();
-    rRenderFullScreen(m_DepthCopyShader, m_MainFrameBuffer.DepthTexture.handle);
-    rRenderFullScreen(m_ResultTexture.handle);
+    rRenderFullScreen(m_LightingTexture.handle);
 }
 
 Camera* GetCamera()
@@ -246,62 +161,58 @@ inline int GetRBHeight(int w, int h) {
 }
 #endif
 
-static void CreateMainFrameBuffer(MainFrameBuffer& frameBuffer, int width, int height, bool half)
+static void CreateGBuffer(GBuffer& gBuffer, int width, int height)
 {
     width  = GetRBWidth(width, height);
     height = GetRBHeight(width, height);
-    frameBuffer.Buffer = rCreateFrameBuffer();
-    frameBuffer.width  = width;
-    frameBuffer.height = height;
-    rBindFrameBuffer(frameBuffer.Buffer);
-    frameBuffer.ColorTexture  = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_Nearest);
-    frameBuffer.NormalTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_Nearest);
-    frameBuffer.RoughnessTexture = rCreateTexture(width, height, nullptr, TextureType_R8, TexFlags_Nearest);
 
-    rFrameBufferAttachColor(frameBuffer.ColorTexture , 0);
-    rFrameBufferAttachColor(frameBuffer.NormalTexture, 1);
-    rFrameBufferAttachColor(frameBuffer.RoughnessTexture, 2);
+    gBuffer.Buffer = rCreateFrameBuffer();
+    gBuffer.width  = width;
+    gBuffer.height = height;
+    rBindFrameBuffer(gBuffer.Buffer);
+    gBuffer.ColorTexture     = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_RawData);
+    gBuffer.NormalTexture    = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_RawData);
+    gBuffer.RoughnessTexture = rCreateTexture(width, height, nullptr, TextureType_R8, TexFlags_RawData);
+
+    rFrameBufferAttachColor(gBuffer.ColorTexture    , 0);
+    rFrameBufferAttachColor(gBuffer.NormalTexture   , 1);
+    rFrameBufferAttachColor(gBuffer.RoughnessTexture, 2);
 
     __const DepthType depthType = IsAndroid() ? DepthType_24 : DepthType_32;
-    frameBuffer.DepthTexture  = rCreateDepthTexture(width, height, depthType);
-    rFrameBufferAttachDepth(frameBuffer.DepthTexture);
+    gBuffer.DepthTexture  = rCreateDepthTexture(width, height, depthType);
+    rFrameBufferAttachDepth(gBuffer.DepthTexture);
 
     rFrameBufferSetNumColorBuffers(3);
     rFrameBufferCheck();
-}
 
-static void DeleteMainFrameBuffer(MainFrameBuffer& frameBuffer)
-{
-    rDeleteTexture(frameBuffer.ColorTexture);
-    rDeleteTexture(frameBuffer.DepthTexture);
-    rDeleteTexture(frameBuffer.NormalTexture);
-    rDeleteTexture(frameBuffer.RoughnessTexture);
-    rDeleteFrameBuffer(frameBuffer.Buffer);
-}
-
-static void CreateFrameBuffers(int width, int height)
-{
-    __const DepthType depthType = IsAndroid() ? DepthType_24 : DepthType_32;
-
-    m_ResultFrameBuffer = rCreateFrameBuffer();
-    m_ResultTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_RawData);
-    m_ResultDepthTexture = rCreateDepthTexture(width, height, depthType);
-    rBindFrameBuffer(m_ResultFrameBuffer);
-    rFrameBufferAttachColor(m_ResultTexture, 0);
-    rFrameBufferSetNumColorBuffers(1);
-    rFrameBufferAttachDepth(m_ResultDepthTexture);
-    rFrameBufferCheck();
+    m_LightingTexture = rCreateTexture(width, height, nullptr, TextureType_RGB10_A2, TexFlags_RawData);
     
-    CreateMainFrameBuffer(m_MainFrameBuffer, width, height, false);
+    m_LightingFrameBuffer = rCreateFrameBuffer(true);
+    rFrameBufferAttachColor(m_LightingTexture);
+    rFrameBufferCheck();
+
+    m_PostProcessingFrameBuffer = rCreateFrameBuffer(true);
+    rFrameBufferAttachColor(gBuffer.ColorTexture);
+    rFrameBufferAttachDepth(gBuffer.DepthTexture);
+    rFrameBufferCheck();
+
+    mGodRaysTex = rCreateTexture(width, height, nullptr, TextureType_R16F);
+    mGodRaysFB = rCreateFrameBuffer(true);
+    rFrameBufferAttachColor(mGodRaysTex, 0);
 }
 
-static void DeleteFrameBuffers()
+static void DeleteGBuffer(GBuffer& gbuffer)
 {
-    rDeleteTexture(m_ResultTexture);
-    rDeleteTexture(m_ResultDepthTexture);
-    rDeleteFrameBuffer(m_ResultFrameBuffer);
-
-    DeleteMainFrameBuffer(m_MainFrameBuffer);
+    rDeleteTexture(gbuffer.ColorTexture);
+    rDeleteTexture(gbuffer.DepthTexture);
+    rDeleteTexture(gbuffer.NormalTexture);
+    rDeleteTexture(gbuffer.RoughnessTexture);
+    rDeleteTexture(mGodRaysTex);
+    rDeleteTexture(m_LightingTexture);
+    rDeleteFrameBuffer(mGodRaysFB);
+    rDeleteFrameBuffer(m_PostProcessingFrameBuffer);
+    rDeleteFrameBuffer(m_LightingFrameBuffer);
+    rDeleteFrameBuffer(gbuffer.Buffer);
 }
 
 void WindowResizeCallback(int width, int height)
@@ -312,9 +223,10 @@ void WindowResizeCallback(int width, int height)
     height = MAX(height, 16);
     rSetViewportSize(smallerWidth, smallerHeight);
     m_Camera.RecalculateProjection(width, height);
-    DeleteFrameBuffers();
+    DeleteGBuffer(m_Gbuffer);
     HBAOResize(smallerWidth, smallerHeight);
-    CreateFrameBuffers(width, height);
+    // PostProcessingResize(width, height);
+    CreateGBuffer(m_Gbuffer, width, height);
     m_RedrawShadows = 2;
     m_ShouldReRender = true;
 }
@@ -366,6 +278,18 @@ static void GetUniformLocations()
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lIntensities, MaxNumLights, "uSpotLights[0].intensity");
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lCutoffs    , MaxNumLights, "uSpotLights[0].cutoff");
     rGetUniformArrayLocations(arrBegin, lightText, m_SpotLightUniforms.lRanges     , MaxNumLights, "uSpotLights[0].range");
+
+    // skybox locations
+    rBindShader(m_SkyboxShader);
+    lSkyTime = rGetUniformLocation("time");
+    lSkySun  = rGetUniformLocation("fsun"); 
+    lSkyViewPos = rGetUniformLocation("viewPos");
+    lSkyViewProj = rGetUniformLocation("uViewProj");
+    lSkyNoiseTex = rGetUniformLocation("noiseTex");
+
+    // shadow locations
+    lShadowModel       = rGetUniformLocation(m_ShadowShader, "model");
+    lShadowLightMatrix = rGetUniformLocation(m_ShadowShader, "lightMatrix");
 }
 
 static void CreateShaders()
@@ -382,16 +306,35 @@ static void CreateShaders()
     gbufferFragmentShader.text[alphaIndex + sizeof("ALPHA_CUTOFF")] = '1';
     m_GBufferShaderAlpha = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text);
 
-    GetUniformLocations();
     m_DepthCopyShader = rCreateFullScreenShader(
                             AX_SHADER_VERSION_PRECISION()
                             "in vec2 texCoord; uniform sampler2D DepthTex;"
                             "void main() { gl_FragDepth = texture(DepthTex, texCoord).r; }"
                         );
+
+    ScopedText shadowVertexShader = ReadAllText("Shaders/ShadowVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    const char* shadowFragmentShader = AX_SHADER_VERSION_PRECISION() "void main() { }";
+    m_ShadowShader      = rCreateShader(shadowVertexShader.text, shadowFragmentShader);
+
+    m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");
+
+    mPostProcessingShader = rImportFullScreenShader("Shaders/PostProcessing.glsl");
+    mGodRaysShader = rImportFullScreenShader("Shaders/GodRays.glsl");
+
+    m_BlackShader = rCreateFullScreenShader(
+        AX_SHADER_VERSION_PRECISION()
+        "layout(location = 0) out float result;"
+        "void main() { result = 0.0; }"
+    );
+    
+    GetUniformLocations();
 }
 
 static void DeleteShaders()
 {
+    rDeleteShader(m_BlackShader);
+    rDeleteShader(mPostProcessingShader);
+    rDeleteShader(mGodRaysShader);
     rDeleteShader(m_GBufferShader);
     rDeleteShader(m_DeferredPBRShader);
     rDeleteShader(m_ShadowShader);
@@ -399,15 +342,8 @@ static void DeleteShaders()
 
 static void SetupShadowRendering()
 {
-    ScopedText shadowVertexShader = ReadAllText("Shaders/ShadowVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    const char* shadowFragmentShader = AX_SHADER_VERSION_PRECISION() "void main() { }";
-
-    m_ShadowShader      = rCreateShader(shadowVertexShader.text, shadowFragmentShader);
     m_ShadowFrameBuffer = rCreateFrameBuffer();
     m_ShadowTexture     = rCreateDepthTexture(ShadowSettings::ShadowMapSize, ShadowSettings::ShadowMapSize, DepthType_24);
-
-    lShadowModel       = rGetUniformLocation(m_ShadowShader, "model");
-    lShadowLightMatrix = rGetUniformLocation(m_ShadowShader, "lightMatrix");
 
     rBindFrameBuffer(m_ShadowFrameBuffer);
     rFrameBufferAttachDepth(m_ShadowTexture);
@@ -453,15 +389,15 @@ static void PrepareSkybox()
         2, 3, 4, 2, 4, 5, // face top
         1, 2, 5, 1, 5, 6, // face right
         0, 7, 4, 0, 4, 3, // face left
-        5, 4, 7, 5, 7, 6 // face back
-        // 0, 6, 7, 0, 1, 6  // face bottom
+        5, 4, 7, 5, 7, 6, // face back
+        0, 6, 7, 0, 1, 6  // face bottom
     };
     
     const InputLayout layout = { 3, GraphicType_Float };
     const InputLayoutDesc desc = { 1, sizeof(Vector3f), &layout, false };
 
     m_BoxMesh = rCreateMesh(vertices, triangles, ArraySize(vertices), ArraySize(triangles), GraphicType_UnsignedShort, &desc);
-    m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");
+    m_SkyNoiseTexture = rImportTexture("Shaders/PerlinNoise.png");
 }
 
 void Init()
@@ -472,14 +408,17 @@ void Init()
     Vector2i windowStartSize;
     wGetMonitorSize(&windowStartSize.x, &windowStartSize.y);
 
-    CreateFrameBuffers(windowStartSize.x, windowStartSize.y);
+    CreateGBuffer(m_Gbuffer, windowStartSize.x, windowStartSize.y);
 
     m_Camera.Init(windowStartSize);
 
     HBAOInit(GetRBWidth(windowStartSize.x, windowStartSize.y), 
              GetRBHeight(windowStartSize.x, windowStartSize.y));
 
+    // PostProcessingInit(windowStartSize.x, windowStartSize.y);
+
     SetupShadowRendering();
+
 
     MemsetZero(&m_defaultMaterial, sizeof(AMaterial));
     m_defaultMaterial.metallicFactor  = 1256;
@@ -501,8 +440,8 @@ void Init()
 
 void BeginRendering()
 {
-    rBindFrameBuffer(m_MainFrameBuffer.Buffer);
-    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
+    rBindFrameBuffer(m_Gbuffer.Buffer);
+    rSetViewportSize(m_Gbuffer.width, m_Gbuffer.height);
     rClearColor(0.2f, 0.2f, 0.2f, 1.0);
     rClearDepth();
 
@@ -581,7 +520,7 @@ void BeginShadowRendering(Scene* scene)
     rClearDepth();
 
     Vector3f offset = ShadowSettings::OrthoOffset; // m_ShadowFollowCamera ? m_Camera.targetPos : Vector3f::Zero();
-    Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 50.0f + offset, -sunLight.dir, Vector3f::Up());
+    Matrix4 view  = Matrix4::LookAtRH(sunLight.dir * 90.0f + offset, -sunLight.dir, Vector3f::Up());
     Matrix4 ortho = ShadowSettings::GetOrthoMatrix();
     m_LightMatrix = view * ortho;
 
@@ -796,45 +735,6 @@ void RenderAllSceneContent(Scene* scene)
     // }
 }
 
-#if 0
-static void DownscaleMainFrameBuffer()
-{
-    // Downscale main frame buffer
-    rBindFrameBuffer(m_MainFrameBufferHalf.Buffer);
-    rSetViewportSize(m_MainFrameBufferHalf.width, m_MainFrameBufferHalf.height);
-    {
-        rClearDepth();
-        rBindShader(m_MainFrameBufferCopyShader);
-    
-        rSetTexture(m_MainFrameBuffer.ColorTexture , 0, dColorTex);
-        rSetTexture(m_MainFrameBuffer.NormalTexture, 1, dNormalTex);
-        rSetTexture(m_MainFrameBuffer.DepthTexture , 2, dDepthTex);
-        rRenderFullScreen();
-    }
-}
-
-static void SSAOPass()
-{
-    // SSAO pass
-    rBindFrameBuffer(m_SSAOFrameBuffer);
-    rFrameBufferAttachColor(m_SSAOHalfTexture, 0);
-    rBindShader(m_SSAOShader);
-    {
-        rSetTexture(m_MainFrameBufferHalf.DepthTexture , 0, sDepthMap); // m_MainFrameBufferHalf.DepthTexture
-        rSetTexture(m_MainFrameBufferHalf.NormalTexture, 1, sNormalTex);
-        rRenderFullScreen();
-    }
-    // Upsample SSAO
-    rSetViewportSize(m_MainFrameBuffer.width, m_MainFrameBuffer.height);
-    rFrameBufferAttachColor(m_SSAOTexture, 0);
-    rBindShader(m_RedUpsampleShader);
-    {
-        rSetTexture(m_SSAOHalfTexture, 0, rGetUniformLocation("halfTex"));
-        rRenderFullScreen();
-    }
-}
-#endif
-
 static void LightingPass()
 {
     DirectionalLight sunLight = g_CurrentScene.m_SunLight;
@@ -850,11 +750,11 @@ static void LightingPass()
         rSetShaderValue(invView.GetPtr(), lInvView, GraphicType_Matrix4);
         rSetShaderValue(invProj.GetPtr(), lInvProj, GraphicType_Matrix4);
 
-        rSetTexture(m_MainFrameBuffer.ColorTexture    , 0, lAlbedoTex);
-        rSetTexture(m_MainFrameBuffer.RoughnessTexture, 1, lRoughnessTex);
-        rSetTexture(m_MainFrameBuffer.NormalTexture   , 2, lNormalTex);
-        rSetTexture(m_MainFrameBuffer.DepthTexture    , 3, lDepthMap);
-        rSetTexture(mBlurResultTX                     , 4, lAmbientOclussionTex);
+        rSetTexture(m_Gbuffer.ColorTexture    , 0, lAlbedoTex);
+        rSetTexture(m_Gbuffer.RoughnessTexture, 1, lRoughnessTex);
+        rSetTexture(m_Gbuffer.NormalTexture   , 2, lNormalTex);
+        rSetTexture(m_Gbuffer.DepthTexture    , 3, lDepthMap);
+        rSetTexture(*HBAOGetResult()          , 4, lAmbientOclussionTex);
 
         rSetShaderValue(g_CurrentScene.m_PointLights.Size(), lNumPointLights);
         rSetShaderValue(g_CurrentScene.m_SpotLights.Size(), lNumSpotLights);
@@ -869,63 +769,293 @@ static void DrawSkybox()
 {
     rSetClockWise(true);
         rBindShader(m_SkyboxShader);
-        rSetShaderValue(m_ViewProjection.GetPtr(), 0, GraphicType_Matrix4);
+        rSetShaderValue((float)TimeSinceStartup() * 0.3f, lSkyTime);
+        rSetShaderValue(g_CurrentScene.m_SunLight.dir.arr, lSkySun, GraphicType_Vector3f);
+        rSetShaderValue(m_CharacterPos.arr, lSkyViewPos, GraphicType_Vector3f);
+        rSetShaderValue(m_ViewProjection.GetPtr(), lSkyViewProj, GraphicType_Matrix4);
+        rSetTexture(m_SkyNoiseTexture, 0, lSkyNoiseTex);
         rBindMesh(m_BoxMesh);
         rRenderMeshIndexed(m_BoxMesh);
     rSetClockWise(false);
 }
 
-void EndRendering(bool renderToBackBuffer)
+void PostProcessingPass()
 {
-    HBAORender(&m_Camera, &m_MainFrameBuffer.DepthTexture, &m_MainFrameBuffer.NormalTexture);
+    Texture depthTexture = m_Gbuffer.DepthTexture;
+    Vector3f sunDir = g_CurrentScene.m_SunLight.dir;
+    Vector3f camDir = m_Camera.Front;
+    Vector2f sunScreenCoord = WorldToNDC(m_ViewProjection, m_CharacterPos + (sunDir * 600.0f));
+    sunScreenCoord = (sunScreenCoord + 1.0) * 0.5f; // convert to 0, 1 space
 
-    Vector2i windowSize;
-    wGetWindowSize(&windowSize.x, &windowSize.y);
-    rSetViewportSize(windowSize.x, windowSize.y);
+    float angle = Abs(ACos(Dot(sunDir, camDir)));
 
-    if (renderToBackBuffer)
+    if (angle < PI)
     {
-        rUnbindFrameBuffer(); // < draw to backbuffer after this line
+        float fovRad = m_Camera.verticalFOV * DegToRad;
+        float intensity = ((PI - angle) / PI);
+
+        rBindShader(mGodRaysShader);
+        rBindFrameBuffer(mGodRaysFB);
+        rSetShaderValue(intensity, 0);
+        rSetShaderValue(sunScreenCoord.arr, 1, GraphicType_Vector2f);
+        rSetTexture(depthTexture, 0, 2);
+        rRenderFullScreen();
     }
     else
     {
-        rBindFrameBuffer(m_ResultFrameBuffer);
+        rBindFrameBuffer(mGodRaysFB);
+        rBindShader(m_BlackShader);
+        rRenderFullScreen();
     }
 
-    rSetDepthTest(true);
-    rSetDepthWrite(true);
-    // copy depth buffer to back buffer
-    rRenderFullScreen(m_DepthCopyShader, m_MainFrameBuffer.DepthTexture.handle);
+    rBindFrameBuffer(m_PostProcessingFrameBuffer);
+    
+    rBindShader(mPostProcessingShader);
+    rSetTexture(m_LightingTexture, 0, 0);
+    rSetTexture(mGodRaysTex, 1, 1);
+    rRenderFullScreen();
+}
+
+void EndRendering(bool renderToBackBuffer)
+{
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
+    
+    HBAORender(&m_Camera, &m_Gbuffer.DepthTexture, &m_Gbuffer.NormalTexture);
+
+    rSetViewportSize(windowSize.x, windowSize.y);
 
     // screen space passes, no need depth
-    rSetDepthTest(false);
     rSetDepthWrite(false);
+    rSetDepthTest(false);
+
+    rBindFrameBuffer(m_LightingFrameBuffer);
     
-    {
-        LightingPass();
-    }
+    LightingPass(); // Deferred Lighting
+
+    PostProcessingPass();
 
     rSetDepthTest(true);
-    {
-        DrawSkybox();
-    }
-    rSetDepthWrite(true);
     
-    if (!renderToBackBuffer)
-    {
-        rUnbindFrameBuffer();
-    }
+    rBindFrameBuffer(m_Gbuffer.Buffer);
+
+    DrawSkybox();
+
+    rUnbindFrameBuffer(); // < draw to backbuffer after this line
+    rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
+    
+    rSetDepthWrite(true);
 }
 
 void Destroy()
 {
-    DeleteFrameBuffers();
+    DeleteGBuffer(m_Gbuffer);
 
     DeleteShaders();
 
     rDeleteTexture(m_ShadowTexture);
     rDeleteFrameBuffer(m_ShadowFrameBuffer);
     HBAODestroy();
+}
+
+struct SphereCreateResult
+{
+    float* vertices;
+    uint32_t* indices;
+    uint32_t vertexCount;
+    uint32_t indexCount;
+};
+
+// SphereCreateResult* CSCreateSphereVertexIndices(uint16_t LatLines, uint16_t LongLines)
+// {
+// 	SphereCreateResult* result = new SphereCreateResult();
+// 
+// 	result->vertexCount = ((LatLines - 2) * LongLines) + 2;
+// 	result->indexCount = (((LatLines - 3) * (LongLines) * 2) + (LongLines * 2)) * 3;
+// 
+// 	float sphereYaw = 0.0f;
+// 	float spherePitch = 0.0f;
+// 
+// 	// calculate vertices
+//     result->vertices = new Vector3f[result->vertexCount];
+// 	XMVECTOR currVertPos = VecSetR(0.0f, 0.0f, 1.0f, 0.0f);
+// 
+// 	result->vertices[0].x = 0.0f;
+// 	result->vertices[0].y = 0.0f;
+// 	result->vertices[0].z = 1.0f;
+// 
+// 	for (uint16_t i = 0; i < LatLines - 2; ++i)
+// 	{
+// 		spherePitch = (i + 1) * (DX_PI / (LatLines - 1));
+// 		vec_t Rotationx = XMMatrixRotationX(spherePitch);
+// 		for (uint16_t j = 0; j < LongLines; ++j)
+// 		{
+// 			sphereYaw = j * (DX_TWO_PI / (LongLines));
+// 			auto Rotationy = XMMatrixRotationZ(sphereYaw);
+// 			currVertPos = Vector3Transform(VecSetR(0.0f, 0.0f, 1.0f, 0.0f), (Rotationx * Rotationy));
+// 			currVertPos = XMVector3Normalize(currVertPos);
+// 			result->vertices[i * LongLines + j + 1].y = XMVectorGetY(currVertPos);
+// 			result->vertices[i * LongLines + j + 1].x = XMVectorGetX(currVertPos);
+// 			result->vertices[i * LongLines + j + 1].z = XMVectorGetZ(currVertPos);
+// 		}
+// 	}
+// 
+// 	result->vertices[result->vertexCount - 1].x = 0.0f;
+// 	result->vertices[result->vertexCount - 1].y = 0.0f;
+// 	result->vertices[result->vertexCount - 1].z = -1.0f;
+// 
+// 	// calculate indices
+// 	result->indices = (uint32_t*)malloc(sizeof(uint32_t) * result->indexCount);
+// 	uint32_t k = 0;
+// 	for (uint16_t l = 0; l < LongLines - 1; ++l)
+// 	{
+// 		result->indices[k] = 0;
+// 		result->indices[k + 1] = l + 1;
+// 		result->indices[k + 2] = l + 2;
+// 		k += 3;
+// 	}
+// 
+// 	result->indices[k] = 0;
+// 	result->indices[k + 1] = LongLines;
+// 	result->indices[k + 2] = 1;
+// 	k += 3;
+// 
+// 	for (uint16_t i = 0; i < LatLines - 3; ++i)
+// 	{
+// 		for (uint16_t j = 0; j < LongLines - 1; ++j)
+// 		{
+// 			result->indices[k] = i * LongLines + j + 1;
+// 			result->indices[k + 1] = i * LongLines + j + 2;
+// 			result->indices[k + 2] = (i + 1) * LongLines + j + 1;
+// 
+// 			result->indices[k + 3] = (i + 1) * LongLines + j + 1;
+// 			result->indices[k + 4] = i * LongLines + j + 2;
+// 			result->indices[k + 5] = (i + 1) * LongLines + j + 2;
+// 
+// 			k += 6; // next quad
+// 		}
+// 
+// 		result->indices[k] = (i * LongLines) + LongLines;
+// 		result->indices[k + 1] = (i * LongLines) + 1;
+// 		result->indices[k + 2] = ((i + 1) * LongLines) + LongLines;
+// 
+// 		result->indices[k + 3] = ((i + 1) * LongLines) + LongLines;
+// 		result->indices[k + 4] = (i * LongLines) + 1;
+// 		result->indices[k + 5] = ((i + 1) * LongLines) + 1;
+// 
+// 		k += 6;
+// 	}
+// 
+// 	for (uint16_t l = 0; l < LongLines - 1; ++l)
+// 	{
+// 		result->indices[k] = result->vertexCount - 1;
+// 		result->indices[k + 1] = (result->vertexCount - 1) - (l + 1);
+// 		result->indices[k + 2] = (result->vertexCount - 1) - (l + 2);
+// 		k += 3;
+// 	}
+// 
+// 	result->indices[k] = result->vertexCount - 1;
+// 	result->indices[k + 1] = (result->vertexCount - 1) - LongLines;
+// 	result->indices[k + 2] = result->vertexCount - 2;
+// 
+// 	return result;
+// }
+
+
+void ShowEditor()
+{
+    static bool open = false;
+    if (GetKeyPressed('B')) open = !open;
+    if (!open) return;
+    Vector2f bgPos   = { 20.0f, 90.0f };
+    Vector2f bgScale = { 450.0f, 600.0f };
+    Vector2f pos = bgPos;
+
+    uDrawQuad(pos, bgScale, uGetColor(uColorQuad) & 0x77FFFFFFu);
+    uBorder(pos, bgScale);
+
+    const float textPadding = 13.0f;
+    Vector2f zero2 = { 0.0f, 0.0f };
+
+    // uSetFloat(ufContentStart, uGetFloat(ufContentStart) * 2.0f);
+    float settingElementWidth = bgScale.x / 1.15f;
+    float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
+
+    Vector2f textSize = uCalcTextSize("Graphics");
+    uPushFloat(ufContentStart, settingElementWidth);
+ 
+    // uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.0f);
+    float settingsXStart = 20.0f;
+    pos.y += textSize.y + textPadding;
+    pos.x += settingsXStart;
+    uDrawText("Graphics", pos);
+    // uPopFloat(ufTextScale);
+
+    float lineLength = bgScale.x * 0.85f;
+    float xoffset = (bgScale.x - lineLength) * 0.5f; // where line starts
+    pos.x += xoffset;
+    pos.y += 20.0f; // line padding
+    pos.x -= settingsXStart;
+
+    uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
+    uLineHorizontal(pos, lineLength, uTriEffect_None);
+    uPopColor(uColorLine);
+
+    pos.x -= xoffset;
+    pos.x += elementsXOffset;
+    pos.y += textSize.y + textPadding;
+
+    static int CurrElement = 0;
+    const int numElements = 11; // number of options plus back button
+
+    uPushFloat(ufTextScale, 0.6f);
+    uPushFloat(ufFieldWidth, uGetFloat(ufFieldWidth) * 0.8f);
+
+    uSetElementFocused(CurrElement == 0);
+    if (uFloatField("Ortho Size", pos, &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
+    {
+        CurrElement = 0;
+        m_RedrawShadows = 1;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 1);
+    static int orthoIndex = 0;
+    if (uFloatVecField("Ortho Offset", pos, &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
+    {
+        CurrElement = 1;
+        m_RedrawShadows = 1;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 2);
+    if (uFloatField("Sun Angle", pos, &g_CurrentScene.m_SunAngle, -PI, PI+0.15f, 0.04f))
+    {
+        m_RedrawShadows = 1;
+        CurrElement = 2;
+    }
+
+    pos.y += textSize.y + textPadding;
+    uSetElementFocused(CurrElement == 3);
+    if (uFloatField("Far Plane", pos, &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
+    {
+        m_RedrawShadows = 1;
+        CurrElement = 3;
+    }
+
+    HBAOEdit(pos, &CurrElement, textSize.y + textPadding);
+
+    uPopFloat(ufTextScale);
+    uPopFloat(ufFieldWidth);
+    uPopFloat(ufContentStart);
+
+    // uSprite(MakeVec2(1100.0f, 500.0f), MakeVec2(800.0f, 550.0f), &m_ShadowTexture);
+
+    if (GetKeyPressed('K'))
+    {
+        DeleteShaders();
+        CreateShaders();
+    }
 }
 
 } // scene renderer namespace endndndnd

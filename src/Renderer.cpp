@@ -337,7 +337,7 @@ static void rResizeTextureLoadBufferIfNecessarry(unsigned long long size)
     }
 }
 
-Texture rLoadTexture(const char* path, bool mipmap)
+Texture rImportTexture(const char* path, TexFlags flags)
 {
     int width, height, channels;
     unsigned char* image = nullptr;
@@ -376,7 +376,6 @@ Texture rLoadTexture(const char* path, bool mipmap)
         return defTexture;
     }
     const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
-    TexFlags flags = (int)mipmap | (compressed << 1);
     Texture texture = rCreateTexture(width, height, image, numCompToFormat[channels], flags);
     if (!compressed)
     {
@@ -1149,7 +1148,6 @@ void rRenderFullScreen(Shader fullScreenShader, unsigned int texture)
 void rRenderFullScreen(unsigned int texture)
 {
     rRenderFullScreen(m_DefaultFragShader, texture);
-    CHECK_GL_ERROR();
 }
 
 void rRenderFullScreen()
@@ -1170,6 +1168,14 @@ void rSetTexture2DArray(Texture texture, int index, unsigned int loc)
     glActiveTexture(GL_TEXTURE0 + index);
     glBindTexture(GL_TEXTURE_2D_ARRAY, texture.handle);
     glUniform1i(loc, index);
+    CHECK_GL_ERROR();
+}
+
+void rSetTexture(Texture* texture, int index, unsigned int location)
+{
+    glActiveTexture(GL_TEXTURE0 + index);
+    glBindTexture(GL_TEXTURE_2D, texture->handle);
+    glUniform1i(location, index);
     CHECK_GL_ERROR();
 }
 

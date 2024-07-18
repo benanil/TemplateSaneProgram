@@ -1,10 +1,12 @@
 
 layout(location = 0) in highp vec3 aPos;
-uniform mat4 proj;
-out vec3 pos;
+uniform mat4 uViewProj;
+uniform vec3 viewPos;
+
+out vec3 vPos;
 
 void main()
 {
-    pos = aPos;
-    gl_Position = proj * vec4(aPos * 500.0, 1.0);
+    vPos = aPos;
+    gl_Position = uViewProj * vec4(aPos * 500.0 + viewPos, 1.0);
 }

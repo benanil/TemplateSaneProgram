@@ -76,9 +76,9 @@ static int mQuarterWidth, mQuarterHeight;
 // Adjustables
 static float mIntensity          = 2.0f;
 static float mBias               = 0.1f;
-static float mRadius             = 3.14f;
+static float mRadius             = 2.14f;
 static float mBlurSharpness      = 30.0f;
-static float mMattersToViewSpace = 1.5f;
+static float mMattersToViewSpace = 1.2f;
 static bool  mIsOpen = true;
 
 // Uniform Locations
@@ -87,6 +87,11 @@ static int uTexLinearDepthLoc;
 static int uTexViewNormalLoc;
 static int uViewLoc;
 static int uJitterLoc;
+
+Texture* HBAOGetResult()
+{
+    return &mBlurResultTX;
+}
 
 static void InitRandom()
 {
@@ -380,7 +385,7 @@ void HBAOEdit(Vector2f pos, int* CurrElement, float textPadding)
     {
         *CurrElement = 7;
     }
-
+        
     pos.y += textPadding;
     uSetElementFocused(*CurrElement == 8);
     if (uFloatField("Blur Sharpness", pos, &mBlurSharpness, 0.0f, 100.0f, 0.01f))
@@ -390,11 +395,11 @@ void HBAOEdit(Vector2f pos, int* CurrElement, float textPadding)
     
     pos.y += textPadding;
     uSetElementFocused(*CurrElement == 9);
-    if (uCheckBox("SSAO", &mIsOpen, pos))
+    if (uCheckBox("SSAO", &mIsOpen, pos, true))
     {
         *CurrElement = 9;
     }
 
-    uSprite(MakeVec2(40.0f, 750.0f), MakeVec2(500.0f, 250.0f), &mBlurResultTX);
+    // uSprite(MakeVec2(40.0f, 750.0f), MakeVec2(500.0f, 250.0f), &mBlurResultTX);
     // uSprite(MakeVec2(540.0f, 750.0f), MakeVec2(500.0f, 250.0f), normalTex);
 }

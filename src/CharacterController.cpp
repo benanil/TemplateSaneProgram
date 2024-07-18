@@ -34,7 +34,7 @@ void CharacterController::Start(Prefab* _character)
     mState = eCharacterControllerState_Idle;
     
     mRotation = QIdentity();
-    mPosition.y     = 0.2f; // make foots touch the ground
+    mPosition.y     = 0.65f; // make foots touch the ground
     mMovementSpeed  = 2.7f;
     mIdleLimit      = 8.0f;
     mIdleTime       = 0.0f;
@@ -47,7 +47,7 @@ void CharacterController::Start(Prefab* _character)
     
     mStartPos = MakeVec3(mPosPtr);
     mStartRotation = VecLoad(mRotPtr);
-    mStartPos.y = 0.2f;
+    mStartPos.y = 0.65f;
 
     mKickHuhSound    = LoadSound("Audio/KickHuh.mp3");
     mSwordSlashSound = LoadSound("Audio/SwordSlash.wav");
@@ -338,24 +338,25 @@ void CharacterController::IdleState()
         bool hasHorizontalMovement = Abs(targetMovement.x) > 0.1f;
         bool horizontalFull        = Abs(targetMovement.x) > 0.9f;
         bool goingBack = targetMovement.y < -0.9f;
-
+        
         if (horizontalFull && !hasVerticalMovement)
         {
             int anim = targetMovement.x > 0.0f ? mTurnRight90Index : mTurnLeft90Index;
             mTurnRotation = HalfPI * Sign(targetMovement.x);
             mAnimController.TriggerAnim(anim, 0.0f, 0.0f, 0);
         }
-
+        
         if (!hasHorizontalMovement && goingBack)
         {
             mTurnRotation = PI;
             mAnimController.TriggerAnim(mTurn180Index, 0.0f, 0.0f, 0);
         }
-
+        
         if (mTurnRotation != 0.0f) {
             mState = eCharacterControllerState_Turning;
         }
-        else {
+        else 
+        {
             mState = eCharacterControllerState_Movement;
         }
     }

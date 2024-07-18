@@ -13,7 +13,7 @@
 #define half3   mediump vec3
 #define half4   mediump vec4
 
-layout(location = 0) out vec4 oFragColor; // TextureType_RGB8
+layout(location = 0) out vec3 oFragColor; // TextureType_RGB8
 
 in vec2 texCoord;
 
@@ -121,37 +121,6 @@ vec3 GetViewRay(vec3 viewPos, vec3 worldSpacePos)
     return normalize(viewPos - worldSpacePos);
 }
 
-half3 ACESFilm(half3 x)
-{
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
-}
-
-// https://www.shadertoy.com/view/WdjSW3
-// equivalent to reinhard tone mapping but no need to gamma correction
-half3 CustomToneMapping(half3 x)
-{
-    #ifdef __ANDROID__
-    x += 0.0125;
-    return x / (x + 0.15) * 0.88;
-    #else
-    return pow(ACESFilm(x), vec3(1.0 / 2.2));
-    #endif
-}
-
-// https://www.shadertoy.com/view/lsKSWR
-float16 Vignette(half2 uv)
-{
-    uv *= vec2(1.0) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
-    float16 vig = uv.x * uv.y * 15.0; // multiply with sth for intensity
-    vig = pow(vig, 0.15); // change pow for modifying the extend of the  vignette
-    return vig; 
-}
-
 // gaussian blur
 lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp float e) 
 {
@@ -195,6 +164,7 @@ void main()
     
     float16 shadow    = albedoShadow.w;
     float16 metallic  = normalMetallic.w;
+
     ao *= min(shadow * 3.0, 1.0);
     ao += 0.05;
     ao = min(1.0, ao * 1.1);
@@ -254,5 +224,5 @@ void main()
     }
     
     shadow = max(min(shadow, 1.0), 0.0);
-    oFragColor = CustomToneMapping(lighting).xyzz * Vignette(texCoord) * GetShadow(shadow, pos);
+    oFragColor = lighting * GetShadow(shadow, pos);
 }

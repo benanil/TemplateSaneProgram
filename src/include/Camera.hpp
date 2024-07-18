@@ -16,7 +16,7 @@ struct Camera
 
 	float verticalFOV = 65.0f;
 	float nearClip = 0.1f;
-	float farClip = 500.0f;
+	float farClip = 800.0f;
 
 	Vector2i viewportSize, monitorSize;
 
@@ -36,7 +36,7 @@ struct Camera
 	{
 		verticalFOV = 65.0f;
 		nearClip = 0.1f;
-		farClip = 500.0f;
+		farClip = 700.0f;
 		pitch = 1.0f, yaw = -160.0f , senstivity = 10.0f;
 
 		viewportSize = xviewPortSize;
@@ -183,7 +183,7 @@ struct Camera
 
 	float verticalFOV = 65.0f;
 	float nearClip = 0.07f;
-	float farClip = 500.0f;
+	float farClip = 700.0f;
 
 	Vector2i viewportSize, monitorSize;
 	Vector2f mouseOld;
@@ -193,20 +193,20 @@ struct Camera
 	
 	Vector3f targetPos;
 	Vector2f angle; // between 0 and 1 but we will multiply by PI
-	Vector3f direction;
+	Vector3f Front;
 	
 	void Init(Vector2i xviewPortSize)
 	{
 		verticalFOV = 65.0f;
 		nearClip = 0.1f;
-		farClip = 500.0f;
+		farClip = 700.0f;
 		senstivity = 0.1f;
         angle = Vector2f::Zero(); //MakeVec2(3.12f, 0.0f);
 		viewportSize = xviewPortSize;
 		targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
 		wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
-		direction = Vector3f::Normalize(MakeVec3(Sin(angle.x * TwoPI), 0.0f, Cos(angle.x * TwoPI)));
+		Front = Vector3f::Normalize(MakeVec3(Sin(angle.x * TwoPI), 0.0f, Cos(angle.x * TwoPI)));
 
 		RecalculateView();
 		RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
