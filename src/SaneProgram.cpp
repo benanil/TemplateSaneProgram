@@ -117,6 +117,8 @@ void AXLoop(bool canRender)
     }
     pauseMenuOpened = ShowMenu(); // < from Menu.cpp
 
+    rDrawAllLines((float*)SceneRenderer::GetViewProjection());
+
     uRender(); // < user interface end 
     // RenderScene(&FBXScene);
     // todo material system

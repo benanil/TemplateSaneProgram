@@ -16,7 +16,7 @@ float EaseOut(float x) {
 
 void main()
 {
-    const float Exposure = 0.3;// 0.3f;
+    const float Exposure = 0.2;// 0.3f;
     const float Decay    = 0.96815;// 0.96815;
     const float Density  = 0.926;// 0.926;
     const float Weight   = 0.587;// 0.587;
@@ -44,4 +44,5 @@ void main()
     }
     
     result = godRaysColor * Exposure * uIntensity * EaseOut(texCoord.y);
+    result = clamp(result, 0.0, 0.45);
 }

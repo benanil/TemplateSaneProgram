@@ -252,7 +252,7 @@ static void ShowFPS()
         IntToString(fpsTxt, fps);
     }
 
-    uDrawText(fpsTxt, MakeVec2(15.0f, 85.0f));
+    uDrawText(fpsTxt, MakeVec2(1810.0f, 85.0f));
 }
 
 static void TriangleTest()

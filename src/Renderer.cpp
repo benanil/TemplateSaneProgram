@@ -30,8 +30,12 @@
     #if defined(_DEBUG) || defined(DEBUG)
         #define CHECK_GL_ERROR() if (GLenum error = glGetError()) \
                                  { FatalError("%s -line:%i message: %s" , __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0); }
+        
+        #define CHECK_GL_WARNING() if (GLenum error = glGetError()) \
+                                  { AX_WARN("warning message: %s", GetGLErrorString(error));  }
     #else
         #define CHECK_GL_ERROR()
+        #define CHECK_GL_WARNING()
     #endif
 
 #endif
@@ -725,7 +729,7 @@ void rSetShaderValue(const void* value, int location, GraphicType type)
             ASSERT(0 && "Shader set value Graphic type invalid. type:");
             break;
     }
-    CHECK_GL_ERROR();
+    CHECK_GL_WARNING();
 }
 
 void rSetMaterial(AMaterial* material)
@@ -733,7 +737,7 @@ void rSetMaterial(AMaterial* material)
     // TODO: set material
 }
 
-static void CheckShaderError(uint shader)
+static void CheckShaderError(uint shader, const char* name)
 {
     GLint isCompiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
@@ -741,13 +745,14 @@ static void CheckShaderError(uint shader)
     {
         GLint maxLength = 2048;
         char infoLog[2048]={};
+        char empty = 0;
         glGetShaderInfoLog(shader, maxLength, &maxLength, infoLog);
-        AX_ERROR("shader compile error: %s", infoLog);
+        AX_ERROR("shader compile error! file: %s log: %s", infoLog, name ? name : &empty);
         glDeleteShader(shader);
     }
 }
 
-static void CheckLinkerError(uint shader)
+static void CheckLinkerError(uint shader, const char* name)
 {
     GLint isCompiled = 0;
     glGetProgramiv(shader, GL_LINK_STATUS, &isCompiled);
@@ -755,8 +760,9 @@ static void CheckLinkerError(uint shader)
     {
         GLint maxLength = 2048;
         char infoLog[2048]={};
+        char empty = 0;
         glGetProgramInfoLog(shader, maxLength, &maxLength, infoLog);
-        AX_ERROR("shader compile error: %s", infoLog);
+        AX_ERROR("shader link error! file: %s log: %s", infoLog, name ? name : &empty);
         glDeleteShader(shader);
     }
 }
@@ -767,12 +773,12 @@ Shader rCreateComputeShader(const char* source)
     GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
     glShaderSource(computeShader, 1, &source, NULL);
     glCompileShader(computeShader);
-    CheckShaderError(computeShader);
+    CheckShaderError(computeShader, "computeShader");
     
     uint program = glCreateProgram();
     glAttachShader(program, computeShader);
     glLinkProgram(program);
-    CheckLinkerError(program);
+    CheckLinkerError(program, "computeShader");
     glDeleteShader(computeShader);
     return { program };
 }
@@ -832,24 +838,24 @@ void rComputeBarier() {
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
 
-Shader rCreateShader(const char* vertexSource, const char* fragmentSource)
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile, const char* fragFile)
 {
     // Vertex shader
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexSource, NULL);
     glCompileShader(vertexShader);
-    CheckShaderError(vertexShader);
+    CheckShaderError(vertexShader, vertexFile);
     // Fragment shader
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
     glCompileShader(fragmentShader);
-    CheckShaderError(fragmentShader);
+    CheckShaderError(fragmentShader, fragFile);
     // Link shaders
     uint shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
-    CheckLinkerError(shaderProgram);
+    CheckLinkerError(shaderProgram, fragFile);
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
@@ -858,7 +864,7 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource)
     return {shaderProgram};
 }
 
-Shader rCreateFullScreenShader(const char* fragmentSource)
+Shader rCreateFullScreenShader(const char* fragmentSource, const char* name)
 {
     const GLchar* vertexShaderSource =
     AX_SHADER_VERSION_PRECISION()
@@ -870,13 +876,13 @@ Shader rCreateFullScreenShader(const char* fragmentSource)
         texCoord.y = (y + 1.0) * 0.5;\n\
         gl_Position = vec4(x, y, 0.0, 1.0);\n\
     }";
-    return rCreateShader(vertexShaderSource, fragmentSource);
+    return rCreateShader(vertexShaderSource, fragmentSource, name, name);
 }
 
 Shader rImportFullScreenShader(const char* path)
 {
     ScopedText fragSource = ReadAllText(path, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    Shader shader = rCreateFullScreenShader(fragSource);
+    Shader shader = rCreateFullScreenShader(fragSource, path);
     return shader;
 }
 
@@ -884,7 +890,7 @@ Shader rImportShader(const char* vertexPath, const char* fragmentPath)
 {
     ScopedText vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     ScopedText fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    Shader shader = rCreateShader(vertexText.text, fragmentText.text);
+    Shader shader = rCreateShader(vertexText.text, fragmentText.text, vertexPath, fragmentPath);
     return shader;
 }
 
@@ -914,13 +920,14 @@ static void CreateDefaultTexture()
     g_DefaultTexture = rCreateTexture(32, 32, img, TextureType_RG8, TexFlags_None).handle;
 }
 
-typedef struct {
+AX_PACK(
+struct LineVertex {
     Vector3f pos;
     uint color;
-} LineVertex;
+});
 
 static int numLines;
-static const int TotalLines = 128;
+static const int TotalLines = 1400 * 8 * 2;
 static LineVertex lineVertices[TotalLines];
 static GLuint lineVao, lineVbo;
 static Shader lineShader;
@@ -945,15 +952,10 @@ static void SetupLineRenderer()
     const char* VertexShaderSource =
     AX_SHADER_VERSION_PRECISION()
     R"(
-        in highp vec3 aPos;
-        in highp uint aColor;
+        layout(location = 0) in highp vec3 aPos;
+        layout(location = 1) in highp uint aColor;
         out lowp vec4 vColor;
         uniform mat4 uViewProj;
-
-        vec4 unpackUnorm4x8(highp uint color)
-        {
-            return vec4(uvec4(color) << uvec4(0, 8, 16, 24)) / 255.0f;
-        }
 
         void main() { 
             vColor = unpackUnorm4x8(aColor);
@@ -964,18 +966,19 @@ static void SetupLineRenderer()
     const char* fragmentShaderSource =
     AX_SHADER_VERSION_PRECISION()
     R"(
+        layout(location = 0) out lowp vec4 color;
         in lowp vec4 vColor;
-        out lowp vec4 color;
         void main() { 
             color = vec4(vColor.xyz, 1.0);
         }
     )";
     lineShader = rCreateShader(VertexShaderSource, fragmentShaderSource);
-    glLineWidth(10.0f);
+    glLineWidth(1.0f);
 }
 
 void rDrawLine(Vector3f start, Vector3f end, uint color)
 {
+    if (numLines >= TotalLines - 2) return;
     lineVertices[numLines].pos     = start;
     lineVertices[numLines++].color = color;
 
@@ -987,8 +990,6 @@ void rDrawAllLines(float* viewProj)
 {
     if (numLines <= 0) return;
     // Todo: android does not support glMapBuffer
-    glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
-
     glBindBuffer(GL_ARRAY_BUFFER, lineVbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, numLines * sizeof(LineVertex), lineVertices);
 

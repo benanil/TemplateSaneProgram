@@ -13,7 +13,7 @@
 #define half3   mediump vec3
 #define half4   mediump vec4
 
-layout(location = 0) out vec3 oFragColor; // TextureType_RGB8
+layout(location = 0) out vec4 oFragColor; // TextureType_RGBA8, alpha is luminence
 
 in vec2 texCoord;
 
@@ -83,10 +83,6 @@ float16 F_Schlick(float16 u, half3 albedo, float16 metallic) {
     return F0 + (1.0 - F0) * (x * x * x * x); // * x
 }
 
-float computeSpecularAO(float NoV, float ao, float roughness) {
-    return clamp(pow(NoV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
-}
-
 half3 Lighting(half3 albedo, half3 l, half3 n, half3 v,
                float16 metallic, float16 roughness, float16 ao)
 {
@@ -99,8 +95,8 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v,
     float16 D = D_GGX(ndh, roughness);
     float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl) * ao; // V_Neubelt(ndv, ndl); 
     float16 F = F_Schlick(ldh, albedo, metallic);
-    float16 Fr = F * (D * V) * 0.92f; // specular BRDF
-    half3   Fd = (albedo / PI) * ao;
+    float16 Fr = F * (D * V) * 0.42f; // specular BRDF
+    half3   Fd = (albedo / PI);
     return Fd + Fr; //albedo * ndl + (r * 0.08);
 }
 
@@ -119,13 +115,6 @@ vec3 WorldSpacePosFromDepthBuffer()
 vec3 GetViewRay(vec3 viewPos, vec3 worldSpacePos)
 {
     return normalize(viewPos - worldSpacePos);
-}
-
-// gaussian blur
-lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp float e) 
-{
-    const lowp float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
-    return Weights5[0] * a + Weights5[1] * (b + c) + Weights5[2] * (d + e);
 }
 
 float16 EaseInCirc(float16 x)
@@ -149,11 +138,7 @@ float GetShadow(float shadow, vec3 surfPos)
 void main()
 {
     // vertical blur
-    lowp float ao = Blur5(texture(uAmbientOclussionTex, texCoord).r,
-                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0, -1)).r,
-                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0,  1)).r,
-                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0, -2)).r,
-                          textureOffset(uAmbientOclussionTex, texCoord, ivec2(0,  2)).r);
+    lowp float ao = texture(uAmbientOclussionTex, texCoord).r;
 
     float16 roughness    = texture(uRoughnessTex, texCoord).r;
     half4 normalMetallic = texture(uNormalMetallicTex, texCoord);
@@ -224,5 +209,6 @@ void main()
     }
     
     shadow = max(min(shadow, 1.0), 0.0);
-    oFragColor = lighting * GetShadow(shadow, pos);
+    oFragColor.rgb = lighting * GetShadow(shadow, pos);
+    oFragColor.a = dot(oFragColor.rgb, vec3(.299f, .587f, .114f));
 }

@@ -3,7 +3,7 @@
 #include "../../ASTL/Math/Matrix.hpp"
 #include "Platform.hpp"
 
-// #define FREE_CAMERA
+#define FREE_CAMERA
 
 #ifdef FREE_CAMERA
 struct Camera
@@ -214,7 +214,7 @@ struct Camera
 
 	void UpdateFrustumPlanes()
 	{
-		frustumPlanes = CreateFrustumPlanes(view * projection);
+        frustumPlanes = CreateFrustumPlanes(view * projection);
 	}
 
 	void RecalculateProjection(int width, int height)

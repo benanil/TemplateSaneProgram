@@ -21,24 +21,34 @@ extern unsigned int g_DefaultTexture;
 namespace SceneRenderer
 {
     Camera      m_Camera;
-    Texture     m_ShadowTexture;
     Matrix4     m_ViewProjection;
     Matrix4     m_LightMatrix;
 
-    Texture     m_SkyNoiseTexture;
-    FrameBuffer m_ShadowFrameBuffer;
     Shader      m_ShadowShader;
-    
     Shader      m_GBufferShader;
     Shader      m_GBufferShaderAlpha;
     Shader      m_SkyboxShader;
     Shader      m_DepthCopyShader;
-    Shader      mPostProcessingShader; // tone-mapping, vignate
-    GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
+    Shader      m_PostProcessingShader; // tone-mapping, vignate
+    Shader      m_MLAAEdgeShader;
+    Shader      m_MLAAShader;
+    Shader      m_GodRaysShader;
+    Shader      m_DeferredPBRShader;
+    Shader      m_BlackShader;
 
-    Shader      mGodRaysShader;
-    FrameBuffer mGodRaysFB;
-    Texture     mGodRaysTex;
+    GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
+    
+    FrameBuffer m_ShadowFrameBuffer;
+    FrameBuffer m_MLAAEdgeFrameBuffer;
+    FrameBuffer m_LightingFrameBuffer;
+    FrameBuffer m_PostProcessingFrameBuffer;
+    FrameBuffer m_GodRaysFB;
+
+    Texture     m_GodRaysTex;
+    Texture     m_MLAAEdgeTex;
+    Texture     m_ShadowTexture;
+    Texture     m_LightingTexture;
+    Texture     m_SkyNoiseTexture;
 
     struct GBuffer
     {
@@ -51,14 +61,6 @@ namespace SceneRenderer
     };
 
     GBuffer m_Gbuffer;
-
-    FrameBuffer m_LightingFrameBuffer;
-    FrameBuffer m_PostProcessingFrameBuffer;
-    Texture m_LightingTexture;
-
-    // deferred rendering
-    Shader      m_DeferredPBRShader;
-    Shader      m_BlackShader;
 
     // Gbuffer uniform locations
     int lAlbedo, lNormalMap, lHasNormalMap, lMetallicMap, lShadowMap, lLightMatrix, 
@@ -136,6 +138,11 @@ Camera* GetCamera()
     return &m_Camera;
 }
 
+Matrix4* GetViewProjection()
+{
+    return &m_ViewProjection;
+}
+
 void SetCharacterPos(float x, float y, float z)
 {
     m_CharacterPos.x = x; m_CharacterPos.y = y; m_CharacterPos.z = z;
@@ -185,7 +192,7 @@ static void CreateGBuffer(GBuffer& gBuffer, int width, int height)
     rFrameBufferSetNumColorBuffers(3);
     rFrameBufferCheck();
 
-    m_LightingTexture = rCreateTexture(width, height, nullptr, TextureType_RGB10_A2, TexFlags_RawData);
+    m_LightingTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_RawData);
     
     m_LightingFrameBuffer = rCreateFrameBuffer(true);
     rFrameBufferAttachColor(m_LightingTexture);
@@ -196,9 +203,13 @@ static void CreateGBuffer(GBuffer& gBuffer, int width, int height)
     rFrameBufferAttachDepth(gBuffer.DepthTexture);
     rFrameBufferCheck();
 
-    mGodRaysTex = rCreateTexture(width, height, nullptr, TextureType_R16F);
-    mGodRaysFB = rCreateFrameBuffer(true);
-    rFrameBufferAttachColor(mGodRaysTex, 0);
+    m_GodRaysTex = rCreateTexture(width, height, nullptr, TextureType_R8, TexFlags_RawData);
+    m_GodRaysFB  = rCreateFrameBuffer(true);
+    rFrameBufferAttachColor(m_GodRaysTex, 0);
+
+    m_MLAAEdgeTex = rCreateTexture(width, height, nullptr, TextureType_R16UI, TexFlags_RawData);
+    m_MLAAEdgeFrameBuffer = rCreateFrameBuffer(true);
+    rFrameBufferAttachColor(m_MLAAEdgeTex, 0);
 }
 
 static void DeleteGBuffer(GBuffer& gbuffer)
@@ -207,9 +218,11 @@ static void DeleteGBuffer(GBuffer& gbuffer)
     rDeleteTexture(gbuffer.DepthTexture);
     rDeleteTexture(gbuffer.NormalTexture);
     rDeleteTexture(gbuffer.RoughnessTexture);
-    rDeleteTexture(mGodRaysTex);
+    rDeleteTexture(m_MLAAEdgeTex);
+    rDeleteTexture(m_GodRaysTex);
     rDeleteTexture(m_LightingTexture);
-    rDeleteFrameBuffer(mGodRaysFB);
+    rDeleteFrameBuffer(m_MLAAEdgeFrameBuffer);
+    rDeleteFrameBuffer(m_GodRaysFB);
     rDeleteFrameBuffer(m_PostProcessingFrameBuffer);
     rDeleteFrameBuffer(m_LightingFrameBuffer);
     rDeleteFrameBuffer(gbuffer.Buffer);
@@ -298,13 +311,13 @@ static void CreateShaders()
 
     ScopedText gbufferVertexShader   = ReadAllText("Shaders/3DVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     ScopedText gbufferFragmentShader = ReadAllText("Shaders/GBuffer.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    m_GBufferShader = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text);
+    m_GBufferShader = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text, "gbufferVert", "gbufferFrag");
 
     // Compile alpha cutoff version of the gbuffer shader, to make sure early z test. I really don't want an branch for discard statement. 
     int alphaIndex = StringContains(gbufferFragmentShader.text, "ALPHA_CUTOFF");
     ASSERT(alphaIndex != -1);
     gbufferFragmentShader.text[alphaIndex + sizeof("ALPHA_CUTOFF")] = '1';
-    m_GBufferShaderAlpha = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text);
+    m_GBufferShaderAlpha = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text, "gbufferVert", "gbufferFrag");
 
     m_DepthCopyShader = rCreateFullScreenShader(
                             AX_SHADER_VERSION_PRECISION()
@@ -314,12 +327,15 @@ static void CreateShaders()
 
     ScopedText shadowVertexShader = ReadAllText("Shaders/ShadowVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     const char* shadowFragmentShader = AX_SHADER_VERSION_PRECISION() "void main() { }";
-    m_ShadowShader      = rCreateShader(shadowVertexShader.text, shadowFragmentShader);
+    m_ShadowShader      = rCreateShader(shadowVertexShader.text, shadowFragmentShader, "ShadowVert", "ShadowFrag");
 
     m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");
 
-    mPostProcessingShader = rImportFullScreenShader("Shaders/PostProcessing.glsl");
-    mGodRaysShader = rImportFullScreenShader("Shaders/GodRays.glsl");
+    m_PostProcessingShader = rImportFullScreenShader("Shaders/PostProcessing.glsl");
+    m_GodRaysShader = rImportFullScreenShader("Shaders/GodRays.glsl");
+
+    m_MLAAEdgeShader = rImportFullScreenShader("Shaders/MLAA_Edge.glsl");
+    m_MLAAShader     = rImportFullScreenShader("Shaders/MLAA.glsl");
 
     m_BlackShader = rCreateFullScreenShader(
         AX_SHADER_VERSION_PRECISION()
@@ -333,11 +349,13 @@ static void CreateShaders()
 static void DeleteShaders()
 {
     rDeleteShader(m_BlackShader);
-    rDeleteShader(mPostProcessingShader);
-    rDeleteShader(mGodRaysShader);
+    rDeleteShader(m_PostProcessingShader);
+    rDeleteShader(m_GodRaysShader);
     rDeleteShader(m_GBufferShader);
     rDeleteShader(m_DeferredPBRShader);
     rDeleteShader(m_ShadowShader);
+    rDeleteShader(m_MLAAShader);
+    rDeleteShader(m_MLAAEdgeShader);
 }
 
 static void SetupShadowRendering()
@@ -593,6 +611,42 @@ static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& pri
     rRenderMeshIndexOffset(prefab->bigMesh, primitive.numIndices, offset);
 }
 
+static void GetAABBCorners(Vector3f* res, vec_t minv, vec_t maxv)
+{
+    Vector3f min; Vec3Store(min.arr, minv);
+    Vector3f max; Vec3Store(max.arr, maxv);
+
+    res[0] = { min.x, min.y, min.z };
+    res[1] = { max.x, max.y, max.z };
+    res[2] = { max.x, max.y, min.z };
+    res[3] = { min.x, min.y, max.z };
+    res[4] = { min.x, max.y, min.z };
+    res[5] = { max.x, min.y, max.z };
+    res[6] = { max.x, min.y, min.z };
+    res[7] = { min.x, max.y, max.z };
+}
+
+static void DrawCube(const Vector3f* corners, uint color)
+{
+    // first 4 corner
+    rDrawLine(corners[0], corners[6], color);
+    rDrawLine(corners[6], corners[2], color);
+    rDrawLine(corners[2], corners[4], color);
+    rDrawLine(corners[4], corners[0], color);
+    // second 4 corner
+    rDrawLine(corners[1], corners[7], color);
+    rDrawLine(corners[7], corners[3], color);
+    rDrawLine(corners[3], corners[5], color);
+    rDrawLine(corners[5], corners[1], color);
+    // connect corners
+    rDrawLine(corners[0], corners[3], color);
+    rDrawLine(corners[6], corners[5], color);
+    rDrawLine(corners[2], corners[1], color);
+    rDrawLine(corners[4], corners[7], color);
+}
+
+static int numCulled = 0;
+
 static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, bool recurse)
 {
     Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale) * parentMat;
@@ -609,16 +663,35 @@ static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, bool r
 
     AMesh mesh = prefab->meshes[node.index];
 
+    Random::PCG pcg;
+    Random::PCGInitialize(pcg, 0x675890u);
+
+    // Vector3f corners[8];
+
     for (int j = 0; j < mesh.numPrimitives; ++j)
     {
         APrimitive& primitive = mesh.primitives[j];
         bool hasMaterial = prefab->materials && primitive.material != -1;
         AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
+        
         vec_t aabbMin = VecLoadA(primitive.min);
         vec_t aabbMax = VecLoadA(primitive.max);
-        bool shouldDraw = true;
 
-        shouldDraw &= CheckAABBCulled(aabbMin, aabbMax, m_Camera.frustumPlanes, model);
+        vec_t min = Vector3Transform(aabbMin, model.r);
+        vec_t max = Vector3Transform(aabbMax, model.r);
+        vec_t t = VecMin(min, max);
+        max = VecMax(min, max);
+        min = t;
+
+        // float rnd = Random::NextFloat01(Random::PCGNext(pcg));
+        // GetAABBCorners(corners, min, max);
+        // DrawCube(corners, HUEToRGBU32(rnd));
+
+        bool shouldDraw = true;
+        bool culled = CheckAABBCulled(min, max, m_Camera.frustumPlanes, model);
+        shouldDraw &= culled;
+        numCulled += culled == false;
+        
         shouldDraw &= primitive.numIndices != 0;
         bool isAlpha = (material.alphaMode == AMaterialAlphaMode_Mask ||
                         material.alphaMode == AMaterialAlphaMode_Blend);
@@ -702,7 +775,6 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         }
         m_DelayedAlphaCutoffs.Resize(0);
     }
-    rDrawAllLines(m_ViewProjection.GetPtr());
 }
 
 static bool MeshInstanceIndexCompare(MeshInstance* a, MeshInstance* b)
@@ -754,12 +826,26 @@ static void LightingPass()
         rSetTexture(m_Gbuffer.RoughnessTexture, 1, lRoughnessTex);
         rSetTexture(m_Gbuffer.NormalTexture   , 2, lNormalTex);
         rSetTexture(m_Gbuffer.DepthTexture    , 3, lDepthMap);
-        rSetTexture(*HBAOGetResult()          , 4, lAmbientOclussionTex);
+        rSetTexture(HBAOGetResult()           , 4, lAmbientOclussionTex);
 
         rSetShaderValue(g_CurrentScene.m_PointLights.Size(), lNumPointLights);
         rSetShaderValue(g_CurrentScene.m_SpotLights.Size(), lNumSpotLights);
         rRenderFullScreen();
     }
+
+    rBindFrameBuffer(m_MLAAEdgeFrameBuffer);
+    rBindShader(m_MLAAEdgeShader);
+    rSetTexture(m_LightingTexture, 0, 0);
+    rRenderFullScreen();
+
+    rBindFrameBuffer(m_PostProcessingFrameBuffer);
+    rBindShader(m_MLAAShader);
+    rSetTexture(m_LightingTexture, 0, 0);
+    rSetTexture(m_MLAAEdgeTex, 1, 1);
+    rRenderFullScreen();
+
+    rBindFrameBuffer(m_LightingFrameBuffer);
+    rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
 
     // rBindFrameBuffer(m_MainFrameBuffer.Buffer);
     // rFrameBufferInvalidate(3); // color, normal, ShadowMetallicRoughness
@@ -794,8 +880,8 @@ void PostProcessingPass()
         float fovRad = m_Camera.verticalFOV * DegToRad;
         float intensity = ((PI - angle) / PI);
 
-        rBindShader(mGodRaysShader);
-        rBindFrameBuffer(mGodRaysFB);
+        rBindShader(m_GodRaysShader);
+        rBindFrameBuffer(m_GodRaysFB);
         rSetShaderValue(intensity, 0);
         rSetShaderValue(sunScreenCoord.arr, 1, GraphicType_Vector2f);
         rSetTexture(depthTexture, 0, 2);
@@ -803,16 +889,17 @@ void PostProcessingPass()
     }
     else
     {
-        rBindFrameBuffer(mGodRaysFB);
+        rBindFrameBuffer(m_GodRaysFB);
         rBindShader(m_BlackShader);
         rRenderFullScreen();
     }
-
+    
     rBindFrameBuffer(m_PostProcessingFrameBuffer);
     
-    rBindShader(mPostProcessingShader);
-    rSetTexture(m_LightingTexture, 0, 0);
-    rSetTexture(mGodRaysTex, 1, 1);
+    rBindShader(m_PostProcessingShader);
+    rSetTexture(m_LightingTexture, rGetUniformLocation("uLightingTex"), 0);
+    rSetTexture(m_GodRaysTex, rGetUniformLocation("uGodRays"), 1);
+    rSetTexture(HBAOGetResult(), rGetUniformLocation("uAmbientOcclussion"), 2);
     rRenderFullScreen();
 }
 
@@ -845,6 +932,11 @@ void EndRendering(bool renderToBackBuffer)
     rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
     
     rSetDepthWrite(true);
+
+    // char culledText[16]={};
+    // IntToString(culledText, numCulled);
+    // uDrawText(culledText, MakeVec2(1810.0f, 185.0f));
+    // numCulled = 0;
 }
 
 void Destroy()
@@ -857,109 +949,6 @@ void Destroy()
     rDeleteFrameBuffer(m_ShadowFrameBuffer);
     HBAODestroy();
 }
-
-struct SphereCreateResult
-{
-    float* vertices;
-    uint32_t* indices;
-    uint32_t vertexCount;
-    uint32_t indexCount;
-};
-
-// SphereCreateResult* CSCreateSphereVertexIndices(uint16_t LatLines, uint16_t LongLines)
-// {
-// 	SphereCreateResult* result = new SphereCreateResult();
-// 
-// 	result->vertexCount = ((LatLines - 2) * LongLines) + 2;
-// 	result->indexCount = (((LatLines - 3) * (LongLines) * 2) + (LongLines * 2)) * 3;
-// 
-// 	float sphereYaw = 0.0f;
-// 	float spherePitch = 0.0f;
-// 
-// 	// calculate vertices
-//     result->vertices = new Vector3f[result->vertexCount];
-// 	XMVECTOR currVertPos = VecSetR(0.0f, 0.0f, 1.0f, 0.0f);
-// 
-// 	result->vertices[0].x = 0.0f;
-// 	result->vertices[0].y = 0.0f;
-// 	result->vertices[0].z = 1.0f;
-// 
-// 	for (uint16_t i = 0; i < LatLines - 2; ++i)
-// 	{
-// 		spherePitch = (i + 1) * (DX_PI / (LatLines - 1));
-// 		vec_t Rotationx = XMMatrixRotationX(spherePitch);
-// 		for (uint16_t j = 0; j < LongLines; ++j)
-// 		{
-// 			sphereYaw = j * (DX_TWO_PI / (LongLines));
-// 			auto Rotationy = XMMatrixRotationZ(sphereYaw);
-// 			currVertPos = Vector3Transform(VecSetR(0.0f, 0.0f, 1.0f, 0.0f), (Rotationx * Rotationy));
-// 			currVertPos = XMVector3Normalize(currVertPos);
-// 			result->vertices[i * LongLines + j + 1].y = XMVectorGetY(currVertPos);
-// 			result->vertices[i * LongLines + j + 1].x = XMVectorGetX(currVertPos);
-// 			result->vertices[i * LongLines + j + 1].z = XMVectorGetZ(currVertPos);
-// 		}
-// 	}
-// 
-// 	result->vertices[result->vertexCount - 1].x = 0.0f;
-// 	result->vertices[result->vertexCount - 1].y = 0.0f;
-// 	result->vertices[result->vertexCount - 1].z = -1.0f;
-// 
-// 	// calculate indices
-// 	result->indices = (uint32_t*)malloc(sizeof(uint32_t) * result->indexCount);
-// 	uint32_t k = 0;
-// 	for (uint16_t l = 0; l < LongLines - 1; ++l)
-// 	{
-// 		result->indices[k] = 0;
-// 		result->indices[k + 1] = l + 1;
-// 		result->indices[k + 2] = l + 2;
-// 		k += 3;
-// 	}
-// 
-// 	result->indices[k] = 0;
-// 	result->indices[k + 1] = LongLines;
-// 	result->indices[k + 2] = 1;
-// 	k += 3;
-// 
-// 	for (uint16_t i = 0; i < LatLines - 3; ++i)
-// 	{
-// 		for (uint16_t j = 0; j < LongLines - 1; ++j)
-// 		{
-// 			result->indices[k] = i * LongLines + j + 1;
-// 			result->indices[k + 1] = i * LongLines + j + 2;
-// 			result->indices[k + 2] = (i + 1) * LongLines + j + 1;
-// 
-// 			result->indices[k + 3] = (i + 1) * LongLines + j + 1;
-// 			result->indices[k + 4] = i * LongLines + j + 2;
-// 			result->indices[k + 5] = (i + 1) * LongLines + j + 2;
-// 
-// 			k += 6; // next quad
-// 		}
-// 
-// 		result->indices[k] = (i * LongLines) + LongLines;
-// 		result->indices[k + 1] = (i * LongLines) + 1;
-// 		result->indices[k + 2] = ((i + 1) * LongLines) + LongLines;
-// 
-// 		result->indices[k + 3] = ((i + 1) * LongLines) + LongLines;
-// 		result->indices[k + 4] = (i * LongLines) + 1;
-// 		result->indices[k + 5] = ((i + 1) * LongLines) + 1;
-// 
-// 		k += 6;
-// 	}
-// 
-// 	for (uint16_t l = 0; l < LongLines - 1; ++l)
-// 	{
-// 		result->indices[k] = result->vertexCount - 1;
-// 		result->indices[k + 1] = (result->vertexCount - 1) - (l + 1);
-// 		result->indices[k + 2] = (result->vertexCount - 1) - (l + 2);
-// 		k += 3;
-// 	}
-// 
-// 	result->indices[k] = result->vertexCount - 1;
-// 	result->indices[k + 1] = (result->vertexCount - 1) - LongLines;
-// 	result->indices[k + 2] = result->vertexCount - 2;
-// 
-// 	return result;
-// }
 
 
 void ShowEditor()

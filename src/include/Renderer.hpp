@@ -326,9 +326,10 @@ enum TextureAccess_ {
 typedef int TextureAccess;
 
 void rBindShader(Shader shader);
-Shader rCreateShader(const char* vertexSource, const char* fragmentSource);
-Shader rImportShader(const char* vertexSource, const char* fragmentSource);
-Shader rCreateFullScreenShader(const char* fragmentSource);
+// you don't have to specify names, it is for debug purpose only
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile = nullptr, const char* fragFile = nullptr);
+Shader rImportShader(const char* vertexFile, const char* fragmentFile);
+Shader rCreateFullScreenShader(const char* fragmentSource, const char* name = nullptr);
 Shader rImportFullScreenShader(const char* path);
 
 // ComputeShader

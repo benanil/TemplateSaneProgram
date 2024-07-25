@@ -372,8 +372,8 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
         
         amaterial.specularFactor   = umaterial->features.pbr.enabled ? AMaterial::MakeFloat16(umaterial->pbr.specular_factor.value_real)
                                                                      : AMaterial::MakeFloat16(umaterial->fbx.specular_factor.value_real);
-        amaterial.diffuseColor     = PackColor3ToUintPtr(&umaterial->fbx.diffuse_color.value_real);
-        amaterial.specularColor    = PackColor3ToUintPtr(&umaterial->fbx.specular_color.value_real);
+        amaterial.diffuseColor     = PackColor3PtrToUint(&umaterial->fbx.diffuse_color.value_real);
+        amaterial.specularColor    = PackColor3PtrToUint(&umaterial->fbx.specular_color.value_real);
         
         amaterial.doubleSided = umaterial->features.double_sided.enabled;
         
@@ -588,7 +588,7 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
                 uint32_t packedWeights;
                 if (weightSize == 4) // if float, pack it directly
                 {
-                    packedWeights = PackColor4ToUintPtr((float*)weights);
+                    packedWeights = PackColor4PtrToUint((float*)weights);
                     weights += weightSize * 4;
                 }
                 else

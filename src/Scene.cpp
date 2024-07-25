@@ -293,6 +293,8 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
                 maxv = VecMax(maxv, l);
                 vertices += vertexSize;
             }
+            VecSetW(minv, 1.0f);
+            VecSetW(maxv, 1.0f);
             VecStore(primitive.min, minv);
             VecStore(primitive.max, maxv);
         }

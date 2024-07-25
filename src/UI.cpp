@@ -324,7 +324,7 @@ static void ImportShaders()
     void main() {
         color = vec4(texture(tex, vec2(vTexCoord.x, 1.0-vTexCoord.y)).rgb, 1.0);
     })";
-    mTextureDrawShader = rCreateShader(spriteDrawVertTxt.text, textureDrawFragTxt);
+    mTextureDrawShader = rCreateShader(spriteDrawVertTxt.text, textureDrawFragTxt, "TextureDrawVert", "TextureDrawFrag");
 }
 
 static void InitSounds()
@@ -1917,7 +1917,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
             float color[4];
             HSVToRGB(mColorPick.hsv, color);
             color[3] = mColorPick.alpha;
-            *colorPtr = PackColor4ToUintPtr(color);
+            *colorPtr = PackColor4PtrToUint(color);
         }
 
         huePosition.x += hueSize.x * mColorPick.hsv.x;
@@ -1934,7 +1934,7 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 
 bool uColorField3(const char* label, Vector2f pos, float* colorPtr)
 {
-    uint ucolor = PackColor3ToUintPtr(colorPtr);
+    uint ucolor = PackColor3PtrToUint(colorPtr);
     bool res = uColorField(label, pos, &ucolor);
     UnpackColor3Uint(ucolor, colorPtr);
     return res;
@@ -1942,7 +1942,7 @@ bool uColorField3(const char* label, Vector2f pos, float* colorPtr)
 
 bool uColorField4(const char* label, Vector2f pos, float* colorPtr)
 {
-    uint ucolor = PackColor4ToUintPtr(colorPtr);
+    uint ucolor = PackColor4PtrToUint(colorPtr);
     bool res = uColorField(label, pos, &ucolor);
     UnpackColor4Uint(ucolor, colorPtr);
     return res;

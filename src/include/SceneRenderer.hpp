@@ -6,6 +6,7 @@ struct Prefab;
 struct LightInstance;
 struct AnimationController;
 struct Camera;
+struct Matrix4;
 
 namespace SceneRenderer
 {
@@ -34,6 +35,8 @@ namespace SceneRenderer
     void SetCharacterPos(float x, float y, float z);
 
     Camera* GetCamera();
+
+    Matrix4* GetViewProjection();
 
     // we call this when we are using pause menu
     void DrawLastRenderedFrame();
