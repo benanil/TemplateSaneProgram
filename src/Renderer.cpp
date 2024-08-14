@@ -509,6 +509,9 @@ GPUMesh rCreateMesh(const void* vertexBuffer, const void* indexBuffer, int numVe
 {
     GPUMesh mesh;
     mesh.indexHandle = -1;
+    mesh.stride = layoutDesc->stride;
+    mesh.indices  = const_cast<void*>(indexBuffer);
+    mesh.vertices = const_cast<void*>(vertexBuffer);
     int bufferUsage = !layoutDesc->dynamic ? GL_STATIC_DRAW : GL_DYNAMIC_DRAW;
     // generate vertex buffer
     {
@@ -984,6 +987,25 @@ void rDrawLine(Vector3f start, Vector3f end, uint color)
 
     lineVertices[numLines].pos     = end;
     lineVertices[numLines++].color = color;
+}
+
+void rDrawLineCube(const Vector3f corners[8], uint color)
+{
+    // first 4 corner
+    rDrawLine(corners[0], corners[6], color);
+    rDrawLine(corners[6], corners[2], color);
+    rDrawLine(corners[2], corners[4], color);
+    rDrawLine(corners[4], corners[0], color);
+    // second 4 corner
+    rDrawLine(corners[1], corners[7], color);
+    rDrawLine(corners[7], corners[3], color);
+    rDrawLine(corners[3], corners[5], color);
+    rDrawLine(corners[5], corners[1], color);
+    // connect corners
+    rDrawLine(corners[0], corners[3], color);
+    rDrawLine(corners[6], corners[5], color);
+    rDrawLine(corners[2], corners[1], color);
+    rDrawLine(corners[4], corners[7], color);
 }
 
 void rDrawAllLines(float* viewProj)

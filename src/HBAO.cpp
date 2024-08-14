@@ -163,10 +163,8 @@ static void InitFrameBuffers(int width, int height)
     rFrameBufferAttachColor(mBlurResultTX, 0);
     rFrameBufferCheck();
 
-    int quarterWidth  = (width  + 3) / 4;
-    int quarterHeight = (height + 3) / 4;
-    mDepth2D  = rCreateTexture2DArray(mDepthViews, quarterWidth, quarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R32F, TexFlags_RawData);
-    mResult2D = rCreateTexture2DArray(nullptr, quarterWidth, quarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R8, TexFlags_RawData);
+    mDepth2D  = rCreateTexture2DArray(mDepthViews, mQuarterWidth, mQuarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R32F, TexFlags_RawData);
+    mResult2D = rCreateTexture2DArray(nullptr, mQuarterWidth, mQuarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R8, TexFlags_RawData);
 }
 
 void HBAOInit(int width, int height)
@@ -294,7 +292,7 @@ static void HorizontalBiliteralBlur()
     rRenderFullScreen();
 }
 
-static void HBAOPass(Camera* camera, Texture* normalTex)
+static void HBAOPass(CameraBase* camera, Texture* normalTex)
 {
     rBindFrameBuffer(mHBAOProcessFB);
     rSetViewportSize(mQuarterWidth, mQuarterHeight);
@@ -314,7 +312,7 @@ static void HBAOPass(Camera* camera, Texture* normalTex)
     }
 }
 
-void HBAORender(Camera* camera, Texture* depthTex, Texture* normalTex)
+void HBAORender(CameraBase* camera, Texture* depthTex, Texture* normalTex)
 {
     if (!mIsOpen)
     {

@@ -11,6 +11,7 @@
 #include "../../ASTL/Additional/GLTFParser.hpp"
 #include "../../ASTL/Common.hpp"
 #include "../../ASTL/Math/Vector.hpp"
+#include "../../ASTL/Math/SIMDVectorMath.hpp"
 
 #ifdef __ANDROID__  
 #define AX_SHADER_VERSION_PRECISION() "#version 320 es\n"              \
@@ -66,17 +67,60 @@ enum GraphicType_
 };
 typedef int GraphicType;
 
+inline Vector3f Unpack_INT_2_10_10_10_REV(uint32_t p) 
+{
+    Vector3f result;
+    const uint32_t tenMask = (1 << 10)-1;
+    result.x = 255.0f / ((p >>  0) & tenMask);
+    result.y = 255.0f / ((p >> 10) & tenMask);
+    result.z = 255.0f / ((p >> 20) & tenMask);
+    return result;
+}
+
 struct GPUMesh
 {
     int numVertex, numIndex;
     // unsigned because opengl accepts unsigned
     unsigned int vertexLayoutHandle;
     unsigned int indexHandle;
-    unsigned int indexType;  // uint32, uint64.
+    unsigned int indexType;  // uint32, uint64. GL_BYTE + indexType
     unsigned int vertexHandle; // opengl handles for, POSITION, TexCoord...
     // usefull for knowing which attributes are there
     // POSITION, TexCoord... AAttribType_ bitmask
     int attributes;
+    int stride; // size of an vertex of the mesh
+    
+    void* vertices;
+    void* indices;
+    
+    // w value is undefined, it could be anything or trash data
+    vec_t GetPosition(int index)
+    {
+        const char* bytePtr = (const char*)vertices;
+        bytePtr += stride * index;
+        return VecLoad((const float*)bytePtr);
+    }
+
+    // todo GPUMesh GetNormal
+    vec_t GetNormal(int index)
+    {
+        const char* bytePtr = (const char*)vertices;
+        bytePtr += stride * index + sizeof(Vector3f); // skip position
+        uint32_t normalPacked = *(uint32_t *)bytePtr;
+        union S { vec_t v; float3 s; };
+        S s = {};
+        s.s = Unpack_INT_2_10_10_10_REV(normalPacked);
+        return s.v; // VecLoad(bytePtr);
+    }
+
+    // todo GPUMesh GetNormal
+    Vector2f GetUV(int index)
+    {
+        const char* bytePtr = (const char*)vertices;
+        bytePtr += stride * index + sizeof(Vector3f) + sizeof(uint) + sizeof(uint); // skip normal and tangent
+        uint32_t uvPacked = *(uint32_t *)bytePtr;
+        return ConvertToFloat2(uvPacked); // VecLoad(bytePtr);
+    }
 };
 
 struct InputLayout
@@ -198,6 +242,8 @@ void rSetBlending(bool val);
 void rSetBlendingFunction(rBlendFunc src, rBlendFunc dst);
 
 void rDrawLine(Vector3f start, Vector3f end, uint color);
+
+void rDrawLineCube(const Vector3f corners[8], uint color);
 
 void rDrawAllLines(float* viewProj);
 

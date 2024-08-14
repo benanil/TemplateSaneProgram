@@ -230,7 +230,7 @@ vec4 MLAA_BlendColor_PS(ivec2 Offset, bool bShowEdgesOnly)
     uint hcount = edges & 0xFFu;
     uint vcount = (edges >> 8u) & 0xFFu;
     
-    // if (bShowEdgesOnly)
+    // if (bShowEdgesOnly) // test visualize edges
     // {
     //     if ((hcount != 0u) || (vcount != 0u))
     //     {

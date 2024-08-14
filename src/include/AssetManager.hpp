@@ -18,7 +18,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale);
 
 int SaveGLTFBinary(SceneBundle* gltf, const char* path);
 
-int LoadGLTFBinary(const char* path, SceneBundle* gltf);
+int LoadSceneBundleBinary(const char* path, SceneBundle* gltf);
 
 void CreateVerticesIndices(SceneBundle* gltf);
 

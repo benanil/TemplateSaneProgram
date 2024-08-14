@@ -4,10 +4,13 @@
 #include "../ASTL/String.hpp" // StrCmp16
 #include "../ASTL/IO.hpp"
 #include "../ASTL/HashSet.hpp"
+#include "../ASTL/Queue.hpp"
 #include "../ASTL/Random.hpp"
 
 #include "include/AssetManager.hpp"
 #include "include/Platform.hpp"
+#include "include/BVH.hpp"
+#include "include/TLAS.hpp"
 
 Scene g_CurrentScene{};
 const int SceneVersion = 0;
@@ -23,7 +26,9 @@ void Scene::Destroy()
     {
         Prefab* prefab = &m_LoadedPrefabs[i];
         rDeleteMesh(prefab->bigMesh);
-    
+        delete[] prefab->globalNodeTransforms;
+        delete prefab->tlas;
+
         if (prefab->gpuTextures) {
             for (int i = 0; i < prefab->numTextures; i++) {
                 rDeleteTexture(prefab->gpuTextures[i]);
@@ -240,9 +245,6 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
         if (isGLTF) {
             ChangeExtension(path, pathLen, "gltf");
             parsed &= ParseGLTF(path, (SceneBundle*)scene, scale); ASSERT(parsed);
-            
-            if (scene->numSkins > 0) CreateVerticesIndicesSkined((SceneBundle*)scene);
-            else                     CreateVerticesIndices((SceneBundle*)scene);
         }
         else if (isOBJ) {
             // todo: make scene bundle from obj
@@ -254,13 +256,20 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
             parsed &= LoadFBX(path, (SceneBundle*)scene, scale);
         }
 
+        if (scene->numSkins > 0) CreateVerticesIndicesSkined((SceneBundle*)scene);
+        else                     CreateVerticesIndices((SceneBundle*)scene);
+
         ChangeExtension(path, StringLength(path), "abm");
+
+        BuildBVH((SceneBundle*)scene);
+
         parsed &= SaveGLTFBinary((SceneBundle*)scene, path); ASSERT(parsed);
         SaveSceneImages(scene, path); // save textures as binary
     }
     else
     {
-        parsed = LoadGLTFBinary(path, (SceneBundle*)scene);
+        parsed = LoadSceneBundleBinary(path, (SceneBundle*)scene);
+        BuildBVH(scene);
     }
 
     if (!parsed)
@@ -300,6 +309,9 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
         }
     }
     
+    scene->globalNodeTransforms = new Matrix4[scene->numNodes];
+    scene->UpdateGlobalNodeTransforms(scene->GetRootNodeIdx(), Matrix4::Identity());
+
     // create big mesh that contains all of the vertices and indices of an scene
     APrimitive primitive  = scene->meshes[0].primitives[0];
     primitive.indices     = scene->allIndices;
@@ -328,6 +340,17 @@ void Scene::Update()
 Prefab* Scene::GetPrefab(PrefabID scene)
 {
     return &m_LoadedPrefabs[scene];
+}
+
+void Prefab::UpdateGlobalNodeTransforms(int nodeIndex, Matrix4 parentMat)
+{
+    ANode* node = &nodes[nodeIndex];
+    globalNodeTransforms[nodeIndex] = Matrix4::PositionRotationScale(node->translation, node->rotation, node->scale) * parentMat;
+
+    for (int i = 0; i < node->numChildren; i++)
+    {
+        UpdateGlobalNodeTransforms(node->children[i], globalNodeTransforms[nodeIndex]);
+    }
 }
 
 int Prefab::FindAnimRootNodeIndex(Prefab* prefab)

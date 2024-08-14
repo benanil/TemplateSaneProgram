@@ -238,7 +238,7 @@ uint64_t ASTCCompress(unsigned char* buffer, unsigned char* image, int dim_x, in
                                      STBIR_RGBA, STBIR_TYPE_UINT8, STBIR_EDGE_CLAMP, STBIR_FILTER_MITCHELL);
         
         if (resized == nullptr) {
-            AX_LOG("stbir_resize failed");
+            AX_LOG("stbir_resize failed %s", "unknown reason");
         }
 
         unsigned char* temp = (unsigned char*)*src->data;
@@ -579,7 +579,7 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
                 case 4: textureType = TextureType_RGBA8; break;
                 default: 
                     textureType = TextureType_R8; 
-                    AX_WARN("texture numComp is undefined");
+                    AX_WARN("texture numComp is undefined, %i", info.numComp);
                     break;
             } 
         }

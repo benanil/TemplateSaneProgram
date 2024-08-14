@@ -15,13 +15,12 @@
 		<CleanCommand></CleanCommand>
 		<BuildWorkingDirectory>C:\Work\TemplateSaneProgram</BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand></RunCommand>
-		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
-		<DebugCommand>C:\Work\raddbg</DebugCommand>
-		<DebugArguments></DebugArguments>
-		<ExePathCommand>C:\Work\TemplateSaneProgram</ExePathCommand>
+		<Exe>C:\Work\raddbg</Exe>
+		<Args></Args>
+		<WorkingDirectory></WorkingDirectory>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
+		<CaptureExeOutput>false</CaptureExeOutput>
 		<Configurations>
 			<Configuration>Debug</Configuration>
 			<Configuration>Release</Configuration>

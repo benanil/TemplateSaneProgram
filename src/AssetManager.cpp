@@ -19,6 +19,7 @@
 #include "../ASTL/Array.hpp"
 #include "../ASTL/String.hpp"
 #include "../ASTL/Math/Matrix.hpp"
+#include "../ASTL/Math/Color.hpp"
 #include "../ASTL/Additional/GLTFParser.hpp"
 #include "../ASTL/IO.hpp"
 
@@ -29,7 +30,7 @@ inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v) {
     const uint32_t xs = v.x < 0.0f, ys = v.y < 0.0f, zs = v.z < 0.0f;   
     return zs << 29 | ((uint32_t)(v.z * 511 + (zs << 9)) & 511) << 20 |
            ys << 19 | ((uint32_t)(v.y * 511 + (ys << 9)) & 511) << 10 |
-           xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);;
+           xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);
 }
 
 inline uint32_t Pack_INT_2_10_10_10_REV(vec_t v)
@@ -226,7 +227,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
         fbxScene->totalVertices += primitive.numVertices;
         
         currentIndex  += primitive.numIndices;
-        currentVertex += primitive.numVertices;        
+        currentVertex += primitive.numVertices;
         
         primitive.indexOffset = indexCursor;
         vertexCursor += primitive.numVertices;
@@ -352,7 +353,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
         amaterial.baseColorTexture.index = GetFBXTexture(umaterial, uscene, UFBX_MATERIAL_FEATURE_PBR,
                                                                             UFBX_MATERIAL_PBR_BASE_COLOR,
                                                                             UFBX_MATERIAL_FBX_DIFFUSE_COLOR);
-        if (amaterial.baseColorTexture.index == -1)
+        if (amaterial.baseColorTexture.index == UINT16_MAX)
             amaterial.baseColorTexture.index = GetFBXTexture(umaterial, uscene, UFBX_MATERIAL_FEATURE_DIFFUSE,
                                                                                 UFBX_MATERIAL_PBR_BASE_COLOR,
                                                                                 UFBX_MATERIAL_FBX_DIFFUSE_COLOR);
@@ -453,7 +454,8 @@ void CreateVerticesIndices(SceneBundle* gltf)
     uint32_t* currIndex = (uint32_t*)gltf->allIndices;
     
     uint32_t vertexCursor = 0, indexCursor = 0;
-    
+    int count = 0;
+
     for (int m = 0; m < gltf->numMeshes; ++m)
     {
         // get number of vertex, getting first attribute count because all of the others are same
@@ -463,26 +465,10 @@ void CreateVerticesIndices(SceneBundle* gltf)
             APrimitive& primitive = mesh.primitives[p];
             char* beforeCopy = (char*)primitive.indices;
             primitive.indices = currIndex;
-            int indexSize = GraphicsTypeToSize(primitive.indexType);
-
-            for (int i = 0; i < primitive.numIndices; i++)
-            {
-                uint32_t index = 0;
-                // index type might be ushort we are converting it to uint32 here.
-                SmallMemCpy(&index, beforeCopy, indexSize);
-                // we are combining all vertices and indices into one buffer, that's why we have to add vertex cursor
-                currIndex[i] = index + vertexCursor; 
-                beforeCopy += indexSize;
-            }
-            
             primitive.indexOffset = indexCursor;
-            
-            vertexCursor += primitive.numVertices;
-            currIndex  += primitive.numIndices;
-            indexCursor += primitive.numIndices;
+            primitive.vertices = currVertex;
             
             // https://www.yosoygames.com.ar/wp/2018/03/vertex-formats-part-1-compression/
-            primitive.vertices  = currVertex;
             Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
             Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
             Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
@@ -499,7 +485,26 @@ void CreateVerticesIndices(SceneBundle* gltf)
                 currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normal);
                 currVertex[v].tangent   = Pack_INT_2_10_10_10_REV(tangent);
             }
+
+            int indexSize = GraphicsTypeToSize(primitive.indexType);
+            
+            for (int i = 0; i < primitive.numIndices; i++)
+            {
+                uint32_t index = 0;
+                // index type might be ushort we are converting it to uint32 here.
+                SmallMemCpy(&index, beforeCopy, indexSize);
+                // we are combining all vertices and indices into one buffer, that's why we have to add vertex cursor
+                currIndex[i] = index + vertexCursor;
+                beforeCopy += indexSize;
+            }
+
             currVertex += primitive.numVertices;
+
+            primitive.indexOffset = indexCursor;
+            indexCursor += primitive.numIndices;
+
+            vertexCursor += primitive.numVertices;
+            currIndex += primitive.numIndices;
         }
     }
     
@@ -931,7 +936,7 @@ void ReadGLTFString(char*& str, AFile file, FixedSizeGrowableAllocator<char>& st
     }
 }
 
-int LoadGLTFBinary(const char* path, SceneBundle* gltf)
+int LoadSceneBundleBinary(const char* path, SceneBundle* gltf)
 {
     AFile file = AFileOpen(path, AOpenFlag_ReadBinary);
     if (!AFileExist(file))

@@ -166,7 +166,7 @@ int LoadSound(const char* path)
     mSounds.AddUninitialized(1);
     uint soundFlag = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
     ma_result res = ma_sound_init_from_file(GetMAEngine(), path, soundFlag, nullptr, nullptr, &mSounds.Back());
-    if (res != MA_SUCCESS) AX_WARN("couldn't load sound file");
+    if (res != MA_SUCCESS) AX_WARN("couldn't load sound file %s", path);
     return mSounds.Size()-1;
 }
 

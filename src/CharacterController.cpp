@@ -32,6 +32,7 @@ void CharacterController::Start(Prefab* _character)
     CreateAnimationController(_character, &mAnimController, true, 58);
     mRandomState = Random::Seed32();
     mState = eCharacterControllerState_Idle;
+    mControlling = true;
     
     mRotation = QIdentity();
     mPosition.y     = 0.65f; // make foots touch the ground
@@ -160,7 +161,7 @@ void CharacterController::RespondInput()
     const float buttonSize = 40.0f;
     const float buttonPadding = 120.0f;
     constexpr uint effect = uFadeBit | uEmptyInsideBit | uFadeInvertBit | uIntenseFadeBit;
-    uDrawCircle(pos, buttonSize, ~0, effect);
+    uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
         if (mAnimController.TriggerAnim(mAtackIndex, 0.0f, 0.0f, eAnimTriggerOpt_Standing))
@@ -168,7 +169,7 @@ void CharacterController::RespondInput()
     }
 
     pos.x -= buttonPadding;
-    uDrawCircle(pos, buttonSize, ~0, effect);
+    uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
         if (mAnimController.TriggerAnim(mKickIndex, 0.0f, 0.0f, 0))
@@ -177,7 +178,7 @@ void CharacterController::RespondInput()
 
     pos.x += buttonPadding;
     pos.y -= buttonPadding;
-    uDrawCircle(pos, buttonSize, ~0, effect);
+    uCircle(pos, buttonSize, ~0, effect);
     if (uClickCheckCircle(pos, buttonSize))
     {
         if (mAnimController.TriggerAnim(mImpactIndex, 0.5f, 0.35f, 0))
@@ -193,7 +194,7 @@ void CharacterController::TurningState()
     if (!mAnimController.IsTrigerred())
     {
         // turning animation ended
-        Camera* camera = SceneRenderer::GetCamera();
+        CameraBase* camera = SceneRenderer::GetCamera();
         // angle we have turned + camera look angle
         float x = camera->angle.x * -TwoPI;
         mRotation = QFromYAngle(x - mTurnRotation + PI);
@@ -272,7 +273,7 @@ void CharacterController::MovementState(bool isSponza)
     mCurrentMovement.y = SmoothDamp(mCurrentMovement.y, targetMovement.y, mSpeedSmoothVelocity, smoothTime, 9999.0f, deltaTime); // Lerp(mCurrentMovement.y, targetMovement.y, acceleration * deltaTime);
     mCurrentMovement.x = Lerp(mCurrentMovement.x, targetMovement.x, 4.0f * deltaTime);
 
-    Camera* camera = SceneRenderer::GetCamera();
+    CameraBase* camera = SceneRenderer::GetCamera();
     // angle of user input, (keyboard or joystick)
     float x = camera->angle.x * -TwoPI;
     float inputAngle = ATan2(targetMovement.x, Clamp(targetMovement.y, -1.0f, 1.0f));
@@ -374,7 +375,7 @@ void CharacterController::HandleNeckAndSpineRotation(float deltaTime)
 {
     if (!mAnimController.IsTrigerred()) 
     {
-        Camera* camera = SceneRenderer::GetCamera();
+        CameraBase* camera = SceneRenderer::GetCamera();
         
         float neckYTarget = -mLastInputAngle + camera->angle.x * -TwoPI;
         const float yMinAngle = -PI / 3.0f, yMaxAngle = PI / 3.0f;
@@ -402,6 +403,13 @@ void CharacterController::HandleNeckAndSpineRotation(float deltaTime)
 
 void CharacterController::Update(float deltaTime, bool isSponza)
 {
+    if (GetKeyPressed('L'))
+    {
+        mControlling = !mControlling;
+    }
+
+    if (!mControlling) return;
+
     SmallMemCpy(mPosPtr, &mStartPos.x, sizeof(Vector3f));
     VecStore(mRotPtr, mStartRotation);
 
@@ -422,6 +430,8 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     VecStore(mRotPtr, mRotation);
     // set animated pos for the renderer
     SmallMemCpy(mPosPtr, &mPosition.x, sizeof(Vector3f));
+    mCharacter->UpdateGlobalNodeTransforms(mRootNodeIdx, Matrix4::Identity());
+
     SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
 }
 

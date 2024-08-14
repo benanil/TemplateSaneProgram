@@ -29,30 +29,34 @@ REM src/Scene.cpp ^
 REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
 REM src/CharacterController.cpp ^
+REM src/BVH.cpp ^
+REM src/TLAS.cpp ^
 REM -o SaneProgram.exe ^
 REM -lopengl32 -lgdi32  SaneProgram.res
 
-REM REM Compile the C++ code using g++
-REM  g++ -std=c++14 -O3 -mavx2 -mfma -march=native -msse4.2 -mwindows -luser32 ^
-REM  -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables ^
-REM  src/SaneProgram.cpp ^
-REM  ASTL/Additional/GLTFParser.cpp ^
-REM  ASTL/Additional/OBJParser.cpp ^
-REM  External/ProcessDxtc.cpp ^
-REM  External/zstddeclib.c ^
-REM  External/ufbx.c ^
-REM  src/PlatformWindows.cpp ^
-REM  src/AssetManager.cpp ^
-REM  src/Animation.cpp ^
-REM  src/CharacterController.cpp ^
-REM  src/Renderer.cpp ^
-REM  src/UI.cpp ^
-REM  src/Menu.cpp ^
-REM  src/Scene.cpp ^
-REM  src/SceneRenderer.cpp ^
-REM  src/Texture.cpp ^
-REM  -o SaneProgram ^
-REM  -lopengl32 -lgdi32 -mno-needed SaneProgram.res
+REM Compile the C++ code using g++
+REM g++ -std=c++14 -O3 -mavx2 -mfma -march=native -msse4.2 -mwindows -luser32 ^
+REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -Wignored-attributes ^
+REM src/SaneProgram.cpp ^
+REM ASTL/Additional/GLTFParser.cpp ^
+REM ASTL/Additional/OBJParser.cpp ^
+REM External/ProcessDxtc.cpp ^
+REM External/zstddeclib.c ^
+REM External/ufbx.c ^
+REM src/PlatformWindows.cpp ^
+REM src/AssetManager.cpp ^
+REM src/Animation.cpp ^
+REM src/CharacterController.cpp ^
+REM src/Renderer.cpp ^
+REM src/UI.cpp ^
+REM src/Menu.cpp ^
+REM src/Scene.cpp ^
+REM src/SceneRenderer.cpp ^
+REM src/Texture.cpp ^
+REM src/BVH.cpp ^
+REM src/TLAS.cpp ^
+REM -o SaneProgram ^
+REM -lopengl32 -lgdi32 SaneProgram.res
 
 REM ------ if this is Editor build compile  External/zstddeclib.c 
 REM External/astc-encoder/astcenc_averages_and_directions.cpp     ^

@@ -62,6 +62,7 @@ struct CharacterController
     float mLastInputAngle;
     float mOldInputAngle;
     bool mWasPressing;
+    bool mControlling;
 
 //------------------------------------------------------------------------
     void Start(Prefab* _character);

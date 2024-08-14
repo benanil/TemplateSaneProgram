@@ -34,6 +34,8 @@ set(SOURCES
     src/HBAO.cpp
     src/Texture.cpp
     src/CharacterController.cpp
+	src/BVH.cpp
+    src/TLAS.cpp
 )
 
 if(AX_GAME_BUILD)
@@ -68,6 +70,8 @@ set_target_properties(SaneProgram PROPERTIES
 )
 
 set_property(TARGET SaneProgram PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/PROFILE")
 
 target_link_libraries(SaneProgram 
     user32

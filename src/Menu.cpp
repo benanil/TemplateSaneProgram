@@ -4,6 +4,7 @@
 #include "include/Platform.hpp"
 
 #include "../ASTL/Algorithms.hpp"
+#include "../ASTL/Math/Color.hpp"
 
 static MenuState menuState = MenuState_Gameplay;
 static char logText[32] = {};
@@ -92,7 +93,7 @@ static void PauseMenu()
         wRequestQuit();
     }
 
-    uDrawText(logText, MakeVec2(1750.0f, 920.0f));
+    uText(logText, MakeVec2(1750.0f, 920.0f));
 }
 
 static void OptionsMenu()
@@ -113,14 +114,14 @@ static void OptionsMenu()
 
     uPushFloat(ufContentStart, settingElementWidth);
 
-    uDrawQuad(pos, bgScale, uGetColor(uColorQuad));
+    uQuad(pos, bgScale, uGetColor(uColorQuad));
     uBorder(pos, bgScale);
 
     uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.2f);
     float settingsXStart = (bgScale.x/2.0f) - (textSize.x/2.0f);
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
-    uDrawText("Settings", pos);
+    uText("Settings", pos);
     uPopFloat(ufTextScale);
 
     float lineLength = bgScale.x * 0.85f;
@@ -252,7 +253,7 @@ static void ShowFPS()
         IntToString(fpsTxt, fps);
     }
 
-    uDrawText(fpsTxt, MakeVec2(1810.0f, 85.0f));
+    uText(fpsTxt, MakeVec2(1810.0f, 85.0f));
 }
 
 static void TriangleTest()
@@ -269,41 +270,41 @@ static void TriangleTest()
 
     const uint numSegments = 0;
     uint properties = MakeTriProperty(uCutBit, cutStart, numSegments);
-    uDrawCircle(circlePos, 25.0f, color0, properties); 
+    uCircle(circlePos, 25.0f, color0, properties); 
     circlePos.x += 55.0f;
 
     properties |= uEmptyInsideBit;
-    uDrawCircle(circlePos, 25.0f, color0, properties); 
+    uCircle(circlePos, 25.0f, color0, properties); 
     circlePos.x += 55.0f;
     
     properties |= uFadeInvertBit;
-    uDrawCircle(circlePos, 25.0f, color0, properties);
+    uCircle(circlePos, 25.0f, color0, properties);
     circlePos.x -= 55.0f * 3.0f;
     
     circlePos.y += 45.0f;
-    uDrawCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
+    uCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
 
     Vector2f quadPos = circlePos;
     Vector2f quadSize = MakeVec2(200.0f, 15.0f);
     // test with uquad
     uint color = PackColorToUint(35, 181, 30, 255);
-    uDrawRoundedRectangle(quadPos, 50.0f, 50.0f, color, uTriEffect_None);
+    uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uTriEffect_None);
     quadPos.x += 60.0f;
-    uDrawRoundedRectangle(quadPos, 50.0f, 50.0f, color, uFadeBit);
+    uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uFadeBit);
     quadPos.x += 60.0f;
-    uDrawRoundedRectangle(quadPos, 50.0f, 50.0f, ~0u, uFadeBit | uFadeInvertBit);
+    uRoundedRectangle(quadPos, 50.0f, 50.0f, ~0u, uFadeBit | uFadeInvertBit);
     quadPos.x -= 60.0f * 2.0;
     quadPos.y += 65.0f;
     
     properties &= ~0xFF; // remove tri effect bits
     float width3 = 60 * 3.0f;
-    uDrawRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.0f), uTriEffect_None);
+    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.0f), uTriEffect_None);
     
     quadPos.y += 75.0f;
-    uDrawRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.2f), uFadeBit);
+    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.2f), uFadeBit);
     
     quadPos.y += 100.0f;
-    uDrawRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
+    uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
 }
 
 bool ShowMenu()
@@ -326,14 +327,14 @@ bool ShowMenu()
 
         // make pause icon ||
         buttonPos += MakeVec2(10.0f, 7.0f);
-        uDrawQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
         buttonPos.x += 15.0f;
-        uDrawQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
     }
 
     if (showDetails) {
         // write to left bottom side of the screen
-        uDrawText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
+        uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
     }
 
     switch (menuState)

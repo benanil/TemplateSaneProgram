@@ -124,7 +124,7 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered);
 //------------------------------------------------------------------------
 
 // text is an utf8 string
-void uDrawText(const char* text, Vector2f position, uTextFlags flags = 0u);
+void uText(const char* text, Vector2f position, uTextFlags flags = 0u);
 
 Vector2f uCalcTextSize(const char* text, uTextFlags flags = 0u);
 
@@ -134,7 +134,7 @@ int CalcTextNumLines(const char* text, uTextFlags flags = 0u);
 bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt = 0);
 
 // quad shaped 
-void uDrawQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0u);
+void uQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0u);
 
 // returns true if changed
 // if cubeCheckMark is true, selected checkbox will look like square instead of checkmark
@@ -217,21 +217,21 @@ inline uint MakeTriProperty(uTriEffect effect, uint cutStart, uint numSegments)
 
 // ads a vertex for triangle drawing
 // properties: leave it as zero if you don't want any effects, otherwise use the instructsions above
-void uDrawVertex(Vector2f pos, uint8 fade, uint color = ~0u, uint properties = 0u);
+void uVertex(Vector2f pos, uint8 fade, uint color = ~0u, uint properties = 0u);
 
-void uDrawCircle(Vector2f center, float radius, uint color, uint properties = 0u);
+void uCircle(Vector2f center, float radius, uint color, uint properties = 0u);
 
-void uDrawCapsule(Vector2f center, float radius, float width, uint color, uint properties = 0u);
+void uCapsule(Vector2f center, float radius, float width, uint color, uint properties = 0u);
 
-void uDrawRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties = 0u);
+void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties = 0u);
 
 void uDrawTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
 
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
-void uDrawHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
+void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
 
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
-void uDrawVerticalTriangle(Vector2f pos, float size, float axis, uint color);
+void uVerticalTriangle(Vector2f pos, float size, float axis, uint color);
 
 enum uScissorMask_ {
     uScissorMask_Quad = 1, // effects the quads

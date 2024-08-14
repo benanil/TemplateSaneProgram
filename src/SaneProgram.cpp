@@ -1,4 +1,6 @@
 
+#include <thread>
+
 #include "include/Renderer.hpp"
 #include "include/Animation.hpp"
 #include "include/Platform.hpp"
@@ -9,11 +11,15 @@
 #include "include/Camera.hpp"
 #include "include/UI.hpp"
 #include "include/Menu.hpp"
+#include "include/BVH.hpp"
+#include "include/TLAS.hpp"
 
 #include "../ASTL/String.hpp"
+#include "../ASTL/Additional/Profiler.hpp"
 
-static PrefabID GLTFPrefab = 0;
+static PrefabID MainScenePrefab = 0;
 static PrefabID AnimatedPrefab = 0;
+static PrefabID SpherePrefab = 0;
 
 CharacterController characterController={};
 
@@ -35,16 +41,33 @@ void AXInit()
     wSetVSync(true);
 }
 
+static Vector2f perfTxtPos;
+
+void PrintPerfFn(const char* text)
+{
+    uPushFloat(ufTextScale, 0.5f);
+    uText(text, perfTxtPos, 0u);
+    perfTxtPos.y += 23.0f;
+    uPopFloat(ufTextScale);
+}
+
 // return 1 if success
 int AXStart()
 {
     g_CurrentScene.Init();
+    InitBVH();
 
-    if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
-    // if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
-    // if (!g_CurrentScene.ImportPrefab(&GLTFPrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
+        return 0;
+    }
+
+    if (!g_CurrentScene.ImportPrefab(&SpherePrefab, "Meshes/Sphere.gltf", 1.0f))
+    {
+        AX_ERROR("gltf scene load failed sphere");
         return 0;
     }
 
@@ -62,6 +85,16 @@ int AXStart()
     Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
     characterController.Start(paladin);
 
+    Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+    int rootNodeIdx = mainScene->GetRootNodeIdx();
+    ANode* rootNode = &mainScene->nodes[rootNodeIdx];
+
+    VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
+    mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
+    
+    mainScene->tlas = new TLAS(mainScene);
+    mainScene->tlas->Build();
+
     SceneRenderer::Init();
  
     wSetWindowResizeCallback(WindowResizeCallback);
@@ -72,17 +105,45 @@ int AXStart()
 
 static bool pauseMenuOpened = false;
 
+static void CastRay()
+{
+    Prefab* sphere = g_CurrentScene.GetPrefab(SpherePrefab);
+    CameraBase* camera = SceneRenderer::GetCamera();
+    Scene* currentScene = &g_CurrentScene;
+
+    Vector2f rayPos;
+    GetMouseWindowPos(&rayPos.x, &rayPos.y); // { 1920.0f / 2.0f, 1080.0f / 2.0f };
+
+    Prefab* bistro = g_CurrentScene.GetPrefab(MainScenePrefab);
+    Triout rayResult = RayCastFromCamera(camera, rayPos, currentScene, MainScenePrefab, nullptr);
+    
+    // static char rayDistTxt[16] = {};
+    // float rayDist = 999.0f;
+    if (rayResult.t != RayacastMissDistance) {
+        sphere->globalNodeTransforms[0].r[3] = rayResult.position;
+    }
+    // FloatToString(rayDistTxt, rayDist);
+    // uDrawText(rayDistTxt, rayPos);
+}
+
 // do rendering and main loop here
 void AXLoop(bool canRender)
 {
     using namespace SceneRenderer;
+
+    perfTxtPos = { 1100.0f, 500.0f };
+    BeginProfile(PrintPerfFn);
     
     uBegin(); // user interface begin
+    
+    CameraBase* camera = SceneRenderer::GetCamera();
+    Scene* currentScene = &g_CurrentScene;
 
+    std::thread raycastThread(CastRay);
+    
     // draw when we are playing game, don't render when using pause menu to save power
     if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
     {
-        Scene* currentScene = &g_CurrentScene;
         currentScene->Update();
     
         float deltaTime = (float)GetDeltaTime();
@@ -91,10 +152,10 @@ void AXLoop(bool canRender)
         const bool isSponza = false;
         characterController.Update(deltaTime, isSponza);
         AnimationController* animController = &characterController.mAnimController;
-
+        
         BeginShadowRendering(currentScene);
         {
-            RenderShadowOfPrefab(currentScene, GLTFPrefab, nullptr);
+            RenderShadowOfPrefab(currentScene, MainScenePrefab, nullptr);
             // don't render shadow of character, we will fake it.
             // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
         }
@@ -102,11 +163,12 @@ void AXLoop(bool canRender)
  
         BeginRendering();
         {
-            RenderPrefab(currentScene, GLTFPrefab, nullptr);
+            RenderPrefab(currentScene, MainScenePrefab, nullptr);
             RenderPrefab(currentScene, AnimatedPrefab, animController);
+            RenderPrefab(currentScene, SpherePrefab, nullptr);
         }
         bool renderToBackBuffer = !pauseMenuOpened;
-        EndRendering(renderToBackBuffer);
+        SceneRenderer::EndRendering(renderToBackBuffer);
         pauseMenuOpened = false;
     
         SceneRenderer::ShowEditor();
@@ -119,7 +181,12 @@ void AXLoop(bool canRender)
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
 
+    raycastThread.join();
+
     uRender(); // < user interface end 
+    
+    EndAndPrintProfile();
+    
     // RenderScene(&FBXScene);
     // todo material system
 }
@@ -127,6 +194,7 @@ void AXLoop(bool canRender)
 
 void AXExit()
 {
+    DestroyBVH();
     g_CurrentScene.Destroy();
     characterController.Destroy();
     DestroyAnimationSystem();

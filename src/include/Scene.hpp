@@ -9,7 +9,9 @@
 struct Prefab : public SceneBundle 
 {
     Texture* gpuTextures;
-    GPUMesh bigMesh; // contains all of the vertices and indices of an prefab
+    GPUMesh  bigMesh; // contains all of the vertices and indices of an prefab
+    Matrix4* globalNodeTransforms; // pre calculated global transforms, accumulated with parents
+    struct TLAS* tlas;
     char path[256]; // relative path
     int firstTimeRender; // starts with 4 and decreases until its 0 we draw first time and set this to-1
 
@@ -33,6 +35,8 @@ struct Prefab : public SceneBundle
         return node;
     }
 
+    void UpdateGlobalNodeTransforms(int rootNodeIdx, Matrix4 parentMat);
+    
     static int FindAnimRootNodeIndex(Prefab* prefab);
     static int FindNodeFromName(Prefab* prefab, const char* name);
 };

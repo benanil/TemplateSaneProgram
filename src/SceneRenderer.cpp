@@ -9,18 +9,24 @@
 #include "include/Camera.hpp"
 #include "include/UI.hpp"
 #include "include/HBAO.hpp"
+#include "include/BVH.hpp"
 // #include "include/PostProcessing.hpp"
 
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
+#include "../ASTL/Queue.hpp"
 #include "../ASTL/String.hpp"
+#include "../ASTL/Math/Color.hpp"
 
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
 
 namespace SceneRenderer
 {
-    Camera      m_Camera;
+    CameraBase* m_Camera;
+    FreeCamera   m_FreeCamera;
+    PlayerCamera m_PlayerCamera;
+
     Matrix4     m_ViewProjection;
     Matrix4     m_LightMatrix;
 
@@ -125,17 +131,17 @@ namespace ShadowSettings
 namespace SceneRenderer 
 {
 
-void CreateShaders();
-void DeleteShaders();
+static void CreateShaders();
+static void DeleteShaders();
 
 void DrawLastRenderedFrame()
 {
     rRenderFullScreen(m_LightingTexture.handle);
 }
 
-Camera* GetCamera()
+CameraBase* GetCamera()
 {
-    return &m_Camera;
+    return m_Camera;
 }
 
 Matrix4* GetViewProjection()
@@ -235,7 +241,10 @@ void WindowResizeCallback(int width, int height)
     width = MAX(width, 16);
     height = MAX(height, 16);
     rSetViewportSize(smallerWidth, smallerHeight);
-    m_Camera.RecalculateProjection(width, height);
+
+    m_FreeCamera.RecalculateProjection(width, height);
+    m_PlayerCamera.RecalculateProjection(width, height);
+
     DeleteGBuffer(m_Gbuffer);
     HBAOResize(smallerWidth, smallerHeight);
     // PostProcessingResize(width, height);
@@ -428,7 +437,10 @@ void Init()
 
     CreateGBuffer(m_Gbuffer, windowStartSize.x, windowStartSize.y);
 
-    m_Camera.Init(windowStartSize);
+    m_FreeCamera.Init(windowStartSize);
+    m_PlayerCamera.Init(windowStartSize);
+
+    m_Camera = &m_PlayerCamera; // reinterpret_cast<CameraBase*>(&m_PlayerCamera); // ->Init(windowStartSize);
 
     HBAOInit(GetRBWidth(windowStartSize.x, windowStartSize.y), 
              GetRBHeight(windowStartSize.x, windowStartSize.y));
@@ -458,13 +470,21 @@ void Init()
 
 void BeginRendering()
 {
+    if (GetKeyPressed('L'))
+    {
+        if (m_Camera == &m_PlayerCamera) 
+            m_Camera = &m_FreeCamera;
+        else
+            m_Camera = &m_PlayerCamera;
+    }
+
     rBindFrameBuffer(m_Gbuffer.Buffer);
     rSetViewportSize(m_Gbuffer.width, m_Gbuffer.height);
     rClearColor(0.2f, 0.2f, 0.2f, 1.0);
     rClearDepth();
 
-    m_Camera.Update();
-    m_ViewProjection = m_Camera.view * m_Camera.projection;
+    m_Camera->Update();
+    m_ViewProjection = m_Camera->view * m_Camera->projection;
 
     rBindShader(m_GBufferShader);
 
@@ -492,7 +512,7 @@ static void RenderShadowOfNode(ANode* node, Prefab* prefab, Matrix4 parentMat)
     for (int i = 0; i < mesh.numPrimitives; i++)
     {
         APrimitive* primitive = &mesh.primitives[i];
-        rRenderMeshIndexOffset(prefab->bigMesh, primitive->numIndices, primitive->indexOffset); // render all scene with one draw call
+        rRenderMeshIndexOffset(prefab->bigMesh, primitive->numIndices, primitive->indexOffset); 
     }
 
     for (int i = 0; i < node->numChildren; i++)
@@ -611,109 +631,8 @@ static void RenderPrimitive(AMaterial& material, Prefab* prefab, APrimitive& pri
     rRenderMeshIndexOffset(prefab->bigMesh, primitive.numIndices, offset);
 }
 
-static void GetAABBCorners(Vector3f* res, vec_t minv, vec_t maxv)
-{
-    Vector3f min; Vec3Store(min.arr, minv);
-    Vector3f max; Vec3Store(max.arr, maxv);
-
-    res[0] = { min.x, min.y, min.z };
-    res[1] = { max.x, max.y, max.z };
-    res[2] = { max.x, max.y, min.z };
-    res[3] = { min.x, min.y, max.z };
-    res[4] = { min.x, max.y, min.z };
-    res[5] = { max.x, min.y, max.z };
-    res[6] = { max.x, min.y, min.z };
-    res[7] = { min.x, max.y, max.z };
-}
-
-static void DrawCube(const Vector3f* corners, uint color)
-{
-    // first 4 corner
-    rDrawLine(corners[0], corners[6], color);
-    rDrawLine(corners[6], corners[2], color);
-    rDrawLine(corners[2], corners[4], color);
-    rDrawLine(corners[4], corners[0], color);
-    // second 4 corner
-    rDrawLine(corners[1], corners[7], color);
-    rDrawLine(corners[7], corners[3], color);
-    rDrawLine(corners[3], corners[5], color);
-    rDrawLine(corners[5], corners[1], color);
-    // connect corners
-    rDrawLine(corners[0], corners[3], color);
-    rDrawLine(corners[6], corners[5], color);
-    rDrawLine(corners[2], corners[1], color);
-    rDrawLine(corners[4], corners[7], color);
-}
 
 static int numCulled = 0;
-
-static void RenderNodeRec(ANode& node, Prefab* prefab, Matrix4 parentMat, bool recurse)
-{
-    Matrix4 model = Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale) * parentMat;
-
-    // if node is not mesh skip (camera or empty node)
-    if (node.type != 0 || node.index == -1)
-    {
-        for (int i = 0; i < node.numChildren && recurse; i++)
-        {
-            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, recurse);
-        }
-        return;
-    }
-
-    AMesh mesh = prefab->meshes[node.index];
-
-    Random::PCG pcg;
-    Random::PCGInitialize(pcg, 0x675890u);
-
-    // Vector3f corners[8];
-
-    for (int j = 0; j < mesh.numPrimitives; ++j)
-    {
-        APrimitive& primitive = mesh.primitives[j];
-        bool hasMaterial = prefab->materials && primitive.material != -1;
-        AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
-        
-        vec_t aabbMin = VecLoadA(primitive.min);
-        vec_t aabbMax = VecLoadA(primitive.max);
-
-        vec_t min = Vector3Transform(aabbMin, model.r);
-        vec_t max = Vector3Transform(aabbMax, model.r);
-        vec_t t = VecMin(min, max);
-        max = VecMax(min, max);
-        min = t;
-
-        // float rnd = Random::NextFloat01(Random::PCGNext(pcg));
-        // GetAABBCorners(corners, min, max);
-        // DrawCube(corners, HUEToRGBU32(rnd));
-
-        bool shouldDraw = true;
-        bool culled = CheckAABBCulled(min, max, m_Camera.frustumPlanes, model);
-        shouldDraw &= culled;
-        numCulled += culled == false;
-        
-        shouldDraw &= primitive.numIndices != 0;
-        bool isAlpha = (material.alphaMode == AMaterialAlphaMode_Mask ||
-                        material.alphaMode == AMaterialAlphaMode_Blend);
-
-        // if alpha blended render after all meshes for performance
-        if (shouldDraw && isAlpha) {
-            m_DelayedAlphaCutoffs.EmplaceBack(&mesh.primitives[j], model);
-            shouldDraw = false;
-        }
-
-        if (shouldDraw) {
-            // SetMaterial(&material);
-            rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
-            RenderPrimitive(material, prefab, primitive);
-        }
-
-        for (int i = 0; i < node.numChildren && recurse; i++)
-        {
-            RenderNodeRec(prefab->nodes[node.children[i]], prefab, model, recurse);
-        }
-    }
-}
 
 // Renders to gbuffer
 void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSystem)
@@ -744,11 +663,73 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         rSetTexture(animSystem->mMatrixTex, 4, lAnimTex);
     }
         
-    for (int i = 0; i < numNodes; i++)
+    Queue<int> nodeQueue = {};
+    nodeQueue.Enqueue(hasScene ? defaultScene.nodes[0] : 0);
+
+    while (!nodeQueue.Empty())
     {
-        ANode& node = hasScene ? prefab->nodes[defaultScene.nodes[i]] : prefab->nodes[i];
-        bool shouldRecurse = hasScene;
-        RenderNodeRec(node, prefab, Matrix4::Identity(), shouldRecurse);
+        int nodeIndex = nodeQueue.Dequeue();
+        ANode& node = prefab->nodes[nodeIndex];
+        Matrix4 model = prefab->globalNodeTransforms[nodeIndex]; // Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale) * parentMat;
+
+        // if node is not mesh skip (camera or empty node)
+        AMesh mesh = prefab->meshes[node.index];
+
+        // Random::PCG pcg;
+        // Random::PCGInitialize(pcg, 0x675890u);
+        // Vector3f corners[8];
+
+        if (node.type == 0 && node.index != -1)
+        for (int j = 0; j < mesh.numPrimitives; ++j)
+        {
+            APrimitive& primitive = mesh.primitives[j];
+            bool hasMaterial = prefab->materials && primitive.material != UINT16_MAX;
+            AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
+            
+            vec_t vmin = VecSet1(1e30f);  
+            vec_t vmax = VecSet1(-1e30f); 
+
+            // convert local Bounds to global bounds
+            for (int i = 0; i < 8; i++)
+            {
+                vec_t point = VecSetR(i & 1 ? primitive.max[0] : primitive.min[0],
+                                      i & 2 ? primitive.max[1] : primitive.min[1],
+                                      i & 4 ? primitive.max[2] : primitive.min[2], 1.0f);
+                point = Vector3Transform(point, model.r);
+                vmin = VecMin(vmin, point);
+                vmax = VecMax(vmax, point);
+            }
+
+            // float rnd = Random::NextFloat01(Random::PCGNext(pcg));
+            // GetAABBCorners(corners, vmin, vmax);
+            // rDrawCube(corners, HUEToRGBU32(0.1f));
+
+            bool shouldDraw = true;
+            bool culled = CheckAABBCulled(vmin, vmax, m_Camera->frustumPlanes, model);
+            shouldDraw &= culled;
+            numCulled += culled == false;
+
+            shouldDraw &= primitive.numIndices != 0;
+            bool isAlpha = (material.alphaMode == AMaterialAlphaMode_Mask ||
+                material.alphaMode == AMaterialAlphaMode_Blend);
+
+            // if alpha blended render after all meshes for performance
+            if (shouldDraw && isAlpha) {
+                m_DelayedAlphaCutoffs.EmplaceBack(&mesh.primitives[j], model);
+                shouldDraw = false;
+            }
+
+            if (shouldDraw) {
+                // SetMaterial(&material);
+                rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
+                RenderPrimitive(material, prefab, primitive);
+            }
+        }
+
+        for (int i = 0; i < node.numChildren; i++)
+        {
+            nodeQueue.Enqueue(node.children[i]);
+        }
     }
 
     // Render alpha masked meshes after opaque meshes, to make sure performance is good. (early z)
@@ -767,7 +748,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
             KeyValuePair<APrimitive*, Matrix4> alphaCutoff = m_DelayedAlphaCutoffs[i];
 
             APrimitive& primitive = *alphaCutoff.key;
-            bool hasMaterial = prefab->materials && primitive.material != -1;
+            bool hasMaterial = prefab->materials && primitive.material != UINT16_MAX;
             AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
 
             rSetShaderValue(alphaCutoff.value.GetPtr(), lModel, GraphicType_Matrix4); // < set model matrix
@@ -813,8 +794,8 @@ static void LightingPass()
 
     rBindShader(m_DeferredPBRShader);
     {
-        Matrix4 invView = Matrix4::Inverse(m_Camera.view);
-        Matrix4 invProj = Matrix4::Inverse(m_Camera.projection);
+        Matrix4 invView = Matrix4::Inverse(m_Camera->view);
+        Matrix4 invProj = Matrix4::Inverse(m_Camera->projection);
 
         rSetShaderValue(&sunLight.dir.x  , lSunDir, GraphicType_Vector3f);
         rSetShaderValue(&m_CharacterPos.x, lPlayerPos, GraphicType_Vector3f);
@@ -857,7 +838,7 @@ static void DrawSkybox()
         rBindShader(m_SkyboxShader);
         rSetShaderValue((float)TimeSinceStartup() * 0.3f, lSkyTime);
         rSetShaderValue(g_CurrentScene.m_SunLight.dir.arr, lSkySun, GraphicType_Vector3f);
-        rSetShaderValue(m_CharacterPos.arr, lSkyViewPos, GraphicType_Vector3f);
+        rSetShaderValue(m_Camera->position.arr, lSkyViewPos, GraphicType_Vector3f);
         rSetShaderValue(m_ViewProjection.GetPtr(), lSkyViewProj, GraphicType_Matrix4);
         rSetTexture(m_SkyNoiseTexture, 0, lSkyNoiseTex);
         rBindMesh(m_BoxMesh);
@@ -869,7 +850,7 @@ void PostProcessingPass()
 {
     Texture depthTexture = m_Gbuffer.DepthTexture;
     Vector3f sunDir = g_CurrentScene.m_SunLight.dir;
-    Vector3f camDir = m_Camera.Front;
+    Vector3f camDir = m_Camera->Front;
     Vector2f sunScreenCoord = WorldToNDC(m_ViewProjection, m_CharacterPos + (sunDir * 600.0f));
     sunScreenCoord = (sunScreenCoord + 1.0) * 0.5f; // convert to 0, 1 space
 
@@ -877,7 +858,7 @@ void PostProcessingPass()
 
     if (angle < PI)
     {
-        float fovRad = m_Camera.verticalFOV * DegToRad;
+        float fovRad = m_Camera->verticalFOV * DegToRad;
         float intensity = ((PI - angle) / PI);
 
         rBindShader(m_GodRaysShader);
@@ -908,7 +889,7 @@ void EndRendering(bool renderToBackBuffer)
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
     
-    HBAORender(&m_Camera, &m_Gbuffer.DepthTexture, &m_Gbuffer.NormalTexture);
+    HBAORender(m_Camera, &m_Gbuffer.DepthTexture, &m_Gbuffer.NormalTexture);
 
     rSetViewportSize(windowSize.x, windowSize.y);
 
@@ -960,7 +941,7 @@ void ShowEditor()
     Vector2f bgScale = { 450.0f, 600.0f };
     Vector2f pos = bgPos;
 
-    uDrawQuad(pos, bgScale, uGetColor(uColorQuad) & 0x77FFFFFFu);
+    uQuad(pos, bgScale, uGetColor(uColorQuad) & 0x77FFFFFFu);
     uBorder(pos, bgScale);
 
     const float textPadding = 13.0f;
@@ -977,7 +958,7 @@ void ShowEditor()
     float settingsXStart = 20.0f;
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
-    uDrawText("Graphics", pos);
+    uText("Graphics", pos);
     // uPopFloat(ufTextScale);
 
     float lineLength = bgScale.x * 0.85f;

@@ -5,7 +5,7 @@ struct Scene;
 struct Prefab;
 struct LightInstance;
 struct AnimationController;
-struct Camera;
+struct CameraBase;
 struct Matrix4;
 
 namespace SceneRenderer
@@ -34,7 +34,7 @@ namespace SceneRenderer
     // to make fake shadow
     void SetCharacterPos(float x, float y, float z);
 
-    Camera* GetCamera();
+    CameraBase* GetCamera();
 
     Matrix4* GetViewProjection();
 
