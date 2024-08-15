@@ -93,7 +93,7 @@ void TLAS::Build()
     TLASNode& root     = tlasNodes[0];
     root.leftFirst     = 0;
     root.instanceCount = blasCount;
-    numNodesUsed = 0;
+    numNodesUsed = 0u;
 
     vec_t centeroidMin, centeroidMax;
     UpdateNodeBounds(numNodesUsed, &centeroidMin, &centeroidMax);
@@ -210,11 +210,11 @@ void TLAS::SubdivideBVH(uint nodeIdx, uint depth, vec_t centeroidMin, vec_t cent
     float splitCost = FindBestSplitPlane(node, &axis, &splitPos, centeroidMin, centeroidMax);
     float nosplitCost = CalculateNodeCost(node->minv, node->maxv, node->instanceCount);
     
-    if (splitCost >= nosplitCost || depth >= 12) return;
+    if (splitCost >= nosplitCost || depth >= 12u || node->instanceCount <= 6u) return;
 
     // in-place partition
-    int i = leftFirst;
-    int j = i + instanceCount - 1;
+    uint i = leftFirst;
+    uint j = i + instanceCount - 1u;
     float centeroidMinAxis = VecGetN(centeroidMin, axis);
     float centeroidMaxAxis = VecGetN(centeroidMax, axis);
     float scale = BINS / (centeroidMaxAxis - centeroidMinAxis);

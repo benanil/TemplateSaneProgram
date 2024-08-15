@@ -199,7 +199,6 @@ static void CreateGBuffer(GBuffer& gBuffer, int width, int height)
     rFrameBufferCheck();
 
     m_LightingTexture = rCreateTexture(width, height, nullptr, TextureType_RGBA8, TexFlags_RawData);
-    
     m_LightingFrameBuffer = rCreateFrameBuffer(true);
     rFrameBufferAttachColor(m_LightingTexture);
     rFrameBufferCheck();
@@ -818,18 +817,16 @@ static void LightingPass()
     rBindShader(m_MLAAEdgeShader);
     rSetTexture(m_LightingTexture, 0, 0);
     rRenderFullScreen();
-
-    rBindFrameBuffer(m_PostProcessingFrameBuffer);
+     
+    rBindFrameBuffer(m_PostProcessingFrameBuffer); // < uses gbuffers color attachment
     rBindShader(m_MLAAShader);
     rSetTexture(m_LightingTexture, 0, 0);
     rSetTexture(m_MLAAEdgeTex, 1, 1);
     rRenderFullScreen();
 
-    rBindFrameBuffer(m_LightingFrameBuffer);
-    rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
-
-    // rBindFrameBuffer(m_MainFrameBuffer.Buffer);
-    // rFrameBufferInvalidate(3); // color, normal, ShadowMetallicRoughness
+    // rBindFrameBuffer(m_LightingFrameBuffer);
+    // rUnbindFrameBuffer();
+    // rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
 }
 
 static void DrawSkybox()
@@ -875,7 +872,7 @@ void PostProcessingPass()
         rRenderFullScreen();
     }
     
-    rBindFrameBuffer(m_PostProcessingFrameBuffer);
+    rBindFrameBuffer(m_PostProcessingFrameBuffer); // gbuffer's color is target
     
     rBindShader(m_PostProcessingShader);
     rSetTexture(m_LightingTexture, rGetUniformLocation("uLightingTex"), 0);
@@ -900,15 +897,15 @@ void EndRendering(bool renderToBackBuffer)
     rBindFrameBuffer(m_LightingFrameBuffer);
     
     LightingPass(); // Deferred Lighting
-
+    
     PostProcessingPass();
-
+    
     rSetDepthTest(true);
     
     rBindFrameBuffer(m_Gbuffer.Buffer);
-
+    
     DrawSkybox();
-
+    
     rUnbindFrameBuffer(); // < draw to backbuffer after this line
     rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
     

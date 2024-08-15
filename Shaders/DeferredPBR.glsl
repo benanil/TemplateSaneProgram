@@ -209,6 +209,6 @@ void main()
     }
     
     shadow = max(min(shadow, 1.0), 0.0);
-    oFragColor.rgb = lighting * GetShadow(shadow, pos);
+    oFragColor.rgb = pow(lighting * GetShadow(shadow, pos), vec3(1.0 / 2.2));
     oFragColor.a = dot(oFragColor.rgb, vec3(.299f, .587f, .114f));
 }

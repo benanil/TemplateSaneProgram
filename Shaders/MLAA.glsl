@@ -121,6 +121,12 @@ uint DecodeCount(uint count, uint shift)
 }
 //--------------------------------------------------------------------------------------
 
+mediump vec4 toLinear4(mediump vec4 sRGB)
+{
+    // https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
+    return sRGB * (sRGB * (sRGB * 0.305306011 + 0.682171111) + 0.012522878);
+}
+
 //-----------------------------------------------------------------------------	
 //  Main function used in third and final phase of the algorithm
 //  This code reads previous inputs and perform anti-aliasing of edges by 
@@ -141,13 +147,13 @@ void BlendColor(uint count,
         uint posCount = DecodeCountNoStopBit(count, kPosCountShift);
 
         // Fetch color adjacent to the edge
-        vec4 adjacentcolor = texelFetch(uColorTex, pos + dir, 0);
+        vec4 adjacentcolor = toLinear4(texelFetch(uColorTex, pos + dir, 0));
 
         if ((negCount + posCount) == 0u)
         {
             const float weight = 1.0 / 8.0; // Arbitrary			
             // Cheap approximation of gamma to linear and then back again
-            color.xyz = sqrt(mix(color.xyz * color.xyz, adjacentcolor.xyz * adjacentcolor.xyz, weight));
+            color = mix(color, adjacentcolor, weight);
             return;
         }
         else
@@ -213,7 +219,7 @@ void BlendColor(uint count,
                 float h1 = abs((1.0 / _length) * (_length - _distance - 1.0) - 0.5);
                 float area = 0.5f * (h0 + h1);                
                 // Cheap approximation of gamma to linear and then back again
-                color.xyz = sqrt(mix(color.xyz * color.xyz, adjacentcolor.xyz * adjacentcolor.xyz, area));
+                color = mix(color, adjacentcolor, area);
             }
         }
     }
@@ -225,51 +231,44 @@ void BlendColor(uint count,
 //-----------------------------------------------------------------------------
 vec4 MLAA_BlendColor_PS(ivec2 Offset, bool bShowEdgesOnly)
 {
-    vec4 rVal   = texelFetch(uColorTex, Offset, 0);
+    vec4 rVal   = toLinear4(texelFetch(uColorTex, Offset, 0));
     uint edges  = texelFetch(uEdgesTex, Offset, 0).x;
     uint hcount = edges & 0xFFu;
     uint vcount = (edges >> 8u) & 0xFFu;
     
-    // if (bShowEdgesOnly) // test visualize edges
-    // {
-    //     if ((hcount != 0u) || (vcount != 0u))
-    //     {
-    //         if ((IsBitSet(hcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(hcount, kStopBit_BitPosition + kNegCountShift)) ||
-    //             (IsBitSet(vcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(vcount, kStopBit_BitPosition + kNegCountShift)))
-    //         {
-    //             uint Count = 0u;
-    //             Count += DecodeCountNoStopBit(hcount, kNegCountShift);
-    //             Count += DecodeCountNoStopBit(hcount, kPosCountShift);
-    //             Count += DecodeCountNoStopBit(vcount, kNegCountShift);
-    //             Count += DecodeCountNoStopBit(vcount, kPosCountShift);
-    //             if (Count != 0u)
-    //             rVal = vec4(1, 0, 0, 1);
-    //         }
-    //     }
-    // }
-    // else
-    // {
-    // }
-    uint hcountup    =  texelFetch(uEdgesTex, Offset - kUp.xy, 0).x & 0xFFu;
-    uint vcountright = (texelFetch(uEdgesTex, Offset - kRight.xy, 0).x >> 8u) & 0xFFu;
+    if (bShowEdgesOnly) // test visualize edges
+    {
+        if ((hcount != 0u) || (vcount != 0u))
+        {
+            if ((IsBitSet(hcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(hcount, kStopBit_BitPosition + kNegCountShift)) ||
+                (IsBitSet(vcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(vcount, kStopBit_BitPosition + kNegCountShift)))
+            {
+                uint Count = 0u;
+                Count += DecodeCountNoStopBit(hcount, kNegCountShift);
+                Count += DecodeCountNoStopBit(hcount, kPosCountShift);
+                Count += DecodeCountNoStopBit(vcount, kNegCountShift);
+                Count += DecodeCountNoStopBit(vcount, kPosCountShift);
+                if (Count != 0u)
+                rVal = vec4(1, 0, 0, 1);
+            }
+        }
+    }
+    else
+    {
+        uint hcountup    =  texelFetch(uEdgesTex, Offset - kUp.xy, 0).x & 0xFFu;
+        uint vcountright = (texelFetch(uEdgesTex, Offset - kRight.xy, 0).x >> 8u) & 0xFFu;
     
-    // Blend pixel colors as required for anti-aliasing edges
-    if (hcount     != 0u) BlendColor(hcount, Offset, kUp.xy, kRight.xy, false, rVal);   // H down-up
-    if (hcountup   != 0u) BlendColor(hcountup, Offset - kUp.xy, -kUp.xy, kRight.xy, true, rVal);   // H up-down    				    
-    if (vcount     != 0u) BlendColor(vcount, Offset, kRight.xy, kUp.xy, false, rVal);   // V left-right				
-    if (vcountright!= 0u) BlendColor(vcountright, Offset - kRight.xy, -kRight.xy, kUp.xy, true, rVal);   // V right-left    			
+        // Blend pixel colors as required for anti-aliasing edges
+        if (hcount     != 0u) BlendColor(hcount, Offset, kUp.xy, kRight.xy, false, rVal);   // H down-up
+        if (hcountup   != 0u) BlendColor(hcountup, Offset - kUp.xy, -kUp.xy, kRight.xy, true, rVal);   // H up-down    				    
+        if (vcount     != 0u) BlendColor(vcount, Offset, kRight.xy, kUp.xy, false, rVal);   // V left-right				
+        if (vcountright!= 0u) BlendColor(vcountright, Offset - kRight.xy, -kRight.xy, kUp.xy, true, rVal);   // V right-left    			
+    }
 
     return rVal;
 }
 
 void main()
 {
-    // if (gl_FragCoord.x > 950.0) 
-    //     fResult.rgb = texelFetch(uColorTex, ivec2(gl_FragCoord.xy), 0).rgb;
-    // else if (gl_FragCoord.x > 949.0)
-    //     fResult.rgb = vec3(0.0, 1.0, 0.0);
-    // else if (gl_FragCoord.x < 250.0)
-    //     fResult = MLAA_BlendColor_PS(ivec2(gl_FragCoord.xy), true);
-    // else
-    fResult.rgb = MLAA_BlendColor_PS(ivec2(gl_FragCoord.xy), false).rgb;
+    fResult.rgb = pow(MLAA_BlendColor_PS(ivec2(gl_FragCoord.xy), false).rgb, vec3(1.0 / 2.2));
 }

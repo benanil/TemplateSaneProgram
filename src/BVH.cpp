@@ -1,7 +1,5 @@
 #pragma once
 
-#include "../ASTL/Math/Quaternion.hpp"
-#include "../ASTL/Algorithms.hpp"
 
 #include "include/BVH.hpp"
 #include "include/Renderer.hpp"
@@ -9,6 +7,7 @@
 #include "include/Platform.hpp"
 
 #include "../ASTL/Math/Matrix.hpp"
+#include "../ASTL/Algorithms.hpp"
 #include "../ASTL/Queue.hpp"
 
 #include "include/BVH.hpp"
@@ -23,8 +22,8 @@
 const size_t MAX_TRIANGLES = 6'000'000; // more than bistro num triangles * 2
 const size_t MAX_BVHNODES = MAX_TRIANGLES;
 
-static uint totalNodesUsed = 2;
-static int currTriangle = 0;
+static uint totalNodesUsed = 0;
+static uint currTriangle = 0;
 
 BVHNode* g_BVHNodes;
 Tri*     g_Triangles;
@@ -169,7 +168,7 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
     float splitCost = FindBestSplitPlane(tris, node, mesh, primitive, &axis, &splitPos, centeroidMin, centeroidMax);
     float nosplitCost = CalculateNodeCost(node->minv, node->maxv, node->triCount);
     
-    if (splitCost >= nosplitCost || depth >= 20) return;
+    if (splitCost >= nosplitCost || depth >= 20 || node->triCount <= 32) return;
 
     // in-place partition
     int i = leftFirst;

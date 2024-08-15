@@ -65,7 +65,7 @@ int AXStart()
         return 0;
     }
 
-    if (!g_CurrentScene.ImportPrefab(&SpherePrefab, "Meshes/Sphere.gltf", 1.0f))
+    if (!g_CurrentScene.ImportPrefab(&SpherePrefab, "Meshes/Sphere.gltf", 0.5f))
     {
         AX_ERROR("gltf scene load failed sphere");
         return 0;
@@ -89,8 +89,8 @@ int AXStart()
     int rootNodeIdx = mainScene->GetRootNodeIdx();
     ANode* rootNode = &mainScene->nodes[rootNodeIdx];
 
-    VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
-    mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
+    // VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
+    // mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
     
     mainScene->tlas = new TLAS(mainScene);
     mainScene->tlas->Build();
@@ -181,10 +181,10 @@ void AXLoop(bool canRender)
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
 
-    raycastThread.join();
 
     uRender(); // < user interface end 
     
+    raycastThread.join();
     EndAndPrintProfile();
     
     // RenderScene(&FBXScene);

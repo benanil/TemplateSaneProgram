@@ -32,8 +32,7 @@ struct TLAS
 	BVHInstance* instances = 0; // | tris
 	uint blasCount;
     
-    int numIndicesUsed;
-    int numNodesUsed;
+    uint numNodesUsed;
 
     void TraverseBVH(const Ray& ray, uint rootNode, Triout* out);
 
