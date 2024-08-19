@@ -167,7 +167,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
         {
             SmallMemCpy(&currentVertex[j].position.x, &umesh->vertex_position.values.data[j], sizeof(float) * 3);
             if (umesh->vertex_uv.exists) {
-                currentVertex[j].texCoord = ConvertToHalf2((float*)(umesh->vertex_uv.values.data + j));
+                currentVertex[j].texCoord = ConvertFloat2ToHalf2((float*)(umesh->vertex_uv.values.data + j));
             }
             if (umesh->vertex_normal.exists) {
                 currentVertex[j].normal = Pack_INT_2_10_10_10_REV(MakeVec3((float*)(umesh->vertex_normal.values.data + j)));
@@ -481,7 +481,7 @@ void CreateVerticesIndices(SceneBundle* gltf)
                 Vector3f normal   = normals   ? normals[v]   : Vector3f{0.5f, 0.5f, 0.0};
 
                 currVertex[v].position  = positions[v];
-                currVertex[v].texCoord  = ConvertToHalf2(&texCoord.x);
+                currVertex[v].texCoord  = ConvertFloat2ToHalf2(&texCoord.x);
                 currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normal);
                 currVertex[v].tangent   = Pack_INT_2_10_10_10_REV(tangent);
             }
@@ -558,10 +558,10 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
                 Vector2f texCoord = texCoords ? texCoords[v] : Vector2f{0.0f, 0.0f};
                 Vector3f normal   = normals   ? normals[v]   : Vector3f{0.5f, 0.5f, 0.0};
 
-                currVertex[v].position  = positions[v];
-                currVertex[v].texCoord  = ConvertToHalf2(&texCoord.x);
-                currVertex[v].normal    = Pack_INT_2_10_10_10_REV(normal);
-                currVertex[v].tangent   = Pack_INT_2_10_10_10_REV(tangent);
+                currVertex[v].position = positions[v];
+                currVertex[v].texCoord = ConvertFloat2ToHalf2(&texCoord.x);
+                currVertex[v].normal   = Pack_INT_2_10_10_10_REV(normal);
+                currVertex[v].tangent  = Pack_INT_2_10_10_10_REV(tangent);
             }
 
             // convert whatever joint format to rgb8u

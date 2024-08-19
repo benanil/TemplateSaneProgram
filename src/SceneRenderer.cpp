@@ -54,7 +54,8 @@ namespace SceneRenderer
     Texture     m_MLAAEdgeTex;
     Texture     m_ShadowTexture;
     Texture     m_LightingTexture;
-    Texture     m_SkyNoiseTexture;
+    Texture     m_SkyNoiseTexture; // 32x32 small noise
+    Texture     m_WhiteTexture;
 
     struct GBuffer
     {
@@ -82,6 +83,8 @@ namespace SceneRenderer
     
     // SSAO downsample uniform locations
     int dColorTex, dNormalTex, dDepthTex;
+
+    int uMLAAColorTex, uMLAAEdgeTex, uMLAAInputTex, uMLAAGodRaysTex, uMLAAAmbientOcclussionTex;
 
     struct LightUniforms
     {
@@ -115,12 +118,12 @@ namespace SceneRenderer
 namespace ShadowSettings
 {
     const int ShadowMapSize = 1 << (11 + (!IsAndroid() << 1)); // mobile 2k, pc 4k
-    float OrthoSize   = 128.0f; 
+    float OrthoSize   = 32.0f;//128.0f; 
     float NearPlane   = 1.0f;
     float FarPlane    = 192.0f;
     
     float Bias = 0.001f;
-    Vector3f OrthoOffset = {32.0f, 56.0f, 5.0f};
+    Vector3f OrthoOffset = {}; // { 32.0f, 56.0f, 5.0f }; // < bistro
 
     inline Matrix4 GetOrthoMatrix()
     {
@@ -311,6 +314,13 @@ static void GetUniformLocations()
     // shadow locations
     lShadowModel       = rGetUniformLocation(m_ShadowShader, "model");
     lShadowLightMatrix = rGetUniformLocation(m_ShadowShader, "lightMatrix");
+    
+    uMLAAColorTex   = rGetUniformLocation(m_MLAAShader, "uColorTex"); 
+    uMLAAEdgeTex    = rGetUniformLocation(m_MLAAShader, "uEdgesTex"); 
+    uMLAAGodRaysTex = rGetUniformLocation(m_MLAAShader, "uGodRaysTex"); 
+    uMLAAAmbientOcclussionTex = rGetUniformLocation(m_MLAAShader, "uAmbientOcclussion");
+
+    uMLAAInputTex = rGetUniformLocation(m_MLAAEdgeShader, "uInputTex");
 }
 
 static void CreateShaders()
@@ -432,7 +442,9 @@ void Init()
     CreateShaders();
 
     Vector2i windowStartSize;
+    Vector2i windowSmallSize;
     wGetMonitorSize(&windowStartSize.x, &windowStartSize.y);
+    windowSmallSize = { GetRBWidth(windowStartSize.x, windowStartSize.y), GetRBHeight(windowStartSize.x, windowStartSize.y) };
 
     CreateGBuffer(m_Gbuffer, windowStartSize.x, windowStartSize.y);
 
@@ -440,14 +452,13 @@ void Init()
     m_PlayerCamera.Init(windowStartSize);
 
     m_Camera = &m_PlayerCamera; // reinterpret_cast<CameraBase*>(&m_PlayerCamera); // ->Init(windowStartSize);
+    // m_Camera = &m_FreeCamera; // reinterpret_cast<CameraBase*>(&m_PlayerCamera); // ->Init(windowStartSize);
 
-    HBAOInit(GetRBWidth(windowStartSize.x, windowStartSize.y), 
-             GetRBHeight(windowStartSize.x, windowStartSize.y));
+    HBAOInit(windowSmallSize.x, windowSmallSize.y);
 
     // PostProcessingInit(windowStartSize.x, windowStartSize.y);
 
     SetupShadowRendering();
-
 
     MemsetZero(&m_defaultMaterial, sizeof(AMaterial));
     m_defaultMaterial.metallicFactor  = 1256;
@@ -455,8 +466,12 @@ void Init()
     m_defaultMaterial.diffuseColor    = 0xFCBD8733;
     m_defaultMaterial.specularColor   = 0xFCBD8733;
     m_defaultMaterial.baseColorFactor = 0xFFFFFFFF;
-    m_defaultMaterial.baseColorTexture.index = -1;
+    m_defaultMaterial.baseColorTexture.index = UINT16_MAX;
     m_defaultMaterial.GetNormalTexture().index = -1;
+
+    uint32_t whiteTexData[4 * 4];
+    FillN(whiteTexData, 4 * 4, 0xFF);
+    m_WhiteTexture = rCreateTexture(4, 4, whiteTexData, TextureType_RGBA8, TexFlags_RawData);
 
     // SSAOParams.Radius = 1.f;
     // SSAOParams.Bias = 0.2f;
@@ -793,8 +808,8 @@ static void LightingPass()
 
     rBindShader(m_DeferredPBRShader);
     {
-        Matrix4 invView = Matrix4::Inverse(m_Camera->view);
-        Matrix4 invProj = Matrix4::Inverse(m_Camera->projection);
+        Matrix4 invView = m_Camera->inverseView;
+        Matrix4 invProj = m_Camera->inverseProjection;
 
         rSetShaderValue(&sunLight.dir.x  , lSunDir, GraphicType_Vector3f);
         rSetShaderValue(&m_CharacterPos.x, lPlayerPos, GraphicType_Vector3f);
@@ -815,18 +830,20 @@ static void LightingPass()
 
     rBindFrameBuffer(m_MLAAEdgeFrameBuffer);
     rBindShader(m_MLAAEdgeShader);
-    rSetTexture(m_LightingTexture, 0, 0);
-    rRenderFullScreen();
-     
-    rBindFrameBuffer(m_PostProcessingFrameBuffer); // < uses gbuffers color attachment
-    rBindShader(m_MLAAShader);
-    rSetTexture(m_LightingTexture, 0, 0);
-    rSetTexture(m_MLAAEdgeTex, 1, 1);
+    rSetTexture(m_LightingTexture, 0, uMLAAInputTex);
     rRenderFullScreen();
 
-    // rBindFrameBuffer(m_LightingFrameBuffer);
-    // rUnbindFrameBuffer();
-    // rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
+    // does post processing as well
+    rBindFrameBuffer(m_PostProcessingFrameBuffer); // < uses gbuffers color attachment
+    rBindShader(m_MLAAShader);
+    rSetTexture(m_LightingTexture, 0, uMLAAColorTex);
+    rSetTexture(m_MLAAEdgeTex, 1, uMLAAEdgeTex);
+    rSetTexture(m_GodRaysTex, 2, uMLAAGodRaysTex);
+
+    if (IsAndroid())  rSetTexture(m_WhiteTexture, 3, uMLAAAmbientOcclussionTex);
+    else              rSetTexture(HBAOGetResult(), 3, uMLAAAmbientOcclussionTex);
+
+    rRenderFullScreen();
 }
 
 static void DrawSkybox()
@@ -843,7 +860,7 @@ static void DrawSkybox()
     rSetClockWise(false);
 }
 
-void PostProcessingPass()
+static void GodRaysPass()
 {
     Texture depthTexture = m_Gbuffer.DepthTexture;
     Vector3f sunDir = g_CurrentScene.m_SunLight.dir;
@@ -853,13 +870,14 @@ void PostProcessingPass()
 
     float angle = Abs(ACos(Dot(sunDir, camDir)));
 
-    if (angle < PI)
+    rBindFrameBuffer(m_GodRaysFB);
+
+    if (!IsAndroid() &&  angle < PI) // god rays are disabled on android
     {
         float fovRad = m_Camera->verticalFOV * DegToRad;
         float intensity = ((PI - angle) / PI);
 
         rBindShader(m_GodRaysShader);
-        rBindFrameBuffer(m_GodRaysFB);
         rSetShaderValue(intensity, 0);
         rSetShaderValue(sunScreenCoord.arr, 1, GraphicType_Vector2f);
         rSetTexture(depthTexture, 0, 2);
@@ -867,48 +885,51 @@ void PostProcessingPass()
     }
     else
     {
-        rBindFrameBuffer(m_GodRaysFB);
         rBindShader(m_BlackShader);
         rRenderFullScreen();
     }
     
-    rBindFrameBuffer(m_PostProcessingFrameBuffer); // gbuffer's color is target
-    
-    rBindShader(m_PostProcessingShader);
-    rSetTexture(m_LightingTexture, rGetUniformLocation("uLightingTex"), 0);
-    rSetTexture(m_GodRaysTex, rGetUniformLocation("uGodRays"), 1);
-    rSetTexture(HBAOGetResult(), rGetUniformLocation("uAmbientOcclussion"), 2);
-    rRenderFullScreen();
+    // rBindFrameBuffer(m_PostProcessingFrameBuffer); // gbuffer's color is target
+    // 
+    // rBindShader(m_PostProcessingShader);
+    // rSetTexture(m_LightingTexture, rGetUniformLocation("uLightingTex"), 0);
+    // rSetTexture(m_GodRaysTex, rGetUniformLocation("uGodRays"), 1);
+    // rSetTexture(HBAOGetResult(), rGetUniformLocation("uAmbientOcclussion"), 2);
+    // rRenderFullScreen();
 }
 
 void EndRendering(bool renderToBackBuffer)
 {
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
-    
+    int smallerWidth  = GetRBWidth(windowSize.x, windowSize.y);
+    int smallerHeight = GetRBHeight(windowSize.x, windowSize.y);
+
     HBAORender(m_Camera, &m_Gbuffer.DepthTexture, &m_Gbuffer.NormalTexture);
 
-    rSetViewportSize(windowSize.x, windowSize.y);
+    rSetViewportSize(smallerWidth, smallerHeight);
 
     // screen space passes, no need depth
     rSetDepthWrite(false);
     rSetDepthTest(false);
 
+    GodRaysPass();
     rBindFrameBuffer(m_LightingFrameBuffer);
     
     LightingPass(); // Deferred Lighting
-    
-    PostProcessingPass();
-    
+
     rSetDepthTest(true);
-    
+
     rBindFrameBuffer(m_Gbuffer.Buffer);
-    
+
     DrawSkybox();
     
+    rSetViewportSize(windowSize.x, windowSize.y);
     rUnbindFrameBuffer(); // < draw to backbuffer after this line
+    // rRenderFullScreen(m_LightingTexture.handle);
     rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
-    
+
+    rSetDepthTest(true);
     rSetDepthWrite(true);
 
     // char culledText[16]={};

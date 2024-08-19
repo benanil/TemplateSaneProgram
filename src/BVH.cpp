@@ -1,5 +1,3 @@
-#pragma once
-
 
 #include "include/BVH.hpp"
 #include "include/Renderer.hpp"
@@ -30,6 +28,7 @@ Tri*     g_Triangles;
 
 void InitBVH()
 {
+    if (IsAndroid()) return;
     g_Triangles = new Tri[MAX_TRIANGLES]{};
     g_BVHNodes  = new BVHNode[MAX_TRIANGLES]{};
 }
@@ -219,6 +218,7 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
 
 uint BuildBVH(SceneBundle* prefab)
 {
+    if (IsAndroid()) return 0;
     Tri* tris = g_Triangles + currTriangle;
     const Tri* triEnd = tris + MAX_TRIANGLES;
 

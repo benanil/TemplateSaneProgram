@@ -17,6 +17,7 @@
 #include "include/SceneRenderer.hpp"
 #include "include/Platform.hpp"
 
+#include "../ASTL/Math/Half.hpp"
 
 void StartAnimationSystem()
 { }
@@ -160,7 +161,7 @@ void AnimationController::SampleAnimationPose(Pose* pose, int animIdx, float nor
                 break;
             case AAnimTargetPath_Rotation:
                 Quaternion rot = QSlerp(begin, end, t);
-                pose[targetNode].rotation = QNorm(rot);// QNormEst
+                pose[targetNode].rotation = QNorm(rot); // QNormEst maybe
                 break;
         //  case AAnimTargetPath_Scale:
         //      pose[targetNode].scale = VecLerp(begin, end, t);
@@ -175,13 +176,14 @@ void AnimationController::UploadBoneMatrices()
     ASkin& skin = mPrefab->skins[0];
     Matrix4* invMatrices = (Matrix4*)skin.inverseBindMatrices;
 
+    // give this, thousands of joints it will process it rapidly!
     for (int i = 0; i < skin.numJoints; i++)
     {
         Matrix4 mat = invMatrices[i] * mBoneMatrices[skin.joints[i]];
         mat = Matrix4::Transpose(mat);
-        ConvertFloatToHalf4(mOutMatrices[i].x, (float*)&mat.r[0]);
-        ConvertFloatToHalf4(mOutMatrices[i].y, (float*)&mat.r[1]);
-        ConvertFloatToHalf4(mOutMatrices[i].z, (float*)&mat.r[2]);
+        // with AVX F16C this is single instruction! vcvtps2ph 
+        ConvertFloat8ToHalf8(mOutMatrices[i].x, &mat.m[0][0]);
+        ConvertFloat4ToHalf4(mOutMatrices[i].z, &mat.m[2][0]); // this is single instruction with it as well
     }
     
     // upload anim matrix texture to the GPU

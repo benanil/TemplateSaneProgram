@@ -78,10 +78,14 @@ const ivec3 kLeft  = ivec3(-1,  0, 0);
 // two pixels for an edge.
 const float fInvEdgeDetectionTreshold = 1.f / 32.f;
 
-layout(location = 0) out vec4 fResult;
+layout(location = 0) out lowp vec4 fResult;
 
-uniform sampler2D uColorTex;
-uniform usampler2D uEdgesTex;
+in vec2 texCoord;
+
+uniform lowp sampler2D uColorTex;
+uniform mediump usampler2D uEdgesTex;
+uniform lowp sampler2D uGodRaysTex;
+uniform lowp sampler2D uAmbientOcclussion;
 
 //-----------------------------------------------------------------------------------------
 // Utility functions
@@ -89,7 +93,7 @@ uniform usampler2D uEdgesTex;
 //--------------------------------------------------------------------------------------
 // Returns true if the colors are different
 //--------------------------------------------------------------------------------------
-bool CompareColors(float a, float b)
+bool CompareColors(lowp float a, lowp float b)
 {
 	return (abs(a - b) > fInvEdgeDetectionTreshold);
 }
@@ -97,31 +101,31 @@ bool CompareColors(float a, float b)
 //--------------------------------------------------------------------------------------
 // Check if the specified bit is set
 //--------------------------------------------------------------------------------------
-bool IsBitSet(uint Value, const uint uBitPosition)
+bool IsBitSet(mediump uint Value, const mediump uint uBitPosition)
 {
     return (Value & (1u << uBitPosition)) > 0u;
 }
 //--------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------
-uint RemoveStopBit(uint a)
+mediump uint RemoveStopBit(mediump uint a)
 {
     return a & (kStopBit - 1u);
 }
 //--------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------
-uint DecodeCountNoStopBit(uint count, uint shift)
+mediump uint DecodeCountNoStopBit(mediump uint count, mediump uint shift)
 {
     return RemoveStopBit((count >> shift) & kCountShiftMask);
 }
 //--------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------
-uint DecodeCount(uint count, uint shift)
+mediump uint DecodeCount(mediump uint count, mediump uint shift)
 {
     return (count >> shift) & kCountShiftMask;
 }
 //--------------------------------------------------------------------------------------
 
-mediump vec4 toLinear4(mediump vec4 sRGB)
+lowp vec4 toLinear4(lowp vec4 sRGB)
 {
     // https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
     return sRGB * (sRGB * (sRGB * 0.305306011 + 0.682171111) + 0.012522878);
@@ -132,26 +136,26 @@ mediump vec4 toLinear4(mediump vec4 sRGB)
 //  This code reads previous inputs and perform anti-aliasing of edges by 
 //  blending colors as required.
 //-----------------------------------------------------------------------------
-void BlendColor(uint count,
+void BlendColor(mediump uint count,
                 ivec2 pos,
                 ivec2 dir,
                 ivec2 ortho,
                 bool _inverse,
-                inout vec4 color)
+                inout lowp vec4 color)
 {
     // Only process pixel edge if it contains a stop bit
     if (IsBitSet(count, kStopBit_BitPosition + kPosCountShift) || IsBitSet(count, kStopBit_BitPosition + kNegCountShift))
     {
         // Retrieve edge length
-        uint negCount = DecodeCountNoStopBit(count, kNegCountShift);
-        uint posCount = DecodeCountNoStopBit(count, kPosCountShift);
+        mediump uint negCount = DecodeCountNoStopBit(count, kNegCountShift);
+        mediump uint posCount = DecodeCountNoStopBit(count, kPosCountShift);
 
         // Fetch color adjacent to the edge
-        vec4 adjacentcolor = toLinear4(texelFetch(uColorTex, pos + dir, 0));
+        lowp vec4 adjacentcolor = toLinear4(texelFetch(uColorTex, pos + dir, 0));
 
         if ((negCount + posCount) == 0u)
         {
-            const float weight = 1.0 / 8.0; // Arbitrary			
+            const lowp float weight = 1.0 / 8.0; // Arbitrary			
             // Cheap approximation of gamma to linear and then back again
             color = mix(color, adjacentcolor, weight);
             return;
@@ -168,10 +172,10 @@ void BlendColor(uint count,
             float midPoint  = _length / 2.f;
             float _distance = float(negCount);
 
-            const uint upperU   = 0x00u;
-            const uint risingZ  = 0x01u;
-            const uint fallingZ = 0x02u;
-            const uint lowerU   = 0x03u;
+            const mediump uint upperU   = 0x00u;
+            const mediump uint risingZ  = 0x01u;
+            const mediump uint fallingZ = 0x02u;
+            const mediump uint lowerU   = 0x03u;
 
             ///////////////////////////////////////////////////////////////////////////////////////
             // Determining what pixels to blend
@@ -194,7 +198,7 @@ void BlendColor(uint count,
             //    |xxxxxx|
             ///////////////////////////////////////////////////////////////////////////////////////
 
-            uint shape = 0x00u;
+            mediump uint shape = 0x00u;
             if (CompareColors((texelFetch(uColorTex, pos - (ortho * ivec2(int(negCount))), 0).a), 
                               (texelFetch(uColorTex, pos - (ortho * (ivec2(int(negCount) + 1))), 0).a)))
             {
@@ -229,46 +233,95 @@ void BlendColor(uint count,
 //	MLAA pixel shader for color blending.
 //	Pixel shader used in third and final phase of the algorithm
 //-----------------------------------------------------------------------------
-vec4 MLAA_BlendColor_PS(ivec2 Offset, bool bShowEdgesOnly)
+lowp vec4 MLAA_BlendColor_PS(ivec2 Offset, bool bShowEdgesOnly)
 {
-    vec4 rVal   = toLinear4(texelFetch(uColorTex, Offset, 0));
-    uint edges  = texelFetch(uEdgesTex, Offset, 0).x;
-    uint hcount = edges & 0xFFu;
-    uint vcount = (edges >> 8u) & 0xFFu;
+    lowp vec4 rVal   = toLinear4(texelFetch(uColorTex, Offset, 0));
+    mediump uint edges  = texelFetch(uEdgesTex, Offset, 0).x;
+    mediump uint hcount = edges & 0xFFu;
+    mediump uint vcount = (edges >> 8u) & 0xFFu;
     
-    if (bShowEdgesOnly) // test visualize edges
-    {
-        if ((hcount != 0u) || (vcount != 0u))
-        {
-            if ((IsBitSet(hcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(hcount, kStopBit_BitPosition + kNegCountShift)) ||
-                (IsBitSet(vcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(vcount, kStopBit_BitPosition + kNegCountShift)))
-            {
-                uint Count = 0u;
-                Count += DecodeCountNoStopBit(hcount, kNegCountShift);
-                Count += DecodeCountNoStopBit(hcount, kPosCountShift);
-                Count += DecodeCountNoStopBit(vcount, kNegCountShift);
-                Count += DecodeCountNoStopBit(vcount, kPosCountShift);
-                if (Count != 0u)
-                rVal = vec4(1, 0, 0, 1);
-            }
-        }
-    }
-    else
-    {
-        uint hcountup    =  texelFetch(uEdgesTex, Offset - kUp.xy, 0).x & 0xFFu;
-        uint vcountright = (texelFetch(uEdgesTex, Offset - kRight.xy, 0).x >> 8u) & 0xFFu;
+    // if (bShowEdgesOnly) // test visualize edges
+    // {
+    //     if ((hcount != 0u) || (vcount != 0u))
+    //     {
+    //         if ((IsBitSet(hcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(hcount, kStopBit_BitPosition + kNegCountShift)) ||
+    //             (IsBitSet(vcount, kStopBit_BitPosition + kPosCountShift) || IsBitSet(vcount, kStopBit_BitPosition + kNegCountShift)))
+    //         {
+    //             uint Count = 0u;
+    //             Count += DecodeCountNoStopBit(hcount, kNegCountShift);
+    //             Count += DecodeCountNoStopBit(hcount, kPosCountShift);
+    //             Count += DecodeCountNoStopBit(vcount, kNegCountShift);
+    //             Count += DecodeCountNoStopBit(vcount, kPosCountShift);
+    //             if (Count != 0u)
+    //             rVal = vec4(1, 0, 0, 1);
+    //         }
+    //     }
+    // }
+    // else
+    // {
+    // }
+    mediump uint hcountup    =  texelFetch(uEdgesTex, Offset - kUp.xy, 0).x & 0xFFu;
+    mediump uint vcountright = (texelFetch(uEdgesTex, Offset - kRight.xy, 0).x >> 8u) & 0xFFu;
     
-        // Blend pixel colors as required for anti-aliasing edges
-        if (hcount     != 0u) BlendColor(hcount, Offset, kUp.xy, kRight.xy, false, rVal);   // H down-up
-        if (hcountup   != 0u) BlendColor(hcountup, Offset - kUp.xy, -kUp.xy, kRight.xy, true, rVal);   // H up-down    				    
-        if (vcount     != 0u) BlendColor(vcount, Offset, kRight.xy, kUp.xy, false, rVal);   // V left-right				
-        if (vcountright!= 0u) BlendColor(vcountright, Offset - kRight.xy, -kRight.xy, kUp.xy, true, rVal);   // V right-left    			
-    }
+    // Blend pixel colors as required for anti-aliasing edges
+    if (hcount     != 0u) BlendColor(hcount, Offset, kUp.xy, kRight.xy, false, rVal);   // H down-up
+    if (hcountup   != 0u) BlendColor(hcountup, Offset - kUp.xy, -kUp.xy, kRight.xy, true, rVal);   // H up-down    				    
+    if (vcount     != 0u) BlendColor(vcount, Offset, kRight.xy, kUp.xy, false, rVal);   // V left-right				
+    if (vcountright!= 0u) BlendColor(vcountright, Offset - kRight.xy, -kRight.xy, kUp.xy, true, rVal);   // V right-left    			
 
     return rVal;
 }
 
+//------------------------------------------------------------------------
+// post processing
+vec3 ACESFilm(vec3 x)
+{
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+// https://www.shadertoy.com/view/WdjSW3
+// equivalent to reinhard tone mapping but no need to gamma correction
+vec3 CustomToneMapping(vec3 x)
+{
+    return pow(ACESFilm(x), vec3(1.0 / 2.2));
+}
+
+// https://www.shadertoy.com/view/lsKSWR
+float Vignette(vec2 uv)
+{
+    uv *= vec2(1.0) - uv.yx;   // vec2(1.0)- uv.yx; -> 1.-u.yx; Thanks FabriceNeyret !
+    return pow(uv.x * uv.y * 15.0, 0.15); // change pow for modifying the extend of the  vignette
+}
+
+// gaussian blur
+lowp float Blur5(lowp float a, lowp float b, lowp float c, lowp float d, lowp float e) 
+{
+    const lowp float Weights5[3] = float[3](6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f);
+    return Weights5[0] * a + Weights5[1] * (b + c) + Weights5[2] * (d + e);
+}
+
 void main()
 {
-    fResult.rgb = pow(MLAA_BlendColor_PS(ivec2(gl_FragCoord.xy), false).rgb, vec3(1.0 / 2.2));
+    ivec2 iTexCoord = ivec2(gl_FragCoord.xy);
+    vec3 godRays = vec3(0.8, 0.65, 0.58) * texelFetch(uGodRaysTex, iTexCoord, 0).r;
+    
+    // vertical blur
+    lowp float ao = Blur5(texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  0), 0).r,
+                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0, -1), 0).r,
+                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  1), 0).r,
+                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0, -2), 0).r,
+                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  2), 0).r);
+    // // ao *= min(albedoShadow.w * 3.0, 1.0);
+    // ao += 0.05;
+    // ao = min(1.0, ao * 1.125);
+
+    vec3 mlaa = MLAA_BlendColor_PS(iTexCoord, false).rgb;
+    fResult.rgb = CustomToneMapping(mlaa) * Vignette(texCoord) * ao;
+    fResult.rgb += godRays;
+    fResult.a = 1.0;
 }

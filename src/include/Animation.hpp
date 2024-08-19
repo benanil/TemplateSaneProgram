@@ -163,8 +163,3 @@ struct AnimationController
 void CreateAnimationController(Prefab* prefab, AnimationController* animController, bool humanoid = true, int lowerBodyStart = 58);
 
 void ClearAnimationController(AnimationController* animController);
-
-// does nothing for now
-[[maybe_unused]] void StartAnimationSystem();
-
-[[maybe_unused]] void DestroyAnimationSystem();

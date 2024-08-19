@@ -21,16 +21,21 @@ endforeach()
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.
 add_library(game SHARED
         ../../../../../src/PlatformAndroid.cpp
+        ../../../../../src/Animation.cpp
+        ../../../../../src/AssetManager.cpp
         ../../../../../src/SaneProgram.cpp
         ../../../../../src/Renderer.cpp
-        ../../../../../src/Scene.cpp
-        ../../../../../src/Animation.cpp
-        ../../../../../src/CharacterController.cpp
-        ../../../../../src/SceneRenderer.cpp
         ../../../../../src/UI.cpp
         ../../../../../src/Menu.cpp
-        ../../../../../src/AssetManager.cpp
+        ../../../../../src/PlatformWindows.cpp
+        # src/VulkanBackend.cpp
+        ../../../../../src/Scene.cpp
+        ../../../../../src/SceneRenderer.cpp
+        ../../../../../src/HBAO.cpp
         ../../../../../src/Texture.cpp
+        ../../../../../src/CharacterController.cpp
+        ../../../../../src/BVH.cpp
+        ../../../../../src/TLAS.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp
         ../../../../../ASTL/Additional/GLTFParser.cpp
         ../../../../../External/zstddeclib.c) # facebook zstd decompressor

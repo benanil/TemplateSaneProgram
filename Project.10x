@@ -43,6 +43,7 @@
 			<Define>__AVX2__</Define>
 			<Define>AX_SUPPORT_SSE</Define>
 			<Define>ASTL_MULTI_THREADING</Define>
+			<Define>AX_SUPPORT_AVX2</Define>
 		</Defines>
 		<ConfigProperties>
 			<ConfigAndPlatform>

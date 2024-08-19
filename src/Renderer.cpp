@@ -7,6 +7,7 @@
 *        Anilcan Gulkaya 2023 anilcangulkaya7@gmail.com github @benanil         *
 ********************************************************************************/
 
+#define DEBUG
 
 #ifdef __ANDROID__
     #include <game-activity/native_app_glue/android_native_app_glue.h>
@@ -17,8 +18,11 @@
         #define CHECK_GL_ERROR() if (GLenum error = glGetError()) {\
                                 __android_log_print(ANDROID_LOG_FATAL, "AX-GL_ERROR", "%s -line:%i message: %s", \
                                     __FILE__, __LINE__, GetGLErrorString(error)); ASSERT(0);}
+        #define CHECK_GL_WARNING() if (GLenum error = glGetError()) \
+                                  { __android_log_print(ANDROID_LOG_WARNING, "warning message: %s", GetGLErrorString(error));  }
     #else
         #define CHECK_GL_ERROR()
+        #define CHECK_GL_WARNING()
     #endif
 
     #define STBI_NO_STDIO
@@ -90,7 +94,7 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_R8             , GL_RED,             GL_UNSIGNED_BYTE                 }, // TextureType_R8            = 0,
     {   GL_R8_SNORM       , GL_RED,             GL_BYTE                          }, // TextureType_R8_SNORM      = 1,
     {   GL_R16F           , GL_RED,             GL_HALF_FLOAT                    }, // TextureType_R16F          = 2,
-    {   GL_R16_SNORM      , GL_RED,             GL_SHORT                         }, // TextureType_R16_SNORM     = 3         
+    {   0x8F98            , GL_RED,             GL_SHORT                         }, // TextureType_R16_SNORM     = 3
     {   GL_R32F           , GL_RED,             GL_FLOAT                         }, // TextureType_R32F          = 4,
     {   GL_R8UI           , GL_RED_INTEGER ,    GL_UNSIGNED_BYTE                 }, // TextureType_R8UI          = 5,
     {   GL_R16UI          , GL_RED_INTEGER ,    GL_UNSIGNED_SHORT                }, // TextureType_R16UI         = 6,
@@ -100,7 +104,7 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RG16F          , GL_RG,              GL_HALF_FLOAT                    }, // TextureType_RG16F         = 10,
     {   GL_RG32F          , GL_RG,              GL_FLOAT                         }, // TextureType_RG32F         = 11,
     {   GL_RG16UI         , GL_RG_INTEGER,      GL_UNSIGNED_SHORT                }, // TextureType_RG16UI        = 12,
-    {   GL_RG16_SNORM     , GL_RG_INTEGER,      GL_SHORT                         }, // TextureType_RG16_SNORM    = 13,
+    {   0x8F99            , GL_RG_INTEGER,      GL_SHORT                         }, // TextureType_RG16_SNORM    = 13,
     {   GL_RG32UI         , GL_RG_INTEGER,      GL_UNSIGNED_INT                  }, // TextureType_RG32UI        = 14,
     {   GL_RGB8           , GL_RGB,             GL_UNSIGNED_BYTE                 }, // TextureType_RGB8          = 15,
     {   GL_SRGB8          , GL_RGB,             GL_UNSIGNED_BYTE                 }, // TextureType_SRGB8         = 16,
@@ -124,8 +128,8 @@ static const TextureFormat TextureFormatTable[] =
     {   GL_RGBA8UI        , GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE                 }, // TextureType_RGBA8UI       = 34,
     {   GL_RGBA16UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT                }, // TextureType_RGBA16UI      = 35,
     {   GL_RGBA32UI       , GL_RGBA_INTEGER,    GL_UNSIGNED_INT                  }, // TextureType_RGBA32UI      = 36,
-    {   GL_RGBA16_SNORM   , GL_RGBA        ,    GL_SHORT                         }, // TextureType_RGBA16SNORM   = 37,
-    {}, {}, {}, {},{},                                                              // Compressed Formats
+    {   0x8F9B            , GL_RGBA        ,    GL_SHORT                         }, // TextureType_RGBA16SNORM   = 37,
+    {}, {}, {}, {},                                                                 // Compressed Formats
     { GL_DEPTH24_STENCIL8  , GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8            }, // TextureType_DepthStencil24 = 42,
     { GL_DEPTH32F_STENCIL8 , GL_DEPTH_STENCIL,   GL_DEPTH32F_STENCIL8            }, // TextureType_DepthStencil32 = 43,
 };
@@ -142,6 +146,59 @@ const char* GetGLErrorString(GLenum error)
         default: AX_ERROR("Unknown GL error: %d\n", error);
     }
     return "UNKNOWN_GL_ERROR";
+}
+
+uint8_t rTextureTypeToBytesPerPixel(TextureType type)
+{
+    const uint8_t map[64] = {
+        1, // TextureType_R8             = 0,
+        1, // TextureType_R8_SNORM       = 1,
+        2, // TextureType_R16F           = 2,
+        2, // TextureType_R16_SNORM      = 3,
+        4, // TextureType_R32F           = 4,
+        1, // TextureType_R8UI           = 5,
+        2, // TextureType_R16UI          = 6,
+        4, // TextureType_R32UI          = 7,
+        2, // TextureType_RG8            = 8,
+        2, // TextureType_RG8_SNORM      = 9,
+        4, // TextureType_RG16F          = 10,
+        8, // TextureType_RG32F          = 11,
+        4, // TextureType_RG16UI         = 12,
+        4, // TextureType_RG16_SNORM     = 13,
+        8, // TextureType_RG32UI         = 14,
+        4, // TextureType_RGB8           = 15,
+        4, // TextureType_SRGB8          = 16,
+        4, // TextureType_RGB8_SNORM	 = 17,
+        4, // TextureType_R11F_G11F_B10  = 18,
+        4, // TextureType_RGB9_E5        = 19,
+        2, // TextureType_RGB565         = 20,
+        8, // TextureType_RGB16F         = 21,
+        16,// TextureType_RGB32F         = 22,
+        4, // TextureType_RGB8UI         = 23,
+        8, // TextureType_RGB16UI        = 24,
+        16,// TextureType_RGB32UI        = 25,
+        4, // TextureType_RGBA8          = 26,
+        4, // TextureType_SRGB8_ALPHA8   = 27,
+        4, // TextureType_RGBA8_SNORM    = 28,
+        2, // TextureType_RGB5_A1        = 29,
+        2, // TextureType_RGBA4          = 30,
+        4, // TextureType_RGB10_A2       = 31,
+        8, // TextureType_RGBA16F        = 32,
+        16,// TextureType_RGBA32F        = 33,
+        4, // TextureType_RGBA8UI        = 34,
+        8, // TextureType_RGBA16UI       = 35,
+        16,// TextureType_RGBA32UI       = 36,
+        8, // TextureType_RGBA16_SNORM   = 37,
+        // Compressed Formats
+        1,// TextureType_CompressedR    = 38, // < actually 0.5 with bc1
+        1,// TextureType_CompressedRG   = 39,
+        1,// TextureType_CompressedRGB  = 40,
+        1,// TextureType_CompressedRGBA = 41,
+        // Depth Formats
+        3,// TextureType_DepthStencil24 = 42,
+        4// TextureType_DepthStencil32 = 43
+    };
+    return map[type];
 }
 
 void rCopyTexture(Texture dst, Texture src)
@@ -291,11 +348,14 @@ Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, 
     TextureFormat format = TextureFormatTable[type];
     glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, format.internalFormat, width, height, depth);
     glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width, height, depth, format.format, format.type, data);
+    
+    uint64_t bytesPerPixel = (uint64_t)rTextureTypeToBytesPerPixel(type);
 
     if (views) for (int i = 0; i < depth; i++)
     {
         glGenTextures(1, &views[i].handle);
         glTextureView(views[i].handle, GL_TEXTURE_2D, texture.handle, format.internalFormat, 0, 1, i, 1);
+        
         glBindTexture(GL_TEXTURE_2D, views[i].handle);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -732,7 +792,7 @@ void rSetShaderValue(const void* value, int location, GraphicType type)
             ASSERT(0 && "Shader set value Graphic type invalid. type:");
             break;
     }
-    CHECK_GL_WARNING();
+    // CHECK_GL_WARNING();
 }
 
 void rSetMaterial(AMaterial* material)

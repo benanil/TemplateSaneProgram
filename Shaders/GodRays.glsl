@@ -22,7 +22,7 @@ void main()
     const float Weight   = 0.587;// 0.587;
     
     vec2 deltaTexCoord = (texCoord - uSunPos);
-    deltaTexCoord *= 1.0f / NUM_SAMPLES * Density;
+    deltaTexCoord *= 1.0f / float(NUM_SAMPLES) * Density;
     
     float godRaysColor = 0.0; 
     

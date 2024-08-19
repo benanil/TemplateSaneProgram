@@ -1,6 +1,4 @@
 
-#extension GL_ARB_shading_language_packing : enable
-
 // per character textures
 uniform highp usampler2D dataTex; // ivec2 uint32 = half2:size, rgba8:color
 

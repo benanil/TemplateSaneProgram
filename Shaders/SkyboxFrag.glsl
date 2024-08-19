@@ -86,10 +86,12 @@ void main()
     if (sundot > 999.0) sun *= 1.0 + min(sqr(sundot-999.0), 1.0);// make sun more visible
     skyCol += sun;
     
+    #ifndef __ANDROID__
     // clouds
     float t = time * 0.1 + 10.0;
     float den = fbm(vec2(p.x - t, p.y - t));
     skyCol = mix(skyCol, cloudCol, smoothstep(.4, .8, den));
+    #endif
     
     // horizon
     skyCol = mix(skyCol, 0.68 * vec3(.418, .394, .372), invYSqr);

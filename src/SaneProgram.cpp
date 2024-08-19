@@ -15,7 +15,10 @@
 #include "include/TLAS.hpp"
 
 #include "../ASTL/String.hpp"
+#include "../ASTL/Math/Half.hpp"
 #include "../ASTL/Additional/Profiler.hpp"
+
+#include <stdio.h>
 
 static PrefabID MainScenePrefab = 0;
 static PrefabID AnimatedPrefab = 0;
@@ -57,8 +60,8 @@ int AXStart()
     g_CurrentScene.Init();
     InitBVH();
 
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -81,7 +84,6 @@ int AXStart()
     // very good font that has lots of icons: http://www.quivira-font.com/
     uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
     MemsetZero(&characterController, sizeof(CharacterController));
-    StartAnimationSystem();
     Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
     characterController.Start(paladin);
 
@@ -139,7 +141,7 @@ void AXLoop(bool canRender)
     CameraBase* camera = SceneRenderer::GetCamera();
     Scene* currentScene = &g_CurrentScene;
 
-    std::thread raycastThread(CastRay);
+    // std::thread raycastThread(CastRay);
     
     // draw when we are playing game, don't render when using pause menu to save power
     if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
@@ -184,7 +186,7 @@ void AXLoop(bool canRender)
 
     uRender(); // < user interface end 
     
-    raycastThread.join();
+    // raycastThread.join();
     EndAndPrintProfile();
     
     // RenderScene(&FBXScene);
@@ -197,7 +199,6 @@ void AXExit()
     DestroyBVH();
     g_CurrentScene.Destroy();
     characterController.Destroy();
-    DestroyAnimationSystem();
     uDestroy();
     SceneRenderer::Destroy();
 }

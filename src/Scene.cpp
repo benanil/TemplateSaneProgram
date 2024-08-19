@@ -17,7 +17,7 @@ const int SceneVersion = 0;
 
 void Scene::Init()
 {
-    m_SunAngle = -0.32f;
+    m_SunAngle = -0.16f; // -0.32f;
 }
 
 void Scene::Destroy()

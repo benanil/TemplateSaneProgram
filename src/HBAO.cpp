@@ -74,12 +74,12 @@ static int mWidth, mHeight;
 static int mQuarterWidth, mQuarterHeight;
 
 // Adjustables
-static float mIntensity          = 2.0f;
+static float mIntensity          = 1.3f;
 static float mBias               = 0.1f;
-static float mRadius             = 2.14f;
+static float mRadius             = 1.94f;
 static float mBlurSharpness      = 30.0f;
-static float mMattersToViewSpace = 1.2f;
-static bool  mIsOpen = true;
+static float mMattersToViewSpace = 2.0f;
+static bool  mIsOpen = !IsAndroid();
 
 // Uniform Locations
 static int uHBAODataLoc;
@@ -169,6 +169,7 @@ static void InitFrameBuffers(int width, int height)
 
 void HBAOInit(int width, int height)
 {
+    if (IsAndroid()) return;
     // Init shaders
     mLinearizeDepthSH  = rImportFullScreenShader("Shaders/LinearizeDepth.glsl");
     mReinterleaveSH    = rImportFullScreenShader("Shaders/HBAOReinterleave.glsl");
@@ -386,16 +387,9 @@ void HBAOEdit(Vector2f pos, int* CurrElement, float textPadding)
         
     pos.y += textPadding;
     uSetElementFocused(*CurrElement == 8);
-    if (uFloatField("Blur Sharpness", pos, &mBlurSharpness, 0.0f, 100.0f, 0.01f))
-    {
-        *CurrElement = 8;
-    }
-    
-    pos.y += textPadding;
-    uSetElementFocused(*CurrElement == 9);
     if (uCheckBox("SSAO", &mIsOpen, pos, true))
     {
-        *CurrElement = 9;
+        *CurrElement = 8;
     }
 
     // uSprite(MakeVec2(40.0f, 750.0f), MakeVec2(500.0f, 250.0f), &mBlurResultTX);

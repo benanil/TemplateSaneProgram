@@ -11,6 +11,7 @@
 #include "../../ASTL/Additional/GLTFParser.hpp"
 #include "../../ASTL/Common.hpp"
 #include "../../ASTL/Math/Vector.hpp"
+#include "../../ASTL/Math/Half.hpp"
 #include "../../ASTL/Math/SIMDVectorMath.hpp"
 
 #ifdef __ANDROID__  
@@ -119,7 +120,9 @@ struct GPUMesh
         const char* bytePtr = (const char*)vertices;
         bytePtr += stride * index + sizeof(Vector3f) + sizeof(uint) + sizeof(uint); // skip normal and tangent
         uint32_t uvPacked = *(uint32_t *)bytePtr;
-        return ConvertToFloat2(uvPacked); // VecLoad(bytePtr);
+        Vector2f result;
+        ConvertHalf2ToFloat2(result.arr, uvPacked); // VecLoad(bytePtr);
+        return result;
     }
 };
 
@@ -299,6 +302,8 @@ enum DepthType_ {
 typedef int DepthType;
 
 void rUnpackAlignment(int n);
+
+uint8_t rTextureTypeToBytesPerPixel(TextureType type);
 
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags = TexFlags_None);

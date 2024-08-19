@@ -19,7 +19,7 @@ set(SOURCES
     ASTL/Additional/GLTFParser.cpp
     ASTL/Additional/OBJParser.cpp
     ASTL/Additional/Profiler.cpp
-    External/vulkan/shVulkan.c
+    # External/vulkan/shVulkan.c
 
     src/Animation.cpp
     src/AssetManager.cpp
@@ -28,7 +28,7 @@ set(SOURCES
     src/UI.cpp
     src/Menu.cpp
     src/PlatformWindows.cpp
-    src/VulkanBackend.cpp
+    # src/VulkanBackend.cpp
     src/Scene.cpp
     src/SceneRenderer.cpp
     src/HBAO.cpp

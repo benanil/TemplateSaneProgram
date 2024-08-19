@@ -37,8 +37,8 @@ uniform vec4 uJitter;
 uniform mat4 uView;
 
 // tweakables
-const float NUM_STEPS = 4;
-const float NUM_DIRECTIONS = 8; // texRandom/uJitter initialization depends on this
+const float NUM_STEPS = 4.0;
+const float NUM_DIRECTIONS = 8.0; // texRandom/uJitter initialization depends on this
 
 uniform mat4 uData;
 float RadiusToScreen       ; // radius

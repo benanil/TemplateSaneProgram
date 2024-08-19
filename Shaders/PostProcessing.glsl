@@ -64,8 +64,10 @@ void main()
                           texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0, -2), 0).r,
                           texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  2), 0).r);
 
+    // ao *= min(albedoShadow.w * 3.0, 1.0);
     ao += 0.05;
     ao = min(1.0, ao * 1.125);
+
     result.rgb = CustomToneMapping(albedoShadow.rgb) * Vignette(texCoord) * ao;
     result.rgb += godRays;
     result.a = 1.0;

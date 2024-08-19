@@ -22,7 +22,7 @@ uniform int uHasNormalMap;
 
 float ShadowLookup(vec4 loc, vec2 offset)
 {
-    vec2 texmapscale = 1.0 / textureSize(uShadowMap, 0);
+    vec2 texmapscale = 1.0 / vec2(textureSize(uShadowMap, 0));
     texmapscale *= 1.35; // increase spread area, to make shadow softer 
     return textureProj(uShadowMap, vec4(loc.xy + offset * texmapscale * loc.w, loc.z, loc.w));
 }

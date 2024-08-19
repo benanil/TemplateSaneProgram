@@ -10,7 +10,7 @@ layout(location = 5) in lowp    vec4  aWeights;
 uniform mat4 model;
 uniform mat4 lightMatrix;
 uniform int uHasAnimation;
-uniform highp sampler2D uAnimTex;
+uniform mediump sampler2D uAnimTex;
 
 void main() 
 {

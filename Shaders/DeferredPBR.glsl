@@ -1,5 +1,4 @@
 
-#extension GL_ARB_shading_language_packing : enable
 
 #ifdef __ANDROID__
 #define MEDIUMP_FLT_MAX    65504.0
@@ -95,7 +94,7 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v,
     float16 D = D_GGX(ndh, roughness);
     float16 V = V_SmithGGXCorrelated_Fast(roughness, ndv, ndl) * ao; // V_Neubelt(ndv, ndl); 
     float16 F = F_Schlick(ldh, albedo, metallic);
-    float16 Fr = F * (D * V) * 0.42f; // specular BRDF
+    float16 Fr = F * (D * V); // specular BRDF
     half3   Fd = (albedo / PI);
     return Fd + Fr; //albedo * ndl + (r * 0.08);
 }

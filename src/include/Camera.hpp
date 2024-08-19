@@ -1,6 +1,8 @@
 #pragma once
 
+
 #include "../../ASTL/Math/Matrix.hpp"
+#include "../../ASTL/Algorithms.hpp"
 #include "Platform.hpp"
 
 // #define FREE_CAMERA
@@ -37,6 +39,9 @@ struct CameraBase
 
     void InitBase(Vector2i xviewPortSize)
     {
+        verticalFOV = 65.0f;
+        nearClip = 0.1f;
+        farClip = 700.0f;
         viewportSize = xviewPortSize;
         position = MakeVec3(5.5f, 4.0f, 0.0f);
         wGetMonitorSize(&monitorSize.x, &monitorSize.y);
@@ -98,9 +103,6 @@ struct FreeCamera : public CameraBase
 {
     void Init(Vector2i xviewPortSize) override
     {
-        verticalFOV = 65.0f;
-        nearClip = 0.1f;
-        farClip = 700.0f;
         pitch = 1.0f, yaw = -160.0f , senstivity = 10.0f;
         CalculateLook();
 
@@ -181,19 +183,14 @@ struct PlayerCamera : public CameraBase
 {
     void Init(Vector2i xviewPortSize) override
     {
-        verticalFOV = 65.0f;
-        nearClip = 0.1f;
-        farClip = 700.0f;
         senstivity = 0.1f;
         angle = Vector2f::Zero(); //MakeVec2(3.12f, 0.0f);
         viewportSize = xviewPortSize;
         targetPos = MakeVec3(0.0f, 0.0f, 0.0f);
-        wGetMonitorSize(&monitorSize.x, &monitorSize.y);
         
         Front = Vector3f::Normalize(MakeVec3(Sin(angle.x * TwoPI), 0.0f, Cos(angle.x * TwoPI)));
-        
-        RecalculateView();
-        RecalculateProjection(xviewPortSize.x, xviewPortSize.y);
+
+        InitBase(xviewPortSize);
     }
 
     void RecalculateView() override
