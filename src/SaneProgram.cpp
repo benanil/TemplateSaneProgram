@@ -109,6 +109,8 @@ static bool pauseMenuOpened = false;
 
 static void CastRay()
 {
+    if (!GetMousePressed(MouseButton_Left)) return;
+
     Prefab* sphere = g_CurrentScene.GetPrefab(SpherePrefab);
     CameraBase* camera = SceneRenderer::GetCamera();
     Scene* currentScene = &g_CurrentScene;
@@ -141,7 +143,7 @@ void AXLoop(bool canRender)
     CameraBase* camera = SceneRenderer::GetCamera();
     Scene* currentScene = &g_CurrentScene;
 
-    // std::thread raycastThread(CastRay);
+    std::thread raycastThread(CastRay);
     
     // draw when we are playing game, don't render when using pause menu to save power
     if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
@@ -183,10 +185,9 @@ void AXLoop(bool canRender)
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
 
-
     uRender(); // < user interface end 
     
-    // raycastThread.join();
+    raycastThread.join();
     EndAndPrintProfile();
     
     // RenderScene(&FBXScene);

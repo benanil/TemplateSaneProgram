@@ -17,7 +17,7 @@
 
 #include "../ASTL/Additional/Profiler.hpp"
 
-const size_t MAX_TRIANGLES = 6'000'000; // more than bistro num triangles * 2
+const size_t MAX_TRIANGLES = 3'200'000; // 6'000'000; // more than bistro num triangles * 2
 const size_t MAX_BVHNODES = MAX_TRIANGLES;
 
 static uint totalNodesUsed = 0;
@@ -28,7 +28,6 @@ Tri*     g_Triangles;
 
 void InitBVH()
 {
-    if (IsAndroid()) return;
     g_Triangles = new Tri[MAX_TRIANGLES]{};
     g_BVHNodes  = new BVHNode[MAX_TRIANGLES]{};
 }
@@ -218,7 +217,6 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
 
 uint BuildBVH(SceneBundle* prefab)
 {
-    if (IsAndroid()) return 0;
     Tri* tris = g_Triangles + currTriangle;
     const Tri* triEnd = tris + MAX_TRIANGLES;
 

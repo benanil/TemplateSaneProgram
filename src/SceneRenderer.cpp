@@ -469,17 +469,9 @@ void Init()
     m_defaultMaterial.baseColorTexture.index = UINT16_MAX;
     m_defaultMaterial.GetNormalTexture().index = -1;
 
-    uint32_t whiteTexData[4 * 4];
-    FillN(whiteTexData, 4 * 4, 0xFF);
-    m_WhiteTexture = rCreateTexture(4, 4, whiteTexData, TextureType_RGBA8, TexFlags_RawData);
-
-    // SSAOParams.Radius = 1.f;
-    // SSAOParams.Bias = 0.2f;
-    // SSAOParams.PowerExponent = 1.5f;
-    // SSAOParams.Blur.Enable = true;
-    // SSAOParams.Blur.Radius = GFSDK_SSAO_BLUR_RADIUS_4;
-    // SSAOParams.Blur.SharpnessProfile.Enable = true;
-    // SSAOParams.Blur.Sharpness = 6.f;
+    uint8_t whiteTexData[8 * 8];
+    FillN(whiteTexData, (uint8_t)0xff, 8 * 8);
+    m_WhiteTexture = rCreateTexture(8, 8, whiteTexData, TextureType_R8, TexFlags_ClampToEdge);
 }
 
 void BeginRendering()

@@ -311,11 +311,11 @@ void main()
     vec3 godRays = vec3(0.8, 0.65, 0.58) * texelFetch(uGodRaysTex, iTexCoord, 0).r;
     
     // vertical blur
-    lowp float ao = Blur5(texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  0), 0).r,
-                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0, -1), 0).r,
-                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  1), 0).r,
-                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0, -2), 0).r,
-                          texelFetch(uAmbientOcclussion, iTexCoord + ivec2(0,  2), 0).r);
+    lowp float ao = Blur5(textureOffset(uAmbientOcclussion, texCoord, ivec2(0,  0)).r,
+                          textureOffset(uAmbientOcclussion, texCoord, ivec2(0, -1)).r,
+                          textureOffset(uAmbientOcclussion, texCoord, ivec2(0,  1)).r,
+                          textureOffset(uAmbientOcclussion, texCoord, ivec2(0, -2)).r,
+                          textureOffset(uAmbientOcclussion, texCoord, ivec2(0,  2)).r);
     // // ao *= min(albedoShadow.w * 3.0, 1.0);
     // ao += 0.05;
     // ao = min(1.0, ao * 1.125);
