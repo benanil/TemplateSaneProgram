@@ -1,3 +1,4 @@
+// not used in anywhere for now
 layout(location = 0) out vec4 result;
 
 in vec2 texCoord;

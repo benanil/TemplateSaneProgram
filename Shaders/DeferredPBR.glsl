@@ -40,8 +40,8 @@ uniform lowp  sampler2D uAmbientOclussionTex; // < ambient occlusion
 uniform highp   vec3 uPlayerPos;
 uniform mediump vec3 uSunDir;
 
-uniform highp mat4 uInvView;
-uniform highp mat4 uInvProj;
+uniform highp vec3 uViewPos;
+uniform highp mat4 uInvViewProj;
 
 const float PI = 3.1415926535;
 
@@ -102,11 +102,9 @@ half3 Lighting(half3 albedo, half3 l, half3 n, half3 v,
 vec3 WorldSpacePosFromDepthBuffer()
 {
     float depth = texture(uDepthMap, texCoord).r;
-    vec2 uv = texCoord * 2.0 - 1.0;
-    vec4 vsPos = uInvProj * vec4(uv, depth * 2.0 - 1.0, 1.0);
-    vsPos /= vsPos.w;
-    vsPos = uInvView * vsPos;
-    return vsPos.xyz;
+    vec4 clipspace = vec4(texCoord * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+    vec4 WsPos = uInvViewProj * clipspace;
+    return WsPos.xyz / WsPos.w;
 }
 
 // Direction vector from the surface point to the viewer (normalized).
@@ -155,7 +153,7 @@ void main()
 
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
-    half3 viewRay = GetViewRay(uInvView[3].xyz, pos); // viewPos: uInvView[3].xyz
+    half3 viewRay = GetViewRay(uViewPos, pos); // viewPos: uInvView[3].xyz
     const half3 sunColor = vec3(1.0); // 0.982f, 0.972, 0.966);
     
     half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, 
@@ -180,6 +178,7 @@ void main()
                              metallic, roughness, ao) * mIntensity;
         shadow = min(shadow + mIntensity, 1.0);
     }
+
     for (int i = 0; i < uNumSpotLights; i++)
     {
         LightInstance spotLight = uSpotLights[i];

@@ -1,3 +1,28 @@
+/********************************************************************************
+*    Purpose:                                                                   *
+*        Render's the given scene                                               *
+*                                                                               *
+*        Shadow Pass (render's depth)                                           *
+*                                                                               *
+*        GBuffer Pass                                                           *
+*            Outputs: normal, albedo, metallic, roughness, Shadow               *
+*            does skinned vertex animations as well                             *
+*                                                                               *
+*        Deferred Lighting (directional, point, spot lights)                    *
+*           output: rgb is color, a is luminance for MLAA calculation           *
+*           we reconstruct view space position from depth here                  *
+*                                                                               *
+*        God Rays (optional)                                                    *
+*                                                                               *
+*        Morphological Anti Aliasing (MLAA)                                     *
+*           Note that we are doing Tone Mapping, Vignette in MLAA               *
+*           we are composing god rays ambient oclussion as well                 *
+*                                                                               *
+*        Procedural Skybox                                                      *
+*           Cloulds with FBM noise (not active with mobile devices)             * 
+*    Author:                                                                    *
+*        Anilcan Gulkaya 2024 anilcangulkaya7@gmail.com github @benanil         *
+********************************************************************************/
 
 #include "include/SceneRenderer.hpp"
 
@@ -10,7 +35,6 @@
 #include "include/UI.hpp"
 #include "include/HBAO.hpp"
 #include "include/BVH.hpp"
-// #include "include/PostProcessing.hpp"
 
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
@@ -35,7 +59,6 @@ namespace SceneRenderer
     Shader      m_GBufferShaderAlpha;
     Shader      m_SkyboxShader;
     Shader      m_DepthCopyShader;
-    Shader      m_PostProcessingShader; // tone-mapping, vignate
     Shader      m_MLAAEdgeShader;
     Shader      m_MLAAShader;
     Shader      m_GodRaysShader;
@@ -74,7 +97,7 @@ namespace SceneRenderer
         lModel , lHasAnimation, lSunDirG, lViewProj, lAnimTex;
 
     // Deferred uniform locations
-    int lSunDir, lPlayerPos, lAlbedoTex, lRoughnessTex, lNormalTex, lDepthMap, lInvView, lInvProj, lAmbientOclussionTex;
+    int lSunDir, lPlayerPos, lAlbedoTex, lRoughnessTex, lNormalTex, lDepthMap, lInvViewProj, lViewPos, lAmbientOclussionTex;
 
     // Skybox uniform locations
     int lSkyTime, lSkySun, lSkyViewPos, lSkyViewProj, lSkyNoiseTex;
@@ -251,7 +274,6 @@ void WindowResizeCallback(int width, int height)
 
     DeleteGBuffer(m_Gbuffer);
     HBAOResize(smallerWidth, smallerHeight);
-    // PostProcessingResize(width, height);
     CreateGBuffer(m_Gbuffer, width, height);
     m_RedrawShadows = 2;
     m_ShouldReRender = true;
@@ -282,8 +304,8 @@ static void GetUniformLocations()
     lRoughnessTex               = rGetUniformLocation("uRoughnessTex");
     lNormalTex                  = rGetUniformLocation("uNormalMetallicTex");
     lDepthMap                   = rGetUniformLocation("uDepthMap");
-    lInvView                    = rGetUniformLocation("uInvView");
-    lInvProj                    = rGetUniformLocation("uInvProj");
+    lInvViewProj                = rGetUniformLocation("uInvViewProj");
+    lViewPos                    = rGetUniformLocation("uViewPos");
     lNumPointLights             = rGetUniformLocation("uNumPointLights");
     lNumSpotLights              = rGetUniformLocation("uNumSpotLights");
     lAmbientOclussionTex        = rGetUniformLocation("uAmbientOclussionTex");
@@ -351,7 +373,6 @@ static void CreateShaders()
 
     m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");
 
-    m_PostProcessingShader = rImportFullScreenShader("Shaders/PostProcessing.glsl");
     m_GodRaysShader = rImportFullScreenShader("Shaders/GodRays.glsl");
 
     m_MLAAEdgeShader = rImportFullScreenShader("Shaders/MLAA_Edge.glsl");
@@ -369,7 +390,6 @@ static void CreateShaders()
 static void DeleteShaders()
 {
     rDeleteShader(m_BlackShader);
-    rDeleteShader(m_PostProcessingShader);
     rDeleteShader(m_GodRaysShader);
     rDeleteShader(m_GBufferShader);
     rDeleteShader(m_DeferredPBRShader);
@@ -457,8 +477,6 @@ void Init()
     // m_Camera = &m_FreeCamera; // reinterpret_cast<CameraBase*>(&m_PlayerCamera); // ->Init(windowStartSize);
 
     HBAOInit(windowSmallSize.x, windowSmallSize.y);
-
-    // PostProcessingInit(windowStartSize.x, windowStartSize.y);
 
     SetupShadowRendering();
 
@@ -550,10 +568,31 @@ static void RenderShadows(Prefab* prefab, DirectionalLight& sunLight, AnimationC
     {
         AScene defaultScene = prefab->scenes[prefab->defaultSceneIndex];
         int numNodes = defaultScene.numNodes;
-        for (int i = 0; i < numNodes; i++)
+
+        static Queue<int> nodeQueue = {};
+        nodeQueue.Enqueue(hasScene ? defaultScene.nodes[0] : 0);
+
+        while (!nodeQueue.Empty())
         {
-            RenderShadowOfNode(&prefab->nodes[defaultScene.nodes[i]], prefab, Matrix4::Identity());
+            int nodeIndex = nodeQueue.Dequeue();
+            ANode* node = prefab->nodes + nodeIndex;
+            Matrix4 model = prefab->globalNodeTransforms[nodeIndex];
+            rSetShaderValue(model.GetPtr(), lShadowModel, GraphicType_Matrix4);
+
+            AMesh* mesh = prefab->meshes + node->index;
+            if (node->type == 0 && node->index != -1)
+            for (int i = 0; i < mesh->numPrimitives; i++)
+            {
+                APrimitive* primitive = mesh->primitives + i;
+                rRenderMeshIndexOffset(prefab->bigMesh, primitive->numIndices, primitive->indexOffset); 
+            }
+            
+            for (int i = 0; i < node->numChildren; i++)
+            {
+                nodeQueue.Enqueue(node->children[i]);
+            }
         }
+        nodeQueue.Reset(); // reset without deallocating
     }
 }
 
@@ -673,7 +712,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         rSetTexture(animSystem->mMatrixTex, 4, lAnimTex);
     }
         
-    Queue<int> nodeQueue = {};
+    static Queue<int> nodeQueue = {};
     nodeQueue.Enqueue(hasScene ? defaultScene.nodes[0] : 0);
 
     while (!nodeQueue.Empty())
@@ -683,16 +722,16 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         Matrix4 model = prefab->globalNodeTransforms[nodeIndex]; // Matrix4::PositionRotationScale(node.translation, node.rotation, node.scale) * parentMat;
 
         // if node is not mesh skip (camera or empty node)
-        AMesh mesh = prefab->meshes[node.index];
+        AMesh* mesh = prefab->meshes + node.index;
 
         // Random::PCG pcg;
         // Random::PCGInitialize(pcg, 0x675890u);
         // Vector3f corners[8];
 
         if (node.type == 0 && node.index != -1)
-        for (int j = 0; j < mesh.numPrimitives; ++j)
+        for (int j = 0; j < mesh->numPrimitives; ++j)
         {
-            APrimitive& primitive = mesh.primitives[j];
+            APrimitive& primitive = mesh->primitives[j];
             bool hasMaterial = prefab->materials && primitive.material != UINT16_MAX;
             AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
             
@@ -725,7 +764,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
 
             // if alpha blended render after all meshes for performance
             if (shouldDraw && isAlpha) {
-                m_DelayedAlphaCutoffs.EmplaceBack(&mesh.primitives[j], model);
+                m_DelayedAlphaCutoffs.EmplaceBack(mesh->primitives + j, model);
                 shouldDraw = false;
             }
 
@@ -733,6 +772,13 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
                 // SetMaterial(&material);
                 rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
                 RenderPrimitive(material, prefab, primitive);
+
+                if (material.doubleSided)
+                {
+                    rSetClockWise(true);
+                    RenderPrimitive(material, prefab, primitive);
+                    rSetClockWise(false);
+                }
             }
         }
 
@@ -741,6 +787,8 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
             nodeQueue.Enqueue(node.children[i]);
         }
     }
+
+    nodeQueue.Reset(); // reset without deallocating
 
     // Render alpha masked meshes after opaque meshes, to make sure performance is good. (early z)
     if (m_DelayedAlphaCutoffs.Size() > 0)
@@ -763,6 +811,12 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
 
             rSetShaderValue(alphaCutoff.value.GetPtr(), lModel, GraphicType_Matrix4); // < set model matrix
             RenderPrimitive(material, prefab, primitive);
+            if (material.doubleSided)
+            {
+                rSetClockWise(true);
+                RenderPrimitive(material, prefab, primitive);
+                rSetClockWise(false);
+            }
         }
         m_DelayedAlphaCutoffs.Resize(0);
     }
@@ -804,14 +858,13 @@ static void LightingPass()
 
     rBindShader(m_DeferredPBRShader);
     {
-        Matrix4 invView = m_Camera->inverseView;
-        Matrix4 invProj = m_Camera->inverseProjection;
+        Matrix4 invViewProj = Matrix4::Inverse(m_Camera->view * m_Camera->projection);
 
         rSetShaderValue(&sunLight.dir.x  , lSunDir, GraphicType_Vector3f);
         rSetShaderValue(&m_CharacterPos.x, lPlayerPos, GraphicType_Vector3f);
 
-        rSetShaderValue(invView.GetPtr(), lInvView, GraphicType_Matrix4);
-        rSetShaderValue(invProj.GetPtr(), lInvProj, GraphicType_Matrix4);
+        rSetShaderValue(invViewProj.GetPtr(), lInvViewProj, GraphicType_Matrix4);
+        rSetShaderValue(m_Camera->position.arr, lViewPos, GraphicType_Vector3f);
 
         rSetTexture(m_Gbuffer.ColorTexture    , 0, lAlbedoTex);
         rSetTexture(m_Gbuffer.RoughnessTexture, 1, lRoughnessTex);
@@ -823,7 +876,6 @@ static void LightingPass()
         rSetShaderValue(g_CurrentScene.m_SpotLights.Size(), lNumSpotLights);
         rRenderFullScreen();
     }
-
 
     rBindFrameBuffer(m_MLAAEdgeFrameBuffer);
     rBindShader(m_MLAAEdgeShader);
@@ -868,7 +920,7 @@ static void GodRaysPass()
 
     rBindFrameBuffer(m_GodRaysFB);
 
-    if (!IsAndroid() &&  angle < PI) // god rays are disabled on android
+    if (!IsAndroid() && angle < PI) // god rays are disabled on android
     {
         float fovRad = m_Camera->verticalFOV * DegToRad;
         float intensity = ((PI - angle) / PI);
@@ -884,14 +936,6 @@ static void GodRaysPass()
         rBindShader(m_BlackShader);
         rRenderFullScreen();
     }
-    
-    // rBindFrameBuffer(m_PostProcessingFrameBuffer); // gbuffer's color is target
-    // 
-    // rBindShader(m_PostProcessingShader);
-    // rSetTexture(m_LightingTexture, rGetUniformLocation("uLightingTex"), 0);
-    // rSetTexture(m_GodRaysTex, rGetUniformLocation("uGodRays"), 1);
-    // rSetTexture(HBAOGetResult(), rGetUniformLocation("uAmbientOcclussion"), 2);
-    // rRenderFullScreen();
 }
 
 void EndRendering(bool renderToBackBuffer)
@@ -901,13 +945,15 @@ void EndRendering(bool renderToBackBuffer)
     int smallerWidth  = GetRBWidth(windowSize.x, windowSize.y);
     int smallerHeight = GetRBHeight(windowSize.x, windowSize.y);
 
-    HBAORender(m_Camera, &m_Gbuffer.DepthTexture, &m_Gbuffer.NormalTexture);
-
-    rSetViewportSize(smallerWidth, smallerHeight);
-
     // screen space passes, no need depth
     rSetDepthWrite(false);
     rSetDepthTest(false);
+
+    HBAOLinearizeDepth(&m_Gbuffer.DepthTexture, m_Camera->nearClip, m_Camera->farClip);
+
+    HBAORender(m_Camera, &m_Gbuffer.DepthTexture, &m_Gbuffer.NormalTexture);
+
+    rSetViewportSize(smallerWidth, smallerHeight);
 
     GodRaysPass();
     rBindFrameBuffer(m_LightingFrameBuffer);

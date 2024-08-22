@@ -54,6 +54,8 @@ void PrintPerfFn(const char* text)
     uPopFloat(ufTextScale);
 }
 
+static void SetDoubleSidedMaterials(Prefab* mainScene);
+
 // return 1 if success
 int AXStart()
 {
@@ -84,7 +86,7 @@ int AXStart()
     // very good font that has lots of icons: http://www.quivira-font.com/
     uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
     MemsetZero(&characterController, sizeof(CharacterController));
-    Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab);
+    Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab); 
     characterController.Start(paladin);
 
     Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
@@ -93,7 +95,7 @@ int AXStart()
 
     // VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
     // mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
-    
+
     mainScene->tlas = new TLAS(mainScene);
     mainScene->tlas->Build();
 
@@ -101,15 +103,42 @@ int AXStart()
  
     wSetWindowResizeCallback(WindowResizeCallback);
     wSetKeyPressCallback(KeyPressCallback);
-    
+
+    SetDoubleSidedMaterials(mainScene);
     return 1;
 }
 
+static void SetDoubleSidedMaterials(Prefab* mainScene)
+{
+    for (int i = 0; i < mainScene->numMaterials; i++)
+    {
+        mainScene->materials[i].doubleSided = false;
+    }
+
+    for (int i = 0; i < mainScene->numNodes; i++)
+    {
+        ANode* node = mainScene->nodes + i;
+    
+        if (!StringCompare("Bistro_Research_Exterior_Linde_Tree_Large_linde_tree_large_4051", node->name))
+        {
+            AMesh* mesh = mainScene->meshes + node->index;
+            for (int j = 0; j < mesh->numPrimitives; j++)
+            {
+                APrimitive* primitive = mesh->primitives + j;
+                AMaterial* material = mainScene->materials + primitive->material;
+                material->doubleSided = true;
+            }
+            break;
+        }
+    }
+}
+
 static bool pauseMenuOpened = false;
+static const char* selectedNodeName = nullptr;
 
 static void CastRay()
 {
-    // if (!GetMousePressed(MouseButton_Left)) return;
+    if (!GetMousePressed(MouseButton_Left)) return;
 
     Prefab* sphere = g_CurrentScene.GetPrefab(SpherePrefab);
     CameraBase* camera = SceneRenderer::GetCamera();
@@ -123,8 +152,18 @@ static void CastRay()
     
     // static char rayDistTxt[16] = {};
     // float rayDist = 999.0f;
-    if (rayResult.t != RayacastMissDistance) {
-        sphere->globalNodeTransforms[0].r[3] = rayResult.position;
+    if (rayResult.t != RayacastMissDistance) 
+    {
+        ANode* node = bistro->nodes + rayResult.nodeIndex;
+        selectedNodeName = node->name;
+        AMesh* mesh = bistro->meshes + node->index;
+        for (int i = 0; i < mesh->numPrimitives; i++)
+        {
+            APrimitive* primitive = mesh->primitives + i;
+            AMaterial* material = bistro->materials + primitive->material;
+            printf("test %i", material->doubleSided);
+        }
+        // sphere->globalNodeTransforms[0].r[3] = rayResult.position;
     }
     // FloatToString(rayDistTxt, rayDist);
     // uDrawText(rayDistTxt, rayPos);
@@ -169,7 +208,7 @@ void AXLoop(bool canRender)
         {
             RenderPrefab(currentScene, MainScenePrefab, nullptr);
             RenderPrefab(currentScene, AnimatedPrefab, animController);
-            RenderPrefab(currentScene, SpherePrefab, nullptr);
+            // RenderPrefab(currentScene, SpherePrefab, nullptr);
         }
         bool renderToBackBuffer = !pauseMenuOpened;
         SceneRenderer::EndRendering(renderToBackBuffer);
@@ -184,6 +223,10 @@ void AXLoop(bool canRender)
     pauseMenuOpened = ShowMenu(); // < from Menu.cpp
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
+    
+    uPushFloat(ufTextScale, 0.5f);
+    uText(selectedNodeName, perfTxtPos);
+    uPopFloat(ufTextScale);
 
     uRender(); // < user interface end 
     

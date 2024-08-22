@@ -57,8 +57,7 @@ static FrameBuffer mHBAOResultFB;
 static FrameBuffer mBlurFB;
 
 static Texture mLinearDepthTX;
-
-Texture mBlurResultTX;
+static Texture mBlurResultTX;
 static Texture mHBAOResultTX;
 
 static Texture mDepth2D;
@@ -89,6 +88,11 @@ static int uJitterLoc;
 Texture* HBAOGetResult()
 {
     return &mBlurResultTX;
+}
+
+Texture* HBAOGetLinearDepth()
+{
+    return &mLinearDepthTX;
 }
 
 static void InitRandom()
@@ -225,7 +229,8 @@ void SetHBAOData(float fov)
     mHBAOData.projInfo.w = -1.0f / pb; // B/N
 }
 
-static void Linearize(Texture* depthTex, float near, float far)
+// just linearizes the depth, no hbao spesific thing
+void HBAOLinearizeDepth(Texture* depthTex, float near, float far)
 {
     rSetViewportSize(mWidth, mHeight);
     rBindFrameBuffer(mLinearDepthFB);
@@ -320,13 +325,8 @@ void HBAORender(CameraBase* camera, Texture* depthTex, Texture* normalTex)
         return;
     }
 
-    rSetDepthTest(false);
-    rSetDepthWrite(false);
-
     SetHBAOData(camera->verticalFOV);
 
-    Linearize(depthTex, camera->nearClip, camera->farClip);
-    
     Deinterleave();
     
     HBAOPass(camera, normalTex);

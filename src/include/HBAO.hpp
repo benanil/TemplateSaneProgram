@@ -6,11 +6,15 @@ struct CameraBase;
 
 void HBAOInit(int width, int height);
 void HBAOResize(int width, int height);
-void HBAORender(CameraBase* camera, Texture* depthTex, Texture* normalTex);
+
+void HBAOLinearizeDepth(Texture* depthTex, float near, float far); // < first call this
+void HBAORender(CameraBase* camera, Texture* depthTex, Texture* normalTex); // then call this
+
 void HBAOEdit(Vector2f pos, int* currElement, float textPadding);
 void HBAODestroy();
 
 Texture* HBAOGetResult();
 
+Texture* HBAOGetLinearDepth();
 
 

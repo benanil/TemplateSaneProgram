@@ -9,7 +9,7 @@ uniform highp sampler2D depthTexture;
 // ze = (zNear * zFar) / (zFar - zb * (zFar - zNear)); 
 void main() 
 {
-    float depth = textureOffset(depthTexture, texCoord, ivec2(0, 0)).r;
+    float depth = texture(depthTexture, texCoord).r;
     result = clipInfo.x / (clipInfo.z - depth * clipInfo.y);
 }
 
