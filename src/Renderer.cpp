@@ -224,7 +224,11 @@ Texture rCreateDepthTexture(int width, int height, DepthType depthType)
     texture.type   = TextureType_DepthStencil24; // < ??
     glGenTextures(1, &texture.handle);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16 + depthType, width, height);
+
+    GLenum glType = depthType == DepthType_32 ? GL_DEPTH_COMPONENT32F : 
+                                                GL_DEPTH_COMPONENT16 + depthType;
+
+    glTexStorage2D(GL_TEXTURE_2D, 1, glType, width, height);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -324,7 +328,7 @@ Texture rCreateTexture(int width, int height, void* data, TextureType type, TexF
     return texture;
 }
 
-Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, void* data, TextureType type, TexFlags flags)
+Texture rCreateTexture2DArray(int width, int height, int depth, void* data, TextureType type, TexFlags flags)
 {
     Texture texture;
     glGenTextures(1, &texture.handle);
@@ -349,20 +353,6 @@ Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, 
     glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, format.internalFormat, width, height, depth);
     glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width, height, depth, format.format, format.type, data);
     
-    uint64_t bytesPerPixel = (uint64_t)rTextureTypeToBytesPerPixel(type);
-
-#ifndef __ANDROID__
-    if (views) for (int i = 0; i < depth; i++)
-    {
-        glGenTextures(1, &views[i].handle);
-        glTextureView(views[i].handle, GL_TEXTURE_2D, texture.handle, format.internalFormat, 0, 1, i, 1);
-        glBindTexture(GL_TEXTURE_2D, views[i].handle);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
-#endif
-
     texture.width  = width;
     texture.height = height;
     texture.depth  = depth;

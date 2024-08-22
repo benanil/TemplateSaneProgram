@@ -320,7 +320,7 @@ static void ImportShaders()
 
     ScopedText spriteDrawVertTxt   = ReadAllText("Shaders/SingleQuadVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     const char* textureDrawFragTxt = AX_SHADER_VERSION_PRECISION() R"(
-    in vec2 vTexCoord; out vec4 color; uniform sampler2D tex;
+    layout(location = 0) in mediump vec2 vTexCoord; out vec4 color; uniform sampler2D tex;
     void main() {
         color = vec4(texture(tex, vec2(vTexCoord.x, 1.0-vTexCoord.y)).rgb, 1.0);
     })";

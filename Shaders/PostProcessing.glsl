@@ -21,13 +21,7 @@ vec3 ACESFilm(vec3 x)
 // equivalent to reinhard tone mapping but no need to gamma correction
 vec3 CustomToneMapping(vec3 x)
 {
-    #ifdef __ANDROID__
-    // reinhard approximation no need gamma correction
-    x += 0.0125;
-    return x / (x + 0.15) * 0.88;
-    #else
     return pow(ACESFilm(x), vec3(1.0 / 2.2));
-    #endif
 }
 
 // https://www.shadertoy.com/view/lsKSWR

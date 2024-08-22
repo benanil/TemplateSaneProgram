@@ -1,9 +1,10 @@
-layout(location = 0) out vec4 Result;
 
 // fwidth() is not supported by default on OpenGL ES. Enable it.
-#if defined(GL_OES_standard_derivatives)
-  #extension GL_OES_standard_derivatives : enable
-#endif
+// #if defined(GL_OES_standard_derivatives)
+// #extension GL_OES_standard_derivatives : enable
+// #endif
+
+layout(location = 0) out vec4 Result;
 
 uniform lowp sampler2D atlas;
 in mediump vec2 vTexCoord;

@@ -277,7 +277,7 @@ void TLAS::TraverseBVH(const Ray& ray, uint rootNode, Triout* out)
         {
             // Vector3f corners[8];
             // GetAABBCorners(corners, node->minv, node->maxv);
-            // DrawLineCube(corners, ~0);
+            // rDrawLineCube(corners, ~0);
 
             // #pragma omp parallel for schedule(dynamic)
             for (uint i = leftFirst; i < leftFirst + instanceCount; ++i)

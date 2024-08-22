@@ -60,8 +60,8 @@ int AXStart()
     g_CurrentScene.Init();
     InitBVH();
 
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -109,7 +109,7 @@ static bool pauseMenuOpened = false;
 
 static void CastRay()
 {
-    if (!GetMousePressed(MouseButton_Left)) return;
+    // if (!GetMousePressed(MouseButton_Left)) return;
 
     Prefab* sphere = g_CurrentScene.GetPrefab(SpherePrefab);
     CameraBase* camera = SceneRenderer::GetCamera();
@@ -189,7 +189,7 @@ void AXLoop(bool canRender)
     
     raycastThread.join();
     EndAndPrintProfile();
-    
+
     // RenderScene(&FBXScene);
     // todo material system
 }

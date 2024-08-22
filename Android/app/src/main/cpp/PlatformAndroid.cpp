@@ -5,13 +5,13 @@
 ********************************************************************/
 #if defined(__ANDROID__)
 
-#include "include/Platform.hpp"
-#include "include/Renderer.hpp"
+#include "../../../../../src/include/Platform.hpp"
+#include "../../../../../src/include/Renderer.hpp"
 
-#include "../ASTL/Array.hpp"
-#include "../ASTL/Memory.hpp"
-#include "../ASTL/Algorithms.hpp" // IntToString
-#include "../ASTL/IO.hpp" // IntToString
+#include "../../../../../ASTL/Array.hpp"
+#include "../../../../../ASTL/Memory.hpp"
+#include "../../../../../ASTL/Algorithms.hpp" // IntToString
+#include "../../../../../ASTL/IO.hpp" // IntToString
 
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
@@ -27,8 +27,8 @@
 #define MA_NO_GENERATION
 #define MA_ENABLE_AAUDIO
 
-#include "../External/miniaudio.h"
-#include "../External/swappyGL.h"
+#include "../../../../../External/miniaudio.h"
+#include "../../../../../External/swappyGL.h"
 
 constexpr int NumTouch = 4;
 

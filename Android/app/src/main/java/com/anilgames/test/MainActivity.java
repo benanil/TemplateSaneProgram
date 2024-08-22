@@ -1,18 +1,19 @@
-package com.anilgames.game;
+package com.anilgames.test;
 
-import android.os.Build;
 import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.View;
-import android.widget.Toast;
 
 import com.google.androidgamesdk.GameActivity;
 
+import java.util.Objects;
+
 public class MainActivity extends GameActivity {
     static {
-        System.loadLibrary("game");
+        System.loadLibrary("test");
     }
+
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
@@ -24,24 +25,19 @@ public class MainActivity extends GameActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        getSupportActionBar().hide(); // hide tab bar
+        Objects.requireNonNull(getSupportActionBar()).hide(); // hide tab bar
         super.onCreate(savedInstanceState);
     }
 
-    public void vibrate(long miliseconds) {
+    public void vibrate() {
         // Obtain the Vibrator system service
-        Vibrator vibrator = (Vibrator) this.getSystemService(this.VIBRATOR_SERVICE);
+        Vibrator vibrator = (Vibrator) this.getSystemService(VIBRATOR_SERVICE);
         if (vibrator == null || !vibrator.hasVibrator()) {
             return; // No vibrator present, exit early
         }
 
         // Vibrate according to the API level
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE));
-        } else {
-            // Deprecated in API 26 (Oreo) but still works
-            vibrator.vibrate(300);
-        }
+        vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE));
     }
 
     private void hideSystemUi() {

@@ -41,6 +41,7 @@ namespace SceneRenderer
     Shader      m_GodRaysShader;
     Shader      m_DeferredPBRShader;
     Shader      m_BlackShader;
+    Shader      m_GTAOShader;
 
     GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
     
@@ -118,12 +119,12 @@ namespace SceneRenderer
 namespace ShadowSettings
 {
     const int ShadowMapSize = 1 << (11 + (!IsAndroid() << 1)); // mobile 2k, pc 4k
-    float OrthoSize   = 32.0f;//128.0f; 
+    float OrthoSize   = 128.0f; // sponza 32.0f
     float NearPlane   = 1.0f;
     float FarPlane    = 192.0f;
     
     float Bias = 0.001f;
-    Vector3f OrthoOffset = {}; // { 32.0f, 56.0f, 5.0f }; // < bistro
+    Vector3f OrthoOffset = { 32.0f, 56.0f, 5.0f };  // < bistro, sponza is 0,0,0
 
     inline Matrix4 GetOrthoMatrix()
     {
@@ -360,7 +361,7 @@ static void CreateShaders()
         "layout(location = 0) out float result;"
         "void main() { result = 0.0; }"
     );
-    
+
     GetUniformLocations();
 }
 
@@ -820,6 +821,7 @@ static void LightingPass()
         rRenderFullScreen();
     }
 
+
     rBindFrameBuffer(m_MLAAEdgeFrameBuffer);
     rBindShader(m_MLAAEdgeShader);
     rSetTexture(m_LightingTexture, 0, uMLAAInputTex);
@@ -831,9 +833,8 @@ static void LightingPass()
     rSetTexture(m_LightingTexture, 0, uMLAAColorTex);
     rSetTexture(m_MLAAEdgeTex, 1, uMLAAEdgeTex);
     rSetTexture(m_GodRaysTex, 2, uMLAAGodRaysTex);
-
-    if (IsAndroid())  rSetTexture(m_WhiteTexture, 3, uMLAAAmbientOcclussionTex);
-    else              rSetTexture(HBAOGetResult(), 3, uMLAAAmbientOcclussionTex);
+    
+    rSetTexture(HBAOGetResult(), 3, uMLAAAmbientOcclussionTex);
 
     rRenderFullScreen();
 }

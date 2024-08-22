@@ -1,6 +1,6 @@
 
 layout(location = 0) out vec4 out_Color;
-uniform sampler2DArray texResultsArray;
+uniform lowp sampler2DArray texResultsArray;
 
 //----------------------------------------------------------------------------------
 

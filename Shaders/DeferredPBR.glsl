@@ -1,6 +1,6 @@
 
 
-#ifdef __ANDROID__
+#ifdef ANDROID
 #define MEDIUMP_FLT_MAX    65504.0
 #define saturateMediump(x) min(x, MEDIUMP_FLT_MAX)
 #else

@@ -31,7 +31,7 @@ float ShadowLookup(vec4 loc, vec2 offset)
 float ShadowCalculation()
 {
     const vec4 minShadow = vec4(0.25);
-    #ifdef __ANDROID__
+    #ifdef ANDROID
     vec2 offset;
     const vec2 mixer = vec2(1.037, 1.137);
     offset.x = fract(dot(vTexCoords.xy, mixer)) * 0.5;
@@ -71,7 +71,7 @@ void main()
 
     mediump vec3  normal = vTBN[2];
 
-    #if !defined(__ANDROID__)
+    #if !defined(ANDROID)
     if (uHasNormalMap == 1 )
     {
         // obtain normal from normal map in range [0,1]

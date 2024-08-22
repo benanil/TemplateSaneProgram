@@ -3,7 +3,7 @@
 layout(location = 0) out float out_Color[8];
 
 uniform vec4 info; 
-uniform sampler2D texLinearDepth;
+uniform highp sampler2D texLinearDepth;
 
 void main() 
 {

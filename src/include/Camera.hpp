@@ -14,7 +14,7 @@ struct CameraBase
     
     float verticalFOV = 65.0f;
     float nearClip = 0.1f;
-    float farClip = 800.0f;
+    float farClip = 700.0f;
 
     Vector2i viewportSize, monitorSize;
 

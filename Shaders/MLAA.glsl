@@ -316,6 +316,7 @@ void main()
                           textureOffset(uAmbientOcclussion, texCoord, ivec2(0,  1)).r,
                           textureOffset(uAmbientOcclussion, texCoord, ivec2(0, -2)).r,
                           textureOffset(uAmbientOcclussion, texCoord, ivec2(0,  2)).r);
+    // ao = ao * ao * ao;
     // // ao *= min(albedoShadow.w * 3.0, 1.0);
     // ao += 0.05;
     // ao = min(1.0, ao * 1.125);

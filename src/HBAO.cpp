@@ -32,7 +32,7 @@ struct HBAOData
 
     float AOMultiplier;
     float PowExponent;
-    Vector2f Offset; // float(i % 4) + 0.5f, float(i / 4) + 0.5f
+    Vector2f Offset; // float(i % 4) + 0.5f, float(i / 4) + 0.5f // not used
 };
 
 static HBAOData mHBAOData;
@@ -62,11 +62,9 @@ Texture mBlurResultTX;
 static Texture mHBAOResultTX;
 
 static Texture mDepth2D;
-static Texture mDepthViews[RANDOM_ELEMENTS];
-
 static Texture mResult2D;
 
-static xyzw mHBAORandom[RANDOM_ELEMENTS * MAX_SAMPLES];
+static xyzw mHBAORandom[RANDOM_ELEMENTS];
 
 static bool mInitialized = false;
 
@@ -79,7 +77,7 @@ static float mBias               = 0.1f;
 static float mRadius             = 1.94f;
 static float mBlurSharpness      = 30.0f;
 static float mMattersToViewSpace = 2.0f;
-static bool  mIsOpen = !IsAndroid();
+static bool mIsOpen = !IsAndroid();
 
 // Uniform Locations
 static int uHBAODataLoc;
@@ -101,7 +99,7 @@ static void InitRandom()
     uint64_t xoro[2];
     Xoroshiro128PlusInit(xoro);
 
-    for(int i = 0; i < RANDOM_ELEMENTS * MAX_SAMPLES; i++)
+    for(int i = 0; i < RANDOM_ELEMENTS; i++)
     {
         float Rand1 = (float)NextDouble01(Xoroshiro128Plus(xoro));
         float Rand2 = (float)NextDouble01(Xoroshiro128Plus(xoro));
@@ -146,7 +144,7 @@ static void InitFrameBuffers(int width, int height)
     else {
         DeleteTextures();
     }
-
+    
     mLinearDepthTX = rCreateTexture(width, height, nullptr, TextureType_R32F, TexFlags_RawData);
     mHBAOResultTX  = rCreateTexture(width, height, nullptr, TextureType_R8  , TexFlags_RawData);
     mBlurResultTX  = rCreateTexture(width, height, nullptr, TextureType_R8  , TexFlags_RawData);
@@ -163,13 +161,12 @@ static void InitFrameBuffers(int width, int height)
     rFrameBufferAttachColor(mBlurResultTX, 0);
     rFrameBufferCheck();
 
-    mDepth2D  = rCreateTexture2DArray(mDepthViews, mQuarterWidth, mQuarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R32F, TexFlags_RawData);
-    mResult2D = rCreateTexture2DArray(nullptr, mQuarterWidth, mQuarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R8, TexFlags_RawData);
+    mDepth2D  = rCreateTexture2DArray(mQuarterWidth, mQuarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R32F, TexFlags_RawData);
+    mResult2D = rCreateTexture2DArray(mQuarterWidth, mQuarterHeight, RANDOM_ELEMENTS, nullptr, TextureType_R8, TexFlags_RawData);
 }
 
 void HBAOInit(int width, int height)
 {
-    if (IsAndroid()) return;
     // Init shaders
     mLinearizeDepthSH  = rImportFullScreenShader("Shaders/LinearizeDepth.glsl");
     mReinterleaveSH    = rImportFullScreenShader("Shaders/HBAOReinterleave.glsl");
@@ -234,8 +231,8 @@ static void Linearize(Texture* depthTex, float near, float far)
     rBindFrameBuffer(mLinearDepthFB);
     rBindShader(mLinearizeDepthSH);
     Vector3f clipInfo = { near * far, far - near, far };
-    rSetShaderValue(clipInfo.arr, 0, GraphicType_Vector3f);
-    rSetTexture(depthTex->handle, 0, 1);
+    rSetShaderValue(clipInfo.arr, rGetUniformLocation("clipInfo"), GraphicType_Vector3f);
+    rSetTexture(depthTex->handle, 0, rGetUniformLocation("depthTexture"));
     rRenderFullScreen();
 }
 
@@ -255,7 +252,7 @@ static void Deinterleave()
     rSetViewportSize(mQuarterWidth, mQuarterHeight);
     rBindFrameBuffer(mDeinterleaveFB);
     rBindShader(mDeinterleaveSH);
-    rSetTexture(mLinearDepthTX, 0, 1);
+    rSetTexture(mLinearDepthTX, 0, rGetUniformLocation("texLinearDepth"));
 
     for(int i = 0; i < RANDOM_ELEMENTS; i += NUM_MRT)
     {
@@ -265,11 +262,11 @@ static void Deinterleave()
             mHBAOData.InvFullResolution.x,
             mHBAOData.InvFullResolution.y 
         };
-        rSetShaderValue(&info.x, 0, GraphicType_Vector4f);
+        rSetShaderValue(&info.x, rGetUniformLocation("info"), GraphicType_Vector4f);
 
         for(int layer = 0; layer < NUM_MRT; layer++)
         {
-            rFrameBufferAttachColor(mDepthViews[i + layer], layer);
+            rFrameBufferAttachColorFrom2DArray(mDepth2D, layer, i + layer);
         }
         rRenderFullScreen();
     }
@@ -288,8 +285,8 @@ static void HorizontalBiliteralBlur()
 {
     rBindShader(mBlurShader);
     rBindFrameBuffer(mBlurFB);
-    rSetTexture(mHBAOResultTX , 0, 0);
-    rSetTexture(mLinearDepthTX, 1, 1);
+    rSetTexture(mHBAOResultTX , 0, rGetUniformLocation("aoSource"));
+    rSetTexture(mLinearDepthTX, 1, rGetUniformLocation("texLinearDepth"));
     rRenderFullScreen();
 }
 
@@ -302,12 +299,12 @@ static void HBAOPass(CameraBase* camera, Texture* normalTex)
     rSetTexture(*normalTex, 1, uTexViewNormalLoc);
     
     rSetShaderValue(&mHBAOData, uHBAODataLoc, GraphicType_Matrix4);
+    rSetTexture2DArray(mDepth2D, 0, uTexLinearDepthLoc);
 
     for(int i = 0; i < RANDOM_ELEMENTS; i++)
     {
         mHBAORandom[i].w = float(i);
         rSetShaderValue(&mHBAORandom[i].x, uJitterLoc, GraphicType_Vector4f);
-        rSetTexture(mDepthViews[i], 0, uTexLinearDepthLoc);
         rFrameBufferAttachColorFrom2DArray(mResult2D, 0, i);
         rRenderFullScreen();
     }

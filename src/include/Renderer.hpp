@@ -19,7 +19,7 @@
                                       "precision highp float;\n"       \
                                       "precision mediump sampler2D;\n" \
                                       "precision mediump int;\n"       \
-                                      "#define __ANDROID__ 1\n"        \
+                                      "#define ANDROID 1\n"        \
                                       "bool IsAndroid() { return true; }\n"
 #else
 #define AX_SHADER_VERSION_PRECISION() "#version 430 core \n"          \
@@ -308,7 +308,7 @@ uint8_t rTextureTypeToBytesPerPixel(TextureType type);
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags = TexFlags_None);
 
-Texture rCreateTexture2DArray(Texture* views, int width, int height, int depth, void* data, TextureType type, TexFlags flags = TexFlags_None);
+Texture rCreateTexture2DArray(int width, int height, int depth, void* data, TextureType type, TexFlags flags = TexFlags_None);
 
 Texture rCreateDepthTexture(int width, int height, DepthType depthType);
 

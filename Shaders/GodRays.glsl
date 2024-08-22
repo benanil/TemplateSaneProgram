@@ -7,7 +7,7 @@ uniform float uIntensity;
 uniform vec2 uSunPos;
 uniform sampler2D uDepthMap;
 
-#define NUM_SAMPLES 60
+#define NUM_SAMPLES 80
 
 float EaseOut(float x) { 
     float r = 1.0f - x;
@@ -33,7 +33,8 @@ void main()
     {     
         // Step sample location along ray.
         mTexCoord -= deltaTexCoord;
-        float hasSun = float(distance(mTexCoord, uSunPos) < 0.1);
+        vec2 diff = mTexCoord - uSunPos;
+        float hasSun = float(dot(diff, diff) < 0.01);
         float hasSky = float(texture(uDepthMap, mTexCoord).r > .9992);
         
         float _sample  = 0.75 * hasSun * hasSky + 0.04 * hasSky;

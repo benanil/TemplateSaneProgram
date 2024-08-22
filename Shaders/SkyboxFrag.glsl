@@ -25,7 +25,7 @@ float noise(in vec2 uv)
                mix(lt, rt, f.x), f.y);
 }
 
-#ifdef __ANDROID__
+#ifdef ANDROID
 #define OCTAVES 3
 #else
 #define OCTAVES 8
@@ -41,7 +41,7 @@ float fbm(in vec2 uv)
         amplitude *= .5;
         uv *= 2.;
     }
-    #ifdef __ANDROID__
+    #ifdef ANDROID
     value *= 1.15;
     #endif
     return value;
@@ -86,7 +86,7 @@ void main()
     if (sundot > 999.0) sun *= 1.0 + min(sqr(sundot-999.0), 1.0);// make sun more visible
     skyCol += sun;
     
-    #ifndef __ANDROID__
+    #ifndef ANDROID
     // clouds
     float t = time * 0.1 + 10.0;
     float den = fbm(vec2(p.x - t, p.y - t));

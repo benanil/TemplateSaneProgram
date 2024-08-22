@@ -31,16 +31,17 @@ layout(location = 0) out float result;
 
 in vec2 texCoord;
 
-uniform sampler2D uTexLinearDepth;
+uniform highp sampler2DArray uTexLinearDepth;
 uniform sampler2D uTexNormal;
 uniform vec4 uJitter;
 uniform mat4 uView;
+uniform mat4 uData;
 
 // tweakables
 const float NUM_STEPS = 4.0;
 const float NUM_DIRECTIONS = 8.0; // texRandom/uJitter initialization depends on this
 
-uniform mat4 uData;
+// bottom values from uData
 float RadiusToScreen       ; // radius
 float R2                   ; // 1.0 / radius
 float NegInvR2             ; // radius * radius
@@ -60,7 +61,8 @@ vec3 UVToView(vec2 uv, float eye_z)
 
 vec3 FetchQuarterResViewPos(vec2 UV)
 {
-    float ViewDepth = textureLod(uTexLinearDepth, UV, 0).x;
+    float depthLayerIndex = uJitter.w;
+    float ViewDepth = texture(uTexLinearDepth, vec3(UV, depthLayerIndex)).x;
     return UVToView(UV, ViewDepth);
 }
 
@@ -98,12 +100,12 @@ float ComputeCoarseAO(vec2 FullResUV, float RadiusPixels, vec3 ViewPosition, vec
     RadiusPixels /= 4.0;
 
     // Divide by NUM_STEPS+1 so that the farthest samples are not fully attenuated
-    float StepSizePixels = RadiusPixels / (NUM_STEPS + 1);
+    float StepSizePixels = RadiusPixels / (NUM_STEPS + 1.0);
 
     const float Alpha = 2.0 * M_PI / NUM_DIRECTIONS;
     float AO = 0.0;
 
-    for (float DirectionIndex = 0; DirectionIndex < NUM_DIRECTIONS; ++DirectionIndex)
+    for (float DirectionIndex = 0.0; DirectionIndex < NUM_DIRECTIONS; DirectionIndex += 1.0)
     {
         float Angle = Alpha * DirectionIndex;
 
@@ -113,7 +115,7 @@ float ComputeCoarseAO(vec2 FullResUV, float RadiusPixels, vec3 ViewPosition, vec
         // Jitter starting sample within the first step
         float RayPixels = (Rand.z * StepSizePixels + 1.0);
 
-        for (float StepIndex = 0; StepIndex < NUM_STEPS; ++StepIndex)
+        for (float StepIndex = 0.0; StepIndex < NUM_STEPS; StepIndex += 1.0)
         {
             vec2 SnappedUV = round(RayPixels * Direction) * InvQuarterResolution + FullResUV;
             vec3 S = FetchQuarterResViewPos(SnappedUV);
@@ -146,7 +148,7 @@ void main()
     vec3 ViewPosition = FetchQuarterResViewPos(uv);
 
     vec3 ViewNormal = texelFetch(uTexNormal, ivec2(base), 0).xyz * 2.0 - 1.0;
-         ViewNormal = normalize(mat3(uView) * -ViewNormal);
+    ViewNormal = normalize(mat3(uView) * -ViewNormal);
 
     // Compute projection of disk of radius control.R into screen space
     float RadiusPixels = RadiusToScreen / ViewPosition.z;

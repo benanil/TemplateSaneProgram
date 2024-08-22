@@ -17,7 +17,7 @@
 
 #include "../ASTL/Additional/Profiler.hpp"
 
-const size_t MAX_TRIANGLES = 3'200'000; // 6'000'000; // more than bistro num triangles * 2
+const size_t MAX_TRIANGLES = 3'800'000; // 6'000'000; // more than bistro num triangles * 2
 const size_t MAX_BVHNODES = MAX_TRIANGLES;
 
 static uint totalNodesUsed = 0;
@@ -28,6 +28,8 @@ Tri*     g_Triangles;
 
 void InitBVH()
 {
+    totalNodesUsed = 0;
+    currTriangle   = 0;
     g_Triangles = new Tri[MAX_TRIANGLES]{};
     g_BVHNodes  = new BVHNode[MAX_TRIANGLES]{};
 }
@@ -38,7 +40,7 @@ void DestroyBVH()
     delete[] g_BVHNodes;
 }
 
-static void UpdateNodeBounds(Tri* tris, SceneBundle* mesh, uint nodeIdx, vec_t* centeroidMinOut, vec_t* centeroidMaxOut)
+static void UpdateNodeBounds(SceneBundle* mesh, uint nodeIdx, vec_t* centeroidMinOut, vec_t* centeroidMaxOut)
 {
     BVHNode* node = g_BVHNodes + nodeIdx;
     vec_t nodeMin = VecSet1(1e30f), nodeMax = VecSet1(-1e30f);
@@ -46,7 +48,7 @@ static void UpdateNodeBounds(Tri* tris, SceneBundle* mesh, uint nodeIdx, vec_t* 
     vec_t centeroidMin = VecSet1(1e30f);
     vec_t centeroidMax = VecSet1(-1e30f);
 
-    const Tri* leafPtr = tris + node->leftFirst;
+    const Tri* leafPtr = g_Triangles + node->leftFirst;
     int stride = mesh->numSkins > 0 ? sizeof(ASkinedVertex) : sizeof(AVertex);
 
     for (uint i = 0; i < node->triCount; i++)
@@ -76,8 +78,7 @@ static void UpdateNodeBounds(Tri* tris, SceneBundle* mesh, uint nodeIdx, vec_t* 
     *centeroidMaxOut = centeroidMax;
 }
 
-static float FindBestSplitPlane(Tri* tris,
-                                const BVHNode* node, 
+static float FindBestSplitPlane(const BVHNode* node, 
                                 SceneBundle* mesh,
                                 APrimitive* primitive,
                                 int* outAxis,
@@ -104,14 +105,14 @@ static float FindBestSplitPlane(Tri* tris,
         for (uint i = 0; i < node->triCount; i++)
         {
             ASSERT(i + leftFirst < MAX_TRIANGLES);
-            Tri* triangle = tris + leftFirst + i;
+            Tri* triangle = g_Triangles + leftFirst + i;
             
             float centeroid = triangle->centeroid[axis];
             int binIdx = MIN(BINS - 1, (int)((centeroid - boundsMin) * scale));
             
             ASSERT(binIdx < BINS && binIdx >= 0);
             bin[binIdx].triCount++;
-            AABB bounds = bin[binIdx].bounds; // .grow(mesh, triangle, stride);
+            AABB& bounds = bin[binIdx].bounds; // .grow(mesh, triangle, stride);
 
             vec_t v0 = VecLoad((const float*)((char*)mesh->allVertices + (triangle->v0 * stride)));
             vec_t v1 = VecLoad((const float*)((char*)mesh->allVertices + (triangle->v1 * stride)));
@@ -154,7 +155,7 @@ static float FindBestSplitPlane(Tri* tris,
     return bestCost;
 }
 
-static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* primitive, uint nodeIdx, vec_t centeroidMin, vec_t centeroidMax)
+static void SubdivideBVH(uint depth, SceneBundle* mesh, APrimitive* primitive, uint nodeIdx, vec_t centeroidMin, vec_t centeroidMax)
 {
     // terminate recursion
     BVHNode* node = g_BVHNodes + nodeIdx;
@@ -163,7 +164,7 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
     // determine split axis and position
     int axis;
     int splitPos;
-    float splitCost = FindBestSplitPlane(tris, node, mesh, primitive, &axis, &splitPos, centeroidMin, centeroidMax);
+    float splitCost = FindBestSplitPlane(node, mesh, primitive, &axis, &splitPos, centeroidMin, centeroidMax);
     float nosplitCost = CalculateNodeCost(node->minv, node->maxv, node->triCount);
     
     if (splitCost >= nosplitCost || depth >= 20 || node->triCount <= 32) return;
@@ -181,8 +182,8 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
 
     while (i <= j)
     {
-        ASSERT(tris + i < g_Triangles + MAX_TRIANGLES);
-        Tri* tri = tris + i;
+        ASSERT(i < MAX_TRIANGLES);
+        Tri* tri = g_Triangles + i;
         float centeroid = tri->centeroid[axis];
         
         int binIdx = MIN(BINS - 1, (int)((centeroid - centeroidMinAxis) * scale));
@@ -190,7 +191,7 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
         if (binIdx < splitPos)
             i++;
         else {
-            Swap(tris[i], tris[j]);
+            Swap(g_Triangles[i], g_Triangles[j]);
             j--;
         }
     }
@@ -208,17 +209,17 @@ static void SubdivideBVH(Tri* tris, uint depth, SceneBundle* mesh, APrimitive* p
     node->leftFirst = leftChildIdx;
     node->triCount = 0;
     // recurse
-    UpdateNodeBounds(tris, mesh, leftChildIdx, &centeroidMin, &centeroidMax);
-    SubdivideBVH(tris, depth + 1, mesh, primitive, leftChildIdx, centeroidMin, centeroidMax);
+    UpdateNodeBounds(mesh, leftChildIdx, &centeroidMin, &centeroidMax);
+    SubdivideBVH(depth + 1, mesh, primitive, leftChildIdx, centeroidMin, centeroidMax);
     
-    UpdateNodeBounds(tris, mesh, rightChildIdx, &centeroidMin, &centeroidMax);
-    SubdivideBVH(tris, depth + 1, mesh, primitive, rightChildIdx, centeroidMin, centeroidMax);
+    UpdateNodeBounds(mesh, rightChildIdx, &centeroidMin, &centeroidMax);
+    SubdivideBVH(depth + 1, mesh, primitive, rightChildIdx, centeroidMin, centeroidMax);
 }
 
 uint BuildBVH(SceneBundle* prefab)
 {
     Tri* tris = g_Triangles + currTriangle;
-    const Tri* triEnd = tris + MAX_TRIANGLES;
+    const Tri* triEnd = g_Triangles + MAX_TRIANGLES;
 
     int totalTriangles = 0;
     int stride = prefab->numSkins > 0 ? sizeof(ASkinedVertex) : sizeof(AVertex);
@@ -226,6 +227,7 @@ uint BuildBVH(SceneBundle* prefab)
     uint* indices = (uint*)prefab->allIndices;
     char* vertices = (char*)prefab->allVertices;
 
+    Tri* tri = tris;
     // for each primitive: calculate centroids and create tris for bvh
     for (int m = 0; m < prefab->numMeshes; m++)
     {
@@ -241,21 +243,21 @@ uint BuildBVH(SceneBundle* prefab)
             // calculate triangle centroids for partitioning
             for (int tr = 0; tr < numTriangles; tr++) 
             {
-                tris->v0 = indices[indexStart + (tr * 3) + 0];
-                tris->v1 = indices[indexStart + (tr * 3) + 1];
-                tris->v2 = indices[indexStart + (tr * 3) + 2];
+                tri->v0 = indices[indexStart + (tr * 3) + 0];
+                tri->v1 = indices[indexStart + (tr * 3) + 1];
+                tri->v2 = indices[indexStart + (tr * 3) + 2];
     
                 // set centeroids
-                vec_t v0 = VecLoad((const float*)(vertices + (tris->v0 * stride)));
-                vec_t v1 = VecLoad((const float*)(vertices + (tris->v1 * stride)));
-                vec_t v2 = VecLoad((const float*)(vertices + (tris->v2 * stride)));
+                vec_t v0 = VecLoad((const float*)(vertices + (tri->v0 * stride)));
+                vec_t v1 = VecLoad((const float*)(vertices + (tri->v1 * stride)));
+                vec_t v2 = VecLoad((const float*)(vertices + (tri->v2 * stride)));
     
-                tris->centeroid[0] = (VecGetX(v0) + VecGetX(v1) + VecGetX(v2)) * 0.333333f;
-                tris->centeroid[1] = (VecGetY(v0) + VecGetY(v1) + VecGetY(v2)) * 0.333333f;
-                tris->centeroid[2] = (VecGetZ(v0) + VecGetZ(v1) + VecGetZ(v2)) * 0.333333f;
+                tri->centeroid[0] = (VecGetX(v0) + VecGetX(v1) + VecGetX(v2)) * 0.333333f;
+                tri->centeroid[1] = (VecGetY(v0) + VecGetY(v1) + VecGetY(v2)) * 0.333333f;
+                tri->centeroid[2] = (VecGetZ(v0) + VecGetZ(v1) + VecGetZ(v2)) * 0.333333f;
     
-                tris++;
-                ASSERT(tris < triEnd);
+                tri++;
+                ASSERT(tri < triEnd);
             }
     
             totalTriangles += numTriangles;
@@ -284,11 +286,11 @@ uint BuildBVH(SceneBundle* prefab)
             primitive->bvhNodeIndex = rootNodeIndex;
 
             vec_t centeroidMin, centeroidMax;
-            UpdateNodeBounds(tris, prefab, rootNodeIndex, &centeroidMin, &centeroidMax);
+            UpdateNodeBounds(prefab, rootNodeIndex, &centeroidMin, &centeroidMax);
     
             // subdivide recursively
-            SubdivideBVH(tris, 0, prefab, primitive, rootNodeIndex, centeroidMin, centeroidMax);
-            currTriangle += root.triCount;
+            SubdivideBVH(0, prefab, primitive, rootNodeIndex, centeroidMin, centeroidMax);
+            currTriangle += numTriangles;
         } 
     }
     

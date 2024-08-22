@@ -3,8 +3,8 @@
 layout(location = 0) out float result;
 
 // Input images
-uniform sampler2D aoSource;
-uniform sampler2D texLinearDepth;
+uniform mediump sampler2D aoSource;
+uniform highp sampler2D texLinearDepth;
 
 // Input uniforms
 // Define the uniform buffer
