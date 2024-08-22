@@ -41,7 +41,6 @@ namespace SceneRenderer
     Shader      m_GodRaysShader;
     Shader      m_DeferredPBRShader;
     Shader      m_BlackShader;
-    Shader      m_GTAOShader;
 
     GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
     
@@ -112,6 +111,7 @@ namespace SceneRenderer
     bool m_ShadowFollowCamera = false;
     int  m_RedrawShadows = false; // maybe: set this after we rotate sun
     bool m_ShouldReRender = false;
+    bool m_Initialized = false;
 
     Vector3f m_CharacterPos;
 }
@@ -140,7 +140,7 @@ static void DeleteShaders();
 
 void DrawLastRenderedFrame()
 {
-    rRenderFullScreen(m_LightingTexture.handle);
+    rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
 }
 
 CameraBase* GetCamera()
@@ -239,6 +239,7 @@ static void DeleteGBuffer(GBuffer& gbuffer)
 
 void WindowResizeCallback(int width, int height)
 {
+    if (!m_Initialized) return;
     int smallerWidth  = GetRBWidth(width, height);
     int smallerHeight = GetRBHeight(width, height);
     width = MAX(width, 16);
@@ -444,7 +445,7 @@ void Init()
 
     Vector2i windowStartSize;
     Vector2i windowSmallSize;
-    wGetMonitorSize(&windowStartSize.x, &windowStartSize.y);
+    wGetWindowSize(&windowStartSize.x, &windowStartSize.y);
     windowSmallSize = { GetRBWidth(windowStartSize.x, windowStartSize.y), GetRBHeight(windowStartSize.x, windowStartSize.y) };
 
     CreateGBuffer(m_Gbuffer, windowStartSize.x, windowStartSize.y);
@@ -473,6 +474,8 @@ void Init()
     uint8_t whiteTexData[8 * 8];
     FillN(whiteTexData, (uint8_t)0xff, 8 * 8);
     m_WhiteTexture = rCreateTexture(8, 8, whiteTexData, TextureType_R8, TexFlags_ClampToEdge);
+    
+    m_Initialized = true;
 }
 
 void BeginRendering()

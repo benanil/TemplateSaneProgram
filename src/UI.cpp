@@ -381,6 +381,9 @@ void uInitialize()
     uScaleLocQuad   = rGetUniformLocation("uScale");
     uIndexStartLocQuad = rGetUniformLocation("uIndexStart");
     GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);
+    Vector2i windowRes;
+    wGetWindowSize(&windowRes.x, &windowRes.y);
+    uWindowResizeCallback(windowRes.x, windowRes.y);
 }
 
 static void WriteGlyphToAtlass(int i, 
