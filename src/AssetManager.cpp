@@ -1030,6 +1030,7 @@ int LoadSceneBundleBinary(const char* path, SceneBundle* gltf)
             primitive.vertices = currVertices;
             currVertices += primitiveVertexSize;
             AFileRead(&primitive.material, sizeof(short), file);
+            primitive.hasOutline = false; // always false 
         }
     }
     

@@ -18,6 +18,7 @@
 		<Exe>C:\Work\raddbg</Exe>
 		<Args></Args>
 		<WorkingDirectory></WorkingDirectory>
+		<DebugCommand></DebugCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
 		<CaptureExeOutput>false</CaptureExeOutput>

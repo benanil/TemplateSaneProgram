@@ -252,25 +252,40 @@ void rDrawAllLines(float* viewProj);
 
 void rSetClockWise(bool val);
 
-void rSetDepthTest(bool val);
+void rClearColor(float r, float g, float b, float a);
+
+//------------------------------------------------------------------------
+// Depth
+void rToggleDepthTest(bool val);
 
 void rSetDepthWrite(bool val);
-
-void rClearColor(float r, float g, float b, float a);
 
 void rClearDepth();
 
 void rClearDepthStencil();
 
+
+//------------------------------------------------------------------------
+// Shadow
 void rBeginShadow();
 
 void rEndShadow();
 
-void rStencilMask(unsigned char mask);
+//------------------------------------------------------------------------
+// Stencil
+void rStencilMask(uint mask);
+
+void rClearStencil();
 
 void rStencilFunc(rCompare compare, uint ref, uint mask);
 
 void rStencilOperation(rStencilOp op, rStencilOp fail, rStencilOp pass);
+
+void rStencilToggle(bool active);
+
+//------------------------------------------------------------------------
+// Scissor
+void rScissorToggle(bool active);
 
 void rScissorToggle(bool active);
 
@@ -351,7 +366,9 @@ void rBindFrameBuffer(FrameBuffer frameBuffer);
 void rUnbindFrameBuffer();
      
 void rFrameBufferAttachDepth(Texture texture);
-     
+
+void rFrameBufferAttachDepthStencil(Texture texture);
+
 void rFrameBufferAttachColor(Texture texture, int index = 0);
      
 void rFrameBufferAttachColorFrom2DArray(Texture texture, int attachmentIdx, int layerIdx);
@@ -359,10 +376,10 @@ void rFrameBufferAttachColorFrom2DArray(Texture texture, int attachmentIdx, int 
 void rFrameBufferSetNumColorBuffers(int numBuffers);
      
 void rFrameBufferInvalidate(int numAttachments);
+
 /*//////////////////////////////////////////////////////////////////////////*/
 /*                                 Shader                                   */
 /*//////////////////////////////////////////////////////////////////////////*/
-
 struct ComputeBuffer {
     unsigned int handle; 
     int index; 
@@ -379,7 +396,7 @@ typedef int TextureAccess;
 void rBindShader(Shader shader);
 // you don't have to specify names, it is for debug purpose only
 Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile = nullptr, const char* fragFile = nullptr);
-Shader rImportShader(const char* vertexFile, const char* fragmentFile);
+Shader rImportShader(const char* vertexPath, const char* fragmentPath);
 Shader rCreateFullScreenShader(const char* fragmentSource, const char* name = nullptr);
 Shader rImportFullScreenShader(const char* path);
 
@@ -475,6 +492,6 @@ enum TextureType_
 	TextureType_CompressedRGB  = 40,
 	TextureType_CompressedRGBA = 41,
     // Depth Formats
-    TextureType_DepthStencil24 = 42,
-    TextureType_DepthStencil32 = 43
+    TextureType_Depth24Stencil8 = 42,
+    TextureType_Depth32Stencil8 = 43
 };

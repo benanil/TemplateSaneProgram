@@ -26,8 +26,12 @@ namespace SceneRenderer
     void BeginRendering();
 
     void RenderPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem = nullptr);
-    
+
     void EndRendering(bool renderToBackBuffer);
+
+    void ShowGBuffer();
+
+    void RenderOutlined(Scene* scene, unsigned short prefabID, int nodeIndex, int primitiveIndex, AnimationController* animSystem = nullptr);
 
     void PostProcessPass();
 
@@ -40,7 +44,7 @@ namespace SceneRenderer
 
     // we call this when we are using pause menu
     void DrawLastRenderedFrame();
-
+    
 // Lights
     void BeginUpdateLights();
     

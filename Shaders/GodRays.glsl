@@ -34,10 +34,10 @@ void main()
         // Step sample location along ray.
         mTexCoord -= deltaTexCoord;
         vec2 diff = mTexCoord - uSunPos;
-        float hasSun = float(dot(diff, diff) < 0.01);
+        float hasSun = float(dot(diff, diff) < 0.004);
         float hasSky = float(texture(uDepthMap, mTexCoord).r > .9992);
         
-        float _sample  = 0.75 * hasSun * hasSky + 0.04 * hasSky;
+        float _sample  = 0.70 * hasSun * hasSky + 0.055 * hasSky;
         
         _sample *= illuminationDecay * Weight;
         godRaysColor += _sample;

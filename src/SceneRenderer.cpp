@@ -64,6 +64,7 @@ namespace SceneRenderer
     Shader      m_GodRaysShader;
     Shader      m_DeferredPBRShader;
     Shader      m_BlackShader;
+    Shader      m_OutlineShader;
 
     GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
     
@@ -219,8 +220,8 @@ static void CreateGBuffer(GBuffer& gBuffer, int width, int height)
     rFrameBufferAttachColor(gBuffer.RoughnessTexture, 2);
 
     __const DepthType depthType = IsAndroid() ? DepthType_24 : DepthType_32;
-    gBuffer.DepthTexture  = rCreateDepthTexture(width, height, depthType);
-    rFrameBufferAttachDepth(gBuffer.DepthTexture);
+    gBuffer.DepthTexture = rCreateTexture(width, height, nullptr, TextureType_Depth24Stencil8, TexFlags_RawData); // rCreateDepthTexture(width, height, depthType);
+    rFrameBufferAttachDepthStencil(gBuffer.DepthTexture);
 
     rFrameBufferSetNumColorBuffers(3);
     rFrameBufferCheck();
@@ -384,6 +385,8 @@ static void CreateShaders()
         "void main() { result = 0.0; }"
     );
 
+    m_OutlineShader = rImportShader("Shaders/OutlineVert.glsl", "Shaders/OutlineFrag.glsl");
+
     GetUniformLocations();
 }
 
@@ -505,16 +508,28 @@ void BeginRendering()
         else
             m_Camera = &m_PlayerCamera;
     }
-
+    
     rBindFrameBuffer(m_Gbuffer.Buffer);
     rSetViewportSize(m_Gbuffer.width, m_Gbuffer.height);
+    
+    // these things for outline
+    rStencilToggle(true);
+    rScissorToggle(false); // < to clear stencil this is required
+    rStencilMask(0xFF); // < maybe not needed for clearing stencil
+    rStencilOperation(rKEEP, rKEEP, rREPLACE);
+    rStencilFunc(rALWAYS, 1, 0xFF); 
+
     rClearColor(0.2f, 0.2f, 0.2f, 1.0);
-    rClearDepth();
+    rClearDepthStencil();
+    rStencilMask(0); // < don't draw anything to stencil
 
     m_Camera->Update();
     m_ViewProjection = m_Camera->view * m_Camera->projection;
 
     rBindShader(m_GBufferShader);
+
+    rSetShaderValue(m_ViewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
+    rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
 
     // shadow uniforms
     rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
@@ -690,13 +705,10 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
     const int hasAnimation = (int)(prefab->numSkins > 0 && animSystem != nullptr);
 
     rBindShader(m_GBufferShader);
-    rSetShaderValue(&scene->m_SunLight.dir.x, lSunDirG, GraphicType_Vector3f);
     rSetShaderValue(hasAnimation, lHasAnimation);
+    rSetShaderValue(&scene->m_SunLight.dir.x, lSunDirG, GraphicType_Vector3f);
 
     rBindMesh(prefab->bigMesh);
-
-    rSetShaderValue(m_ViewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
-    rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
 
     int numNodes  = prefab->numNodes;
     bool hasScene = prefab->numScenes > 0;
@@ -734,11 +746,12 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
             APrimitive& primitive = mesh->primitives[j];
             bool hasMaterial = prefab->materials && primitive.material != UINT16_MAX;
             AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
-            
+
             vec_t vmin = VecSet1(1e30f);  
             vec_t vmax = VecSet1(-1e30f); 
 
             // convert local Bounds to global bounds
+            // todo move this to scene.cpp 
             for (int i = 0; i < 8; i++)
             {
                 vec_t point = VecSetR(i & 1 ? primitive.max[0] : primitive.min[0],
@@ -769,6 +782,7 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
             }
 
             if (shouldDraw) {
+                rStencilMask(primitive.hasOutline ? 0xFF : 0x00);
                 // SetMaterial(&material);
                 rSetShaderValue(model.GetPtr(), lModel, GraphicType_Matrix4);
                 RenderPrimitive(material, prefab, primitive);
@@ -806,6 +820,8 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
             KeyValuePair<APrimitive*, Matrix4> alphaCutoff = m_DelayedAlphaCutoffs[i];
 
             APrimitive& primitive = *alphaCutoff.key;
+            rStencilMask(primitive.hasOutline ? 0xFF : 0x00);
+
             bool hasMaterial = prefab->materials && primitive.material != UINT16_MAX;
             AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
 
@@ -820,6 +836,50 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
         }
         m_DelayedAlphaCutoffs.Resize(0);
     }
+
+    rStencilMask(0x00);
+}
+
+void RenderOutlined(Scene* scene, unsigned short prefabID, int nodeIndex, int primitiveIndex, AnimationController* animSystem)
+{
+    Prefab* prefab = scene->GetPrefab(prefabID);
+    const int hasAnimation = (int)(prefab->numSkins > 0 && animSystem != nullptr);    
+
+    rBindMesh(prefab->bigMesh);
+
+    ANode& node = prefab->nodes[nodeIndex];
+    if (node.type != 0 || node.index == -1) return;
+
+    AMesh* mesh = prefab->meshes + node.index;
+    APrimitive& primitive = mesh->primitives[primitiveIndex];
+    AMaterial& material = prefab->materials[primitive.material];
+
+    Matrix4 model = prefab->globalNodeTransforms[nodeIndex];
+
+    // draw outline, bigger mesh growth done in vertex shader
+    rToggleDepthTest(false);
+    rBindShader(m_OutlineShader);
+    rSetShaderValue(model.GetPtr(), rGetUniformLocation("uModel"), GraphicType_Matrix4);
+    rSetShaderValue(m_ViewProjection.GetPtr(), rGetUniformLocation("uViewProj"), GraphicType_Matrix4);
+
+    rStencilFunc(rNOTEQUAL, 1, 0xFF);
+    rStencilMask(0x00);
+
+    int offset = primitive.indexOffset;
+    rRenderMeshIndexOffset(prefab->bigMesh, primitive.numIndices, offset);
+
+    if (material.doubleSided)
+    {
+        rSetClockWise(true);
+        rRenderMeshIndexOffset(prefab->bigMesh, primitive.numIndices, offset);
+        rSetClockWise(false);
+    }
+
+    rStencilFunc(rALWAYS, 1, 0xFF);   
+    rStencilMask(0x00);
+
+    rToggleDepthTest(true);
+    rStencilToggle(false);
 }
 
 static bool MeshInstanceIndexCompare(MeshInstance* a, MeshInstance* b)
@@ -947,7 +1007,7 @@ void EndRendering(bool renderToBackBuffer)
 
     // screen space passes, no need depth
     rSetDepthWrite(false);
-    rSetDepthTest(false);
+    rToggleDepthTest(false);
 
     HBAOLinearizeDepth(&m_Gbuffer.DepthTexture, m_Camera->nearClip, m_Camera->farClip);
 
@@ -960,24 +1020,31 @@ void EndRendering(bool renderToBackBuffer)
     
     LightingPass(); // Deferred Lighting
 
-    rSetDepthTest(true);
+    rToggleDepthTest(true);
 
     rBindFrameBuffer(m_Gbuffer.Buffer);
 
     DrawSkybox();
     
+    // char culledText[16]={};
+    // IntToString(culledText, numCulled);
+    // uDrawText(culledText, MakeVec2(1810.0f, 185.0f));
+    // numCulled = 0;
+}
+
+// draw all of the graphics to back buffer (inside all window)
+void ShowGBuffer()
+{
+    Vector2i windowSize;
+    wGetWindowSize(&windowSize.x, &windowSize.y);
+
     rSetViewportSize(windowSize.x, windowSize.y);
     rUnbindFrameBuffer(); // < draw to backbuffer after this line
     // rRenderFullScreen(m_LightingTexture.handle);
     rRenderFullScreen(m_Gbuffer.ColorTexture.handle);
 
-    rSetDepthTest(true);
+    rToggleDepthTest(true);
     rSetDepthWrite(true);
-
-    // char culledText[16]={};
-    // IntToString(culledText, numCulled);
-    // uDrawText(culledText, MakeVec2(1810.0f, 185.0f));
-    // numCulled = 0;
 }
 
 void Destroy()

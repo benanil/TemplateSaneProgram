@@ -133,8 +133,9 @@ static void SetDoubleSidedMaterials(Prefab* mainScene)
     }
 }
 
-static bool pauseMenuOpened = false;
-static const char* selectedNodeName = nullptr;
+static bool PauseMenuOpened = false;
+static int SelectedNodeIndex = 0;
+static int SelectedNodePrimitiveIndex = 0;
 
 static void CastRay()
 {
@@ -154,16 +155,23 @@ static void CastRay()
     // float rayDist = 999.0f;
     if (rayResult.t != RayacastMissDistance) 
     {
-        ANode* node = bistro->nodes + rayResult.nodeIndex;
-        selectedNodeName = node->name;
-        AMesh* mesh = bistro->meshes + node->index;
-        for (int i = 0; i < mesh->numPrimitives; i++)
-        {
-            APrimitive* primitive = mesh->primitives + i;
-            AMaterial* material = bistro->materials + primitive->material;
-            printf("test %i", material->doubleSided);
-        }
+        AMesh* mesh = bistro->meshes + bistro->nodes[SelectedNodeIndex].index;
+
+        // remove outline of last selected object
+        mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = false;
+  
+        SelectedNodeIndex = rayResult.nodeIndex;
+        SelectedNodePrimitiveIndex = rayResult.primitiveIndex;
+
+        mesh = bistro->meshes + bistro->nodes[SelectedNodeIndex].index;
+        mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = true;
+        
         // sphere->globalNodeTransforms[0].r[3] = rayResult.position;
+    }
+    else
+    {
+        SelectedNodeIndex = 0;
+        SelectedNodePrimitiveIndex = 0;
     }
     // FloatToString(rayDistTxt, rayDist);
     // uDrawText(rayDistTxt, rayPos);
@@ -185,7 +193,7 @@ void AXLoop(bool canRender)
     std::thread raycastThread(CastRay);
     
     // draw when we are playing game, don't render when using pause menu to save power
-    if (canRender && (pauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
+    if (canRender && (PauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
     {
         currentScene->Update();
     
@@ -210,23 +218,29 @@ void AXLoop(bool canRender)
             RenderPrefab(currentScene, AnimatedPrefab, animController);
             // RenderPrefab(currentScene, SpherePrefab, nullptr);
         }
-        bool renderToBackBuffer = !pauseMenuOpened;
+
+        bool renderToBackBuffer = !PauseMenuOpened;
         SceneRenderer::EndRendering(renderToBackBuffer);
-        pauseMenuOpened = false;
-    
+
+        RenderOutlined(currentScene, MainScenePrefab, SelectedNodeIndex, SelectedNodePrimitiveIndex);
+        
+        ShowGBuffer(); // draw all of the graphics to back buffer (inside all window)
+
         SceneRenderer::ShowEditor();
+        
+        PauseMenuOpened = false;
     }
     else
     {
         DrawLastRenderedFrame();
     }
-    pauseMenuOpened = ShowMenu(); // < from Menu.cpp
+    PauseMenuOpened = ShowMenu(); // < from Menu.cpp
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
     
-    uPushFloat(ufTextScale, 0.5f);
-    uText(selectedNodeName, perfTxtPos);
-    uPopFloat(ufTextScale);
+    // uPushFloat(ufTextScale, 0.5f);
+    // uText(Selectednode, perfTxtPos);
+    // uPopFloat(ufTextScale);
 
     uRender(); // < user interface end 
     

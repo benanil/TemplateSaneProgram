@@ -195,8 +195,8 @@ uint8_t rTextureTypeToBytesPerPixel(TextureType type)
         1,// TextureType_CompressedRGB  = 40,
         1,// TextureType_CompressedRGBA = 41,
         // Depth Formats
-        3,// TextureType_DepthStencil24 = 42,
-        4// TextureType_DepthStencil32 = 43
+        4,// TextureType_DepthStencil24 = 42,
+        5 // TextureType_DepthStencil32 = 43 ??
     };
     return map[type];
 }
@@ -221,7 +221,7 @@ Texture rCreateDepthTexture(int width, int height, DepthType depthType)
     texture.width  = width;
     texture.height = height;
     texture.buffer = nullptr;
-    texture.type   = TextureType_DepthStencil24; // < ??
+    texture.type   = TextureType_Depth24Stencil8; // < ??
     glGenTextures(1, &texture.handle);
     glBindTexture(GL_TEXTURE_2D, texture.handle);
 
@@ -1116,7 +1116,7 @@ void rInitRenderer()
     g_TextureLoadBuffer = new unsigned char[g_TextureLoadBufferSize];
 }
 
-void rSetDepthTest(bool val)
+void rToggleDepthTest(bool val)
 {
     void(*EnableDisable[2])(unsigned int) = { glDisable, glEnable};
     EnableDisable[val](GL_DEPTH_TEST);
@@ -1149,20 +1149,26 @@ void rClearDepth()
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
+void rClearStencil()
+{
+    glClear(GL_STENCIL_BUFFER_BIT);
+}
+
 void rClearDepthStencil()
 {
     glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT); 
 }
 
-void rStencilMask(unsigned char mask)
+void rStencilMask(uint mask)
 {
     glStencilMask(mask);
 }
 
 void rStencilFunc(rCompare compare, uint ref, uint mask)
 {
-    compare += GL_NEVER; //, GL_LESS, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_EQUAL, GL_NOTEQUAL, GL_ALWAYS
-    glStencilFunc(compare, ref, mask);
+    const int map[] = { GL_NEVER, GL_LESS, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_EQUAL, GL_NOTEQUAL, GL_ALWAYS };
+    // compare += GL_NEVER; 
+    glStencilFunc(map[compare], ref, mask);
 }
 
 void rStencilOperation(rStencilOp op, rStencilOp fail, rStencilOp pass)
@@ -1178,6 +1184,11 @@ void rStencilOperation(rStencilOp op, rStencilOp fail, rStencilOp pass)
         GL_INVERT
     };
     glStencilOp(opMap[op], opMap[fail], opMap[pass]);
+}
+
+void rStencilToggle(bool active)
+{
+    if (active) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
 }
 
 void rScissorToggle(bool active)
