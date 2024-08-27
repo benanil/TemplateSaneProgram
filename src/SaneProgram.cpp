@@ -48,10 +48,10 @@ static Vector2f perfTxtPos;
 
 void PrintPerfFn(const char* text)
 {
-    uPushFloat(ufTextScale, 0.5f);
+    uPushFloat(uf::TextScale, 0.5f);
     uText(text, perfTxtPos, 0u);
     perfTxtPos.y += 23.0f;
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
 }
 
 static void SetDoubleSidedMaterials(Prefab* mainScene);
@@ -62,8 +62,8 @@ int AXStart()
     g_CurrentScene.Init();
     InitBVH();
 
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -83,6 +83,7 @@ int AXStart()
     }
 
     uInitialize();
+    uSetFloat(uf::TextScale, 0.81f);
     // very good font that has lots of icons: http://www.quivira-font.com/
     uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
     MemsetZero(&characterController, sizeof(CharacterController));
@@ -151,11 +152,12 @@ static void CastRay()
     Prefab* bistro = g_CurrentScene.GetPrefab(MainScenePrefab);
     Triout rayResult = RayCastFromCamera(camera, rayPos, currentScene, MainScenePrefab, nullptr);
     
-    // static char rayDistTxt[16] = {};
-    // float rayDist = 999.0f;
     if (rayResult.t != RayacastMissDistance) 
     {
-        AMesh* mesh = bistro->meshes + bistro->nodes[SelectedNodeIndex].index;
+        int nodeIndex = bistro->nodes[SelectedNodeIndex].index;
+        if (nodeIndex != 0) return;
+
+        AMesh* mesh = bistro->meshes + nodeIndex;
 
         // remove outline of last selected object
         mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = false;
@@ -173,6 +175,8 @@ static void CastRay()
         SelectedNodeIndex = 0;
         SelectedNodePrimitiveIndex = 0;
     }
+    // static char rayDistTxt[16] = {};
+    // float rayDist = 999.0f;
     // FloatToString(rayDistTxt, rayDist);
     // uDrawText(rayDistTxt, rayPos);
 }
@@ -238,9 +242,9 @@ void AXLoop(bool canRender)
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
     
-    // uPushFloat(ufTextScale, 0.5f);
+    // uPushFloat(uf::TextScale, 0.5f);
     // uText(Selectednode, perfTxtPos);
-    // uPopFloat(ufTextScale);
+    // uPopFloat(uf::TextScale);
 
     uRender(); // < user interface end 
     

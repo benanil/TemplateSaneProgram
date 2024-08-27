@@ -138,6 +138,45 @@ struct ScissorData
     }
 };
 
+enum uWindowPos_
+{
+    uWindowPos_LeftEdge    = 1 << 0,
+    uWindowPos_RightEdge   = 1 << 1,
+    uWindowPos_TopEdge     = 1 << 2,
+    uWindowPos_BottomEdge  = 1 << 3,
+    uWindowPos_EdgeMask    = 0b1111, 
+
+    uWindowPos_LeftTop      = 1 << 4,
+    uWindowPos_RightTop     = 1 << 5,
+    uWindowPos_LeftBottom   = 1 << 6,
+    uWindowPos_RightBottom  = 1 << 7,
+    uWindowPos_CornerMask   = 0b11110000, 
+
+    uWindowPos_NumPos = 8
+};
+
+typedef uint32_t uWindowPos;
+
+struct UWindow
+{
+    Vector2f position;
+    Vector2f scale;
+    Vector2f elementPos; // we increment y gradually, and reset this to position every frame
+
+    float elementOffsetY;
+
+    uint hash; // unique identifier
+    int currElement; // each frame zeroing this, and incrementing with each element
+    int selectedElement;
+    int numElements;
+
+    uWindowPos draggingPos;
+    
+    bool started; // hash is created, variables initialized ? (if false window is openning first time)
+    bool isOpen;
+    bool holdingTop;
+};
+
 namespace
 {
     FontAtlas mFontAtlases[4] = {};
@@ -147,6 +186,7 @@ namespace
     // ratio against 1920x1080, [1.0, 1.0] if 1080p 0.5 if half of it, 2.0 if two times bigger
     // aspect ratio fixer thingy
     Vector2f mWindowRatio;
+    Vector2f mWindowSize;
     float mUIScale; // min(mWindowRatio.x, mWindowRatio.y)
 
     Vector2f mMouseOld;
@@ -219,26 +259,26 @@ namespace
     //------------------------------------------------------------------------
     // configuration
     uint mColors[] = { 
-        0xFFE1E1E1u, // uColorText
-        0xFF111111u, // uColorQuad
+        0xFFE1E1E1u, // uColor::Text
+        0xFF111111u, // uColor::Quad
         0x8CFFFFFFu, // uColorHover
-        0xFFDEDEDEu, // uColorLine
-        0xFF484848u, // uColorBorder
-        0xFF0B0B0Bu, // uColorCheckboxBG
-        0xFF0B0B0Bu, // UColorTextBoxBG
-        0xCF888888u, // uColorSliderInside 
-        0xFFFFFFFFu, // uColorTextBoxCursor
-        0xFF008CFAu  // uColorSelectedBorder
+        0xFFDEDEDEu, // uColor::Line
+        0xFF484848u, // uColor::Border
+        0xFF0B0B0Bu, // uColor::CheckboxBG
+        0xFF0B0B0Bu, // uColor::TextBoxBG
+        0xCF888888u, // uColor::SliderInside 
+        0xFFFFFFFFu, // uColor::TextBoxCursor
+        0xFF008CFAu  // uColor::SelectedBorder
     };
     constexpr int NumColors = sizeof(mColors) / sizeof(uint);
     constexpr int StackSize = 6;
     // stack for pushed colors
     uint mColorStack[NumColors][StackSize];
-    int mColorStackCnt[NumColors] = { };
+    int mColorStackCnt[NumColors];
 
     float mFloats[] = {
         1.5f  , // line thickness  
-        160.0f, // ufContentStart
+        160.0f, // uf::ContentStart
         12.0f , // ButtonSpace
         1.0f  , // TextScale,
         175.0f, // TextBoxWidth
@@ -250,7 +290,7 @@ namespace
     constexpr int NumFloats = sizeof(mFloats) / sizeof(float);
     // stack for pushed floats
     float mFloatStack[NumFloats][StackSize];
-    int mFloatStackCnt[NumFloats] = { };
+    int mFloatStackCnt[NumFloats];
     
     //------------------------------------------------------------------------
     // Sound
@@ -287,6 +327,13 @@ namespace
     Array<TriangleVert> mTriangles={};
     int mCurrentTriangle = 0;
     Shader mTriangleShader;
+    
+    const int MaxWindows = 32;
+    int mNumWindows = 0;
+    int mCurrentWindow = 0;
+    UWindow mWindows[MaxWindows] = {};
+
+    bool mBeginnedWindow = false;
 }
 
 void PlayButtonClickSound() {
@@ -301,6 +348,12 @@ void PlayButtonHoverSound() {
 
 void uWindowResizeCallback(int width, int height)
 {
+    if (width < 64 || height < 64) {
+        width = 1920;
+        height = 1080;
+    }
+
+    mWindowSize = { (float)width , (float)height };
     mWindowRatio = { width / 1920.0f, height / 1080.0f };
     mUIScale = (mWindowRatio.x + mWindowRatio.y) * 0.5f; // min(ratio.x, ratio.y)
     // ultra wide
@@ -358,6 +411,9 @@ void CreateTriangleMesh(int size)
 
 void uInitialize()
 {
+    FillN(mColorStackCnt, -1, NumColors);
+    FillN(mFloatStackCnt, -1, NumFloats);
+
     InitSounds();
     ImportShaders();
     CreateTriangleMesh(2048);
@@ -467,7 +523,7 @@ FontHandle uLoadFont(const char* file)
             LoadFontAtlasBin(path, currentAtlas, image);
             currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
             mCurrentFontAtlas = currentAtlas;
-            currentAtlas->maxCharWidth  = uCalcTextSize("a").x;
+            currentAtlas->maxCharWidth  = uCalcCharSize('a').x;
             return mNumFontAtlas - 1;
         }
     }
@@ -563,7 +619,7 @@ FontHandle uLoadFont(const char* file)
     SaveFontAtlasBin(path, pathLen, currentAtlas, image);
     mCurrentFontAtlas = currentAtlas;
     currentAtlas->textureHandle = rCreateTexture(AtlasWidth, AtlasWidth, image, TextureType_R8, TexFlags_Linear).handle;
-    currentAtlas->maxCharWidth  = uCalcTextSize("a").x;
+    currentAtlas->maxCharWidth  = uCalcCharSize('a').x;
 #else
     AX_UNREACHABLE();
 #endif
@@ -675,25 +731,25 @@ void uSetFont(FontHandle font) {
 }
 
 void uSetTheme(uColor what, uint color) {
-    mColors[what] = color;
+    mColors[(uint)what] = color;
 }
 
 void uSetFloat(uFloat what, float val) {
-    mFloats[what] = val;
+    mFloats[(uint)what] = val;
 }
 
 float uGetFloat(uFloat what) {
-    int stackCnt = mFloatStackCnt[what];
-    if (stackCnt > 0) // if user used PushFloat use the one from stack
-        return mFloatStack[what][stackCnt-1];
-    return mFloats[what];
+    int stackCnt = mFloatStackCnt[(uint)what];
+    if (stackCnt >= 0) // if user used PushFloat use the one from stack
+        return mFloatStack[(uint)what][stackCnt];
+    return mFloats[(uint)what];
 }
 
 uint uGetColor(uColor color) {
-    int stackCnt = mColorStackCnt[color];
-    if (stackCnt > 0) // if user used PushColor use the one from stack
-        return mColorStack[color][stackCnt-1];
-    return mColors[color];
+    int stackCnt = mColorStackCnt[(uint)color];
+    if (stackCnt >= 0) // if user used PushColor use the one from stack
+        return mColorStack[(uint)color][stackCnt];
+    return mColors[(uint)color];
 }
 
 void uSetTheme(uint* colors) {
@@ -701,26 +757,26 @@ void uSetTheme(uint* colors) {
 }
 
 void uPushColor(uColor color, uint val) {
-    int& index = mColorStackCnt[color];
+    int& index = mColorStackCnt[(uint)color];
     ASSERTR(index < StackSize, return);
-    mColorStack[color][index++] = val;
+    mColorStack[(uint)color][++index] = val;
 }
 
 void uPushFloat(uFloat what, float val) {
-    int& index = mFloatStackCnt[what];
+    int& index = mFloatStackCnt[(uint)what];
     ASSERTR(index < StackSize, return);
-    mFloatStack[what][index++] = val;
+    mFloatStack[(uint)what][++index] = val;
 }
 
 void uPopColor(uColor color) {
-    int& index = mColorStackCnt[color];
-    if (index <= 0) return;
+    int& index = mColorStackCnt[(uint)color];
+    ASSERTR(index != -1, return);
     index--;
 }
 
 void uPopFloat(uFloat what) {
-    int& index = mFloatStackCnt[what];
-    if (index <= 0) return;
+    int& index = mFloatStackCnt[(uint)what];
+    ASSERTR(index != -1, return);
     index--;
 }
 
@@ -734,7 +790,7 @@ bool uIsHovered() {
 // it works like this: 123.4 * 10 = 1234.0 -> 1234 when we unpacking we devide by 10: 1234.0/10= 123.4
 inline ushort MakeFixed(float f)
 {
-    return ushort(MIN(uint(f * 10.0f), 0xFFFFu));
+    return ushort(Clamp(uint(f * 10.0f), 0u, 0xFFFFu));
 }
 
 // reference resolution is always 1920x1080,
@@ -772,14 +828,14 @@ void uText(const char* text, Vector2f position, uTextFlags flags)
     Vector2f posStart = position;
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
     float ascent = (float)mCurrentFontAtlas->characters['0'].height * 1.15f;
-    float scale = uGetFloat(ufTextScale);
+    float scale = uGetFloat(uf::TextScale);
     scale *= mUIScale;
     half scalef16 = ConvertFloatToHalf(scale);
-    uint color = uGetColor(uColorText);
+    uint color = uGetColor(uColor::Text);
     int currentLine = 0;
 
     const char* textEnd = text + txtSize;
-    uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
+    uint8 currentDepth = int(uGetFloat(uf::Depth) * 255.0f);
     int numChars = 0;
     // fill per quad data
     while (text < textEnd)
@@ -805,7 +861,7 @@ void uText(const char* text, Vector2f position, uTextFlags flags)
         
         if (*text == ' ') {
             float sizeX = position.x - posStart.x;
-            if ((flags & uTextFlags_WrapWidthDetermined) && sizeX > uGetFloat(ufTextWrapWidth))
+            if ((flags & uTextFlags_WrapWidthDetermined) && sizeX > uGetFloat(uf::TextWrapWidth))
             {
                 currentLine++;
                 position = posStart;
@@ -858,11 +914,24 @@ void uText(const char* text, Vector2f position, uTextFlags flags)
     mNumChars += numChars; // we shouldn't count spaces or tabs
 }
 
+Vector2f uCalcCharSize(char c)
+{
+    float scale = uGetFloat(uf::TextScale);
+    char arr[4] = { c, 0, 0, 0 };
+
+    unsigned int unicode;
+    CodepointFromUtf8(&unicode, arr, arr + 4);
+    char chr = UnicodeToAtlasIndex(unicode);
+    const FontChar& character = mCurrentFontAtlas->characters[chr];
+    
+    return {character.advence * scale, character.height * (float)scale };
+}
+
 Vector2f uCalcTextSize(const char* text, uTextFlags flags)
 {
     if (!text) return { 0.0f, 0.0f };
     
-    float scale = uGetFloat(ufTextScale);
+    float scale = uGetFloat(uf::TextScale);
     float spaceWidth = (float)mCurrentFontAtlas->characters['0'].width;
     float ascent = (float)mCurrentFontAtlas->characters['0'].height * 1.15f;
     
@@ -897,7 +966,7 @@ Vector2f uCalcTextSize(const char* text, uTextFlags flags)
         }
 
         if (*text == ' ') {
-            if ((flags & uTextFlags_WrapWidthDetermined) && size.x  > uGetFloat(ufTextWrapWidth))
+            if ((flags & uTextFlags_WrapWidthDetermined) && size.x  > uGetFloat(uf::TextWrapWidth))
             {
                 currentLine++;
                 currentLine++;
@@ -969,7 +1038,7 @@ void uQuad(Vector2f position, Vector2f scale, uint color, uint properties)
     quadData->size  = uint32_t(MakeFixed(scale.x));
     quadData->size |= uint32_t(MakeFixed(scale.y)) << 16;
     
-    uint8 currentDepth = int(uGetFloat(ufDepth) * 255.0f);
+    uint8 currentDepth = int(uGetFloat(uf::Depth) * 255.0f);
     quadData->color = color;
     quadData->depth = currentDepth;
     quadData->effect = 0xFF & properties;
@@ -1036,8 +1105,8 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered)
         GetMouseWindowPos(&mousePos.x, &mousePos.y);
         // we apply window ratio in functions but we shouldn't apply because we get the mouse position 
         mousePos /= mWindowRatio; 
-        uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.9f);
-        uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.5f);
+        uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.9f);
+        uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.5f);
         Vector2f textSize = uCalcTextSize(text, textFlag) * 1.15f;
 
         float lineHeight = textSize.y / (float)numLines;
@@ -1046,11 +1115,11 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered)
         
         mousePos.y -= lineHeight;
         textSize.y += lineHeight * 0.5f;
-        uQuad(mousePos, textSize, uGetColor(uColorQuad), uButtonOpt_Border);
+        uQuad(mousePos, textSize, uGetColor(uColor::Quad), uButtonOpt_Border);
         uBorder(mousePos, textSize);
 
-        uPopFloat(ufTextScale);
-        uPopFloat(ufDepth);
+        uPopFloat(uf::TextScale);
+        uPopFloat(uf::Depth);
     }
     return timeRemaining;
 }
@@ -1059,7 +1128,7 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered)
 bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
 {
     if (scale.x + scale.y < Epsilon) {
-        float buttonSpace = uGetFloat(ufButtonSpace);
+        float buttonSpace = uGetFloat(uf::ButtonSpace);
         pos.x -= buttonSpace * 2.0f;
         pos.y += buttonSpace;
         scale = uCalcTextSize(text) + buttonSpace;
@@ -1070,9 +1139,9 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
     bool pressed = entered || uClickCheck(pos, scale);
     if (pressed) PlayButtonClickSound();
 
-    uint quadColor = uGetColor(uColorQuad);
+    uint quadColor = uGetColor(uColor::Quad);
     if (mWasHovered || !!(opt & uButtonOpt_Hovered))
-        quadColor = mColors[uColorHovered];
+        quadColor = mColors[(uint)uColor::Hovered];
 
     uQuad(pos, scale, quadColor, opt & 0xFF);
     if (!!(opt & uButtonOpt_Border)) {
@@ -1091,24 +1160,24 @@ bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt)
 
 inline Vector2f uLabel(const char* label, Vector2f pos) {
     Vector2f labelSize;
-    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.8f);
     if (label != nullptr) {
         labelSize = uCalcTextSize(label);
         uText(label, pos);
     } else {
-        labelSize.y = uCalcTextSize("A").y;
+        labelSize.y = uCalcCharSize('A').y;
         labelSize.x = labelSize.y;
     }
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
     return labelSize * 1.2f;
 }
 
-bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMark)
+bool uCheckBox(const char* text, Vector2f pos, bool* isEnabled, bool cubeCheckMark)
 {
     Vector2f textSize = uLabel(text, pos);
     float checkboxHeight = textSize.y;
     // detect box position
-    float checkboxStart = uGetFloat(ufContentStart);
+    float checkboxStart = uGetFloat(uf::ContentStart);
     if (checkboxStart < 0.01f) {
         const float boxPadding = 20.0f;
         pos.x += textSize.x + boxPadding;
@@ -1121,13 +1190,13 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
     pos.y -= boxScale.y - 4.0f;
     boxScale /= mWindowRatio;
     boxScale *= 0.80f;
-    uQuad(pos, boxScale, uGetColor(uColorCheckboxBG));
+    uQuad(pos, boxScale, uGetColor(uColor::CheckboxBG));
 
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
-    uPushColor(uColorBorder, borderColor);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
+    uPushColor(uColor::Border, borderColor);
         uBorder(pos, boxScale);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
     
     bool enabled = *isEnabled;
     bool entered = elementFocused && GetKeyPressed(Key_ENTER);
@@ -1137,17 +1206,17 @@ bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMa
     }
 
     if (enabled && !cubeCheckMark) {
-        float scale = uGetFloat(ufTextScale);
+        float scale = uGetFloat(uf::TextScale);
         pos.y += boxScale.y - 4.0f;
-        uPushFloat(ufTextScale, scale * 0.85f);
+        uPushFloat(uf::TextScale, scale * 0.85f);
         uText(IC_CHECK_MARK, pos); // todo properly scale the checkmark
-        uPopFloat(ufTextScale);
+        uPopFloat(uf::TextScale);
     }
     else if (enabled && cubeCheckMark)
     {
         Vector2f slightScale = boxScale * 0.17f;
-        uint color = uGetColor(uColorSliderInside);
-        float lineThickness = uGetFloat(ufLineThickness);
+        uint color = uGetColor(uColor::SliderInside);
+        float lineThickness = uGetFloat(uf::LineThickness);
         uQuad(pos + slightScale + lineThickness, boxScale - (slightScale * 2.0f)-lineThickness, color);
     }
     
@@ -1160,25 +1229,27 @@ struct LineThicknesBorderColor { float thickness; uint color; };
 
 inline LineThicknesBorderColor GetLineData()
 {
-    return { uGetFloat(ufLineThickness), uGetColor(uColorLine) };
+    return { uGetFloat(uf::LineThickness), uGetColor(uColor::Line) };
 }
 
-void uLineVertical(Vector2f begin, float size, uint properties) {
+void uLineVertical(Vector2f begin, float size, uint properties) 
+{
     LineThicknesBorderColor data = GetLineData();
     uQuad(begin, MakeVec2(data.thickness, size), data.color, properties);
 }
 
-void uLineHorizontal(Vector2f begin, float size, uint properties) {
+void uLineHorizontal(Vector2f begin, float size, uint properties) 
+{
     LineThicknesBorderColor data = GetLineData();
     uQuad(begin, MakeVec2(size, data.thickness), data.color, properties);
 }
 
 void uBorder(Vector2f begin, Vector2f scale)
 {
-    LineThicknesBorderColor data = { uGetFloat(ufLineThickness), uGetColor(uColorBorder) };
+    LineThicknesBorderColor data = { uGetFloat(uf::LineThickness), uGetColor(uColor::Border) };
     uQuad(begin, MakeVec2(scale.x, data.thickness), data.color);
     uQuad(begin, MakeVec2(data.thickness, scale.y), data.color);
-    
+        
     begin.y += scale.y;
     uQuad(begin, MakeVec2(scale.x + data.thickness, data.thickness), data.color);
     
@@ -1236,21 +1307,21 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
 
     if (size.x + size.y < Epsilon) // if size is not determined generate it
     {
-        size.x = uGetFloat(ufTextBoxWidth);
+        size.x = uGetFloat(uf::TextBoxWidth);
         size.y = labelSize.y * 0.85f;
     }
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size);
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uQuad(pos, size, uGetColor(uColor::TextBoxBG));
 
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
-    uPushColor(uColorBorder, borderColor);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
+    uPushColor(uColor::Border, borderColor);
         uBorder(pos, size);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
     
     uBeginScissor(pos, size, uScissorMask_Text); // clip the text inside of rectangle
 
@@ -1260,12 +1331,12 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
 
     // todo: add cursor movement
     // set text position
-    float textScale = uGetFloat(ufTextScale);
+    float textScale = uGetFloat(uf::TextScale);
     float offset = size.y * 0.1f;
     pos.y += size.y - offset;
     pos.x += offset;
 
-    uPushFloat(ufTextScale, textScale * 0.7f);
+    uPushFloat(uf::TextScale, textScale * 0.7f);
     if (elementFocused)
     {
         // max number of characters that we can write
@@ -1309,17 +1380,17 @@ bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text)
             cursorPos.x += textSize.x;
             cursorPos.y -= textSize.y;
 
-            uint cursorColor = uGetColor(uColorTextBoxCursor);
-            uPushColor(uColorLine, cursorColor);
+            uint cursorColor = uGetColor(uColor::TextBoxCursor);
+            uPushColor(uColor::Line, cursorColor);
             uLineVertical(cursorPos, textSize.y);
-            uPopColor(uColorLine);
+            uPopColor(uColor::Line);
         }
     }
 
     uText(text, pos, uTextFlags_NoNewLine);
     
     uEndScissor(uScissorMask_Text);
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
     return clicked;
 }
 
@@ -1327,16 +1398,16 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
 {
     Vector2f labelSize = uLabel(label, pos);
     Vector2f size;
-    size.x = uGetFloat(ufTextBoxWidth);
+    size.x = uGetFloat(uf::TextBoxWidth);
     size.y = labelSize.y * 0.85f;
 
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size);
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
 
     size_t id = (size_t)label;
     bool newlyOpenned = false;
@@ -1346,7 +1417,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
         mDropdownOpen = true;
     }
 
-    float textScale = uGetFloat(ufTextScale);
+    float textScale = uGetFloat(uf::TextScale);
     float offset = size.y * 0.1f;
     Vector2f textPos = pos;
     textPos.y += size.y - offset;
@@ -1355,16 +1426,16 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
     bool isCurrentDropdown = mCurrentDropdown == id;
     size.y *= 1.0f + (float(numNames) * (isCurrentDropdown && mDropdownOpen));
     
-    uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.9f);
+    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.9f);
     
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uQuad(pos, size, uGetColor(uColor::TextBoxBG));
 
-    uPushColor(uColorBorder, borderColor);
+    uPushColor(uColor::Border, borderColor);
     uBorder(pos, size);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
 
     uBeginScissor(pos, size, uScissorMask_Text); // clip the text inside of rectangle
-    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.7f);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.7f);
 
     if (!(mDropdownOpen && isCurrentDropdown))
     {
@@ -1382,7 +1453,7 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
             clicked = uClickCheck(pos, size);
             
             if (mWasHovered) {
-                uQuad(pos, size, uGetColor(uColorHovered));
+                uQuad(pos, size, uGetColor(uColor::Hovered));
                 if (mLastHoveredDropdown != i) 
                     PlayButtonHoverSound(), mLastHoveredDropdown = i;
             }
@@ -1399,29 +1470,29 @@ int uDropdown(const char* label, Vector2f pos, const char** names, int numNames,
     }
 
     uEndScissor(uScissorMask_Text);
-    uPopFloat(ufTextScale);
-    uPopFloat(ufDepth);
+    uPopFloat(uf::TextScale);
+    uPopFloat(uf::Depth);
     return current;
 }
 
 int uChoice(const char* label, Vector2f pos, const char** names, int numNames, int current)
 {   
     Vector2f labelSize = uLabel(label, pos);
-    Vector2f size = { uGetFloat(ufTextBoxWidth), uGetFloat(ufSliderHeight) };
+    Vector2f size = { uGetFloat(uf::TextBoxWidth), uGetFloat(uf::SliderHeight) };
 
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
 
     Vector2f startPos = pos;
     // write centered text
-    Vector2f nameSize  = uCalcTextSize(names[current]);
+    Vector2f nameSize  = uCalcCharSize(names[current][0]);
     Vector2f arrowSize = MakeVec2(mCurrentFontAtlas->maxCharWidth * 1.65f);
     float centerOffset = (size.x - nameSize.x) / 2.0f;
     
     pos.x += centerOffset;
-    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.8f);
         uText(names[current], pos);
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
     pos.x -= centerOffset + arrowSize.x;
 
     bool elementFocused = uGetElementFocused();
@@ -1438,7 +1509,7 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
         else current = numNames - 1;
     }
 
-    uint iconColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorText);
+    uint iconColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Text);
     uHorizontalTriangle(pos, arrowSize.x * 0.82f, -0.8f, iconColor);
     pos.x += size.x;
     pos.x += arrowSize.x;
@@ -1457,17 +1528,17 @@ int uChoice(const char* label, Vector2f pos, const char** names, int numNames, i
 bool uSlider(const char* label, Vector2f pos, float* val, float scale)
 {
     Vector2f labelSize = uLabel(label, pos);
-    Vector2f size = { scale, uGetFloat(ufSliderHeight) };
+    Vector2f size = { scale, uGetFloat(uf::SliderHeight) };
     
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
-    uPushColor(uColorBorder, borderColor);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
+    uPushColor(uColor::Border, borderColor);
     uBorder(pos, size);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
 
     bool edited = uClickCheck(pos, size, CheckOpt_WhileMouseDown);
     
@@ -1490,16 +1561,16 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
     
     if (*val > 0.01f)
     {
-        float lineThickness = uGetFloat(ufLineThickness);
+        float lineThickness = uGetFloat(uf::LineThickness);
         size.x *= *val;
         pos    += lineThickness;
         size   -= lineThickness;
-        uQuad(pos, size, uGetColor(uColorSliderInside));
+        uQuad(pos, size, uGetColor(uColor::SliderInside));
         
-        uPushFloat(ufLineThickness, 3.0f);
+        uPushFloat(uf::LineThickness, 3.0f);
         pos.x += size.x;
         uLineVertical(pos, size.y);
-        uPopFloat(ufLineThickness);
+        uPopFloat(uf::LineThickness);
     }
     return edited;
 }
@@ -1507,21 +1578,21 @@ bool uSlider(const char* label, Vector2f pos, float* val, float scale)
 FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int maxVal, float dragSpeed)
 {
     Vector2f labelSize = uLabel(label, pos);
-    Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
+    Vector2f size = { uGetFloat(uf::FieldWidth), uGetFloat(uf::SliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uQuad(pos, size, uGetColor(uColor::TextBoxBG));
 
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
-    uPushColor(uColorBorder, borderColor);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
+    uPushColor(uColor::Border, borderColor);
         uBorder(pos, size);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
 
     FieldRes result = FieldRes_Clicked * clicked;
     int value = *val;
@@ -1569,10 +1640,10 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int ma
 
     char valText[16] = {};
     IntToString(valText, value);
-    float textScale = uGetFloat(ufTextScale);
-    uPushFloat(ufTextScale, textScale * 0.7f);
+    float textScale = uGetFloat(uf::TextScale);
+    uPushFloat(uf::TextScale, textScale * 0.7f);
         uText(valText, pos);
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
     return result;
 }
 
@@ -1593,21 +1664,21 @@ inline float SetFloatFract0(float val, int n)
 FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVal, float maxVal, float dragSpeed)
 {
     Vector2f labelSize = uLabel(label, pos);
-    Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
+    Vector2f size = { uGetFloat(uf::FieldWidth), uGetFloat(uf::SliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
     bool clicked = uClickCheck(pos, size, CheckOpt_BigColission);
-    uQuad(pos, size, uGetColor(uColorTextBoxBG));
+    uQuad(pos, size, uGetColor(uColor::TextBoxBG));
 
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
-    uPushColor(uColorBorder, borderColor);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
+    uPushColor(uColor::Border, borderColor);
         uBorder(pos, size);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
 
     float value = *valPtr;
     bool changed = false;
@@ -1698,10 +1769,10 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
         FloatToString(valText, value, afterpoint);
     }
     
-    float textScale = uGetFloat(ufTextScale);
-    uPushFloat(ufTextScale, textScale * 0.7f);
+    float textScale = uGetFloat(uf::TextScale);
+    uPushFloat(uf::TextScale, textScale * 0.7f);
         uText(valText, pos);
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
     return result;
 }
 
@@ -1709,7 +1780,7 @@ bool uIntVecField(const char* label, Vector2f pos, int* vecPtr, int N, int* inde
 {
     AX_ASSUME(N <= 8);
     Vector2f labelSize = uLabel(label, pos);
-    const float fieldWidth = uGetFloat(ufFieldWidth);
+    const float fieldWidth = uGetFloat(uf::FieldWidth);
     const float padding = fieldWidth * 0.07f;
     // start it from left
     const int Nmin1 = N - 1;
@@ -1742,7 +1813,7 @@ bool uFloatVecField(const char* label, Vector2f pos, float* vecPtr, int N, int* 
 {
     AX_ASSUME(N <= 8);
     Vector2f labelSize = uLabel(label, pos);
-    const float fieldWidth = uGetFloat(ufFieldWidth);
+    const float fieldWidth = uGetFloat(uf::FieldWidth);
     const float padding = fieldWidth * 0.07f;
     // start it from left
     const int Nmin1 = N - 1;
@@ -1775,10 +1846,10 @@ bool uFloatVecField(const char* label, Vector2f pos, float* vecPtr, int N, int* 
 bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 {
     Vector2f labelSize = uLabel(label, pos);
-    Vector2f size = { uGetFloat(ufFieldWidth), uGetFloat(ufSliderHeight) };
+    Vector2f size = { uGetFloat(uf::FieldWidth), uGetFloat(uf::SliderHeight) };
     size.y = labelSize.y; // maybe change: y scale using label height is weierd 
 
-    float contentStart = uGetFloat(ufContentStart);
+    float contentStart = uGetFloat(uf::ContentStart);
     pos.x += contentStart - size.x;
     pos.y -= size.y;
 
@@ -1786,10 +1857,10 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     uQuad(pos, size, *colorPtr);
 
     bool elementFocused = uGetElementFocused();
-    uint borderColor = uGetColor(elementFocused ? uColorSelectedBorder : uColorBorder);
-    uPushColor(uColorBorder, borderColor);
+    uint borderColor = uGetColor(elementFocused ? uColor::SelectedBorder : uColor::Border);
+    uPushColor(uColor::Border, borderColor);
         uBorder(pos, size);
-    uPopColor(uColorBorder);
+    uPopColor(uColor::Border);
     
     bool edited = false;
     clicked |= GetKeyPressed(Key_ENTER) & elementFocused;
@@ -1808,19 +1879,19 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
     }
 
     if (mColorPick.isOpen) {
-        float lineThickness = uGetFloat(ufLineThickness) * 2.0f;
+        float lineThickness = uGetFloat(uf::LineThickness) * 2.0f;
         mColorPick.pos = pos;
         mColorPick.size = MakeVec2(300.0f, 200.0f) * (1.0f + IsAndroid());
         mColorPick.pos.y -= mColorPick.size.y + lineThickness;
         mColorPick.pos.x += size.x + lineThickness; // field width
 
-        uPushColor(uColorBorder, 0xFFFFFFFFu);
-        uPushFloat(ufLineThickness, lineThickness);
+        uPushColor(uColor::Border, 0xFFFFFFFFu);
+        uPushFloat(uf::LineThickness, lineThickness);
         mColorPick.pos -= lineThickness * 0.9f;
             uBorder(mColorPick.pos, mColorPick.size + lineThickness);
         mColorPick.pos += lineThickness * 0.9f;
-        uPopFloat(ufLineThickness);
-        uPopColor(uColorBorder);
+        uPopFloat(uf::LineThickness);
+        uPopColor(uColor::Border);
         
         Vector2f mousePos; 
         GetMouseWindowPos(&mousePos.x, &mousePos.y);
@@ -1843,12 +1914,12 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
             mColorPick.alpha = 1.0f - Remap(mousePos.y, 0.0f, alphaSize.y * mWindowRatio.y, 0.0f, 1.0f);
         }
 
-        uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.8f);
-        uPushColor(uColorLine, 0xFF000000u);
+        uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.8f);
+        uPushColor(uColor::Line, 0xFF000000u);
             alphaPos.y += alphaSize.y * (1.0f-mColorPick.alpha);
             uLineHorizontal(alphaPos, alphaSize.x); // alpha black indicator line 
-        uPopColor(uColorLine);
-        uPopFloat(ufDepth);
+        uPopColor(uColor::Line);
+        uPopFloat(uf::Depth);
 
         // sv = saturation, vibrance
         Vector2f svPosition = mColorPick.pos;
@@ -1895,11 +1966,11 @@ bool uColorField(const char* label, Vector2f pos, uint* colorPtr)
 
         huePosition.x += hueSize.x * mColorPick.hsv.x;
 
-        uPushFloat(ufDepth, uGetFloat(ufDepth) * 0.8f);
-        uPushColor(uColorLine, 0xFF000000u);
+        uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.8f);
+        uPushColor(uColor::Line, 0xFF000000u);
             uLineVertical(huePosition, hueSize.y); // hue black indicator line 
-        uPopColor(uColorLine);
-        uPopFloat(ufDepth);
+        uPopColor(uColor::Line);
+        uPopFloat(uf::Depth);
     }
 
     return clicked || edited;
@@ -1939,7 +2010,7 @@ void uVertex(Vector2f pos, uint8 fade, uint color, uint32 properties)
     vert.posX   = MakeFixed(pos.x); 
     vert.posY   = MakeFixed(pos.y); 
     vert.fade   = fade;
-    vert.depth  = uint8(uGetFloat(ufDepth) * 255.0f);
+    vert.depth  = uint8(uGetFloat(uf::Depth) * 255.0f);
     vert.cutStart = 0xFF & (properties >> 8);
     vert.effect = 0xFF & properties;
     vert.color  = color;
@@ -2173,6 +2244,404 @@ void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color)
 }
 
 //------------------------------------------------------------------------
+// Section: WindowAPI
+
+void uSeperatorW(uint color, uTriEffect triEffect, float occupancy)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    float lineLength = window.scale.x * occupancy;
+    float xoffset = (window.scale.x - lineLength) * 0.5f; // where line starts
+    Vector2f oldPos = window.elementPos;
+    window.elementPos.x = window.position.x + xoffset;
+
+    uPushColor(uColor::Line, uGetColor(uColor::Border));
+        uLineHorizontal(window.elementPos, lineLength, triEffect);
+    uPopColor(uColor::Line);
+    
+    window.elementPos = oldPos;
+    window.elementPos.y += window.elementOffsetY;
+}
+
+static int FindWindow(uint32_t hash)
+{
+    for (int i = 0; i < mNumWindows; i++)
+        if (mWindows[i].hash == hash)
+            return i;
+    return 0;
+}
+
+void uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale)
+{
+    mNumWindows++;
+    
+    int windowIndex = FindWindow(hash);
+    mCurrentWindow = windowIndex;
+    UWindow& window = mWindows[windowIndex];
+
+    if (!window.started)
+    {
+        window.started = true;
+        window.position = position;
+        window.scale = scale;
+        window.hash = hash;
+    }
+ 
+    float settingElementWidth = window.scale.x / 1.10f;
+    float elementsXOffset = window.scale.x / 2.0f - (settingElementWidth / 2.0f);
+
+    window.elementPos = window.position;
+    window.currElement = 0;
+    window.numElements = 0;
+
+
+    uQuad(window.position, window.scale, uGetColor(uColor::Quad) & 0xFEFFFFFFu); // background
+    uBorder(window.position, window.scale);
+
+    uPushFloat(uf::ContentStart, settingElementWidth);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.7f);
+    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.9f);
+    
+    float elementHeight = uCalcCharSize('G').y;
+    float lineThickness = uGetFloat(uf::LineThickness);
+    float labelPadding = elementHeight * 0.33f;
+    float topHeight = elementHeight + labelPadding * 2.0f;
+
+    uBeginScissor(window.position-lineThickness*2.0f, window.scale + lineThickness*2.0f, uScissorMask_Text | uScissorMask_Quad);
+
+    uQuad(window.position + lineThickness, MakeVec2(window.scale.x - lineThickness * 2.0f, topHeight), uGetColor(uColor::Quad) & 0xFD636363u);
+    
+    uPushColor(uColor::Line, uGetColor(uColor::Border));
+        uLineHorizontal(window.position + lineThickness + MakeVec2(0.0f, topHeight), window.scale.x - lineThickness * 2.0f);
+    uPopColor(uColor::Line);
+
+    Vector2f mousePos;
+    GetMouseWindowPos(&mousePos.x, &mousePos.y);
+
+    // handle holding and dragging top of the window, to move the window
+    Vector2f topPos  = window.position + 8.0f;
+    Vector2f topSize = MakeVec2(window.scale.x - 16.0f, topHeight - 8.0f);
+
+    topPos *= mWindowRatio;
+    topSize *= mWindowRatio;
+    bool topIntersect = PointBoxIntersection(topPos, topPos + topSize, mousePos);
+
+    if ((window.holdingTop || topIntersect) && GetMouseDown(MouseButton_Left) && window.draggingPos == 0)
+    {
+        Vector2f old = mMouseOld / mWindowRatio;
+        mousePos /= mWindowRatio;
+        window.position += mousePos - old;
+        window.holdingTop = true;
+    }
+    else
+        window.holdingTop = false;
+
+    float labelXStart = window.scale.x * 0.012f;
+    window.elementPos.y += elementHeight + labelPadding;
+    window.elementPos.x += labelXStart;
+    uText(name, window.elementPos);
+
+    uPopFloat(uf::TextScale);
+    
+    float lineLength = window.scale.x;
+    window.elementPos.y += elementHeight + labelPadding * 3.0f; 
+    window.elementPos.x -= labelXStart;
+    window.elementPos.x += elementsXOffset * 1.2f;
+
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.72f);
+    elementHeight = uCalcCharSize('G').y;
+    window.elementOffsetY = elementHeight + (elementHeight * 0.35f);
+
+    uPushFloat(uf::FieldWidth, uGetFloat(uf::FieldWidth) * 0.8f);
+}
+
+void uWindowEnd()
+{
+    uPopFloat(uf::TextScale);
+    uPopFloat(uf::FieldWidth);
+    uPopFloat(uf::ContentStart);
+    uPopFloat(uf::Depth);
+    
+    uEndScissor(uScissorMask_Text | uScissorMask_Quad);
+
+    UWindow& window = mWindows[mCurrentWindow];
+    int currElement = window.selectedElement;
+    int numElements = window.numElements;
+
+    bool tabPressed = GetKeyPressed(Key_TAB) && currElement != numElements; // if we are at int field we don't want to increase current element instead we want to go next element in vector field
+    if (GetKeyPressed(Key_UP))
+        window.selectedElement = currElement == 0 ? numElements - 1 : currElement - 1;
+    else if (GetKeyPressed(Key_DOWN) || tabPressed)                                                   
+        window.selectedElement = currElement == numElements - 1 ? 0 : currElement + 1;
+}
+
+static inline bool EdgePointIntersection(Vector2f point, Vector2f lineCenter, int axis, float halfSize, float dist)
+{
+    return Abs(point[axis] - lineCenter[axis]) < dist && 
+        Abs(point[1 - axis] - lineCenter[1 - axis]) < halfSize;
+}
+
+static void HandleWindowEvents()
+{
+    Vector2f mousePos;
+    GetMouseWindowPos(&mousePos.x, &mousePos.y);
+    
+    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.7f);
+
+    for (int w = 0; w < mNumWindows; w++)
+    {
+        UWindow& window = mWindows[w];
+        if (window.holdingTop) continue;
+
+        Vector2f scaledPos = window.position * mWindowRatio;
+        Vector2f scaledScale = window.scale * mWindowRatio;
+
+        Vector2f halfSize = scaledScale * 0.5f;
+        Vector2f center = scaledPos + halfSize;
+
+        int edgeDragging = (window.draggingPos & uWindowPos_EdgeMask) > 0;
+        
+        float edgeDist = 5.0f * (1.0f + edgeDragging);
+        // edge detection, right, left, up, bottom
+        int r = EdgePointIntersection(mousePos, center + MakeVec2( halfSize.x, 0.0f), 0, halfSize[1], edgeDist);
+        int l = EdgePointIntersection(mousePos, center + MakeVec2(-halfSize.x, 0.0f), 0, halfSize[1], edgeDist);
+        int t = EdgePointIntersection(mousePos, center + MakeVec2(0.0f, -halfSize.y), 1, halfSize[0], edgeDist);
+        int b = EdgePointIntersection(mousePos, center + MakeVec2(0.0f,  halfSize.y), 1, halfSize[0], edgeDist);
+
+        int cornerDragging = !!(window.draggingPos & uWindowPos_CornerMask);
+        
+        // detect corner intersection
+        float corDist  = 12.0f * (1.0f + cornerDragging);
+        float corDistH = corDist / 2.0f;
+
+        // right upper, left upper, right bottom, left bottom
+        int rt = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(scaledScale.x, 0.0f)) < corDist;
+        int lt = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(0.0f)) < corDist;
+        int rb = Vector2f::DistanceSq(mousePos, scaledPos + scaledScale) < corDist;
+        int lb = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(0.0f, scaledScale.y)) < corDist;
+        
+        // uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.8f);
+
+        Vector2f quadSize = MakeVec2(corDistH) / mWindowRatio;
+        // show cube at corner if user expanding window
+        if (rt) uQuad(window.position + MakeVec2(window.scale.x - corDistH, 0.0f), quadSize, 0xFF008CFAu);
+        if (lt) uQuad(window.position, quadSize, 0xFF008CFAu);
+        if (rb) uQuad(window.position + MakeVec2(window.scale.x - corDistH, window.scale.y - corDistH), quadSize, 0xFF008CFAu);
+        if (lb) uQuad(window.position + MakeVec2(0.0f, window.scale.y - corDistH), quadSize, 0xFF008CFAu);
+
+        uPushColor(uColor::Line, uGetColor(uColor::SelectedBorder));
+        uPushFloat(uf::LineThickness, uGetFloat(uf::LineThickness) * 2.0f);
+
+        int anyCorner = rt | lt | rb | lb | cornerDragging;
+        // show line in edge if player scaling window
+        if (r && !anyCorner) uLineVertical(window.position + MakeVec2(window.scale.x, 0.0f), window.scale.y, 0);
+        if (l && !anyCorner) uLineVertical(window.position, window.scale.y, 0);
+        if (t && !anyCorner) uLineHorizontal(window.position, window.scale.x, 0);
+        if (b && !anyCorner) uLineHorizontal(window.position + MakeVec2(0.0f, window.scale.y), window.scale.x, 0);
+        
+        uPopFloat(uf::LineThickness);
+        uPopColor(uColor::Line);
+
+        bool mouseDown = GetMouseDown(MouseButton_Left);
+
+        Vector2f begin = scaledPos;
+        Vector2f end = begin + scaledScale;
+        
+        const float winMinSize = 125.0f;
+
+        Vector2f beginMin = begin + MakeVec2(winMinSize);
+        Vector2f endMin   = end - MakeVec2(winMinSize);
+
+        if (!anyCorner && mouseDown)
+        {
+            // do edge movement, if selected and dragging
+            if (r || window.draggingPos == uWindowPos_RightEdge) {
+                end.x = MacroMax(mousePos.x, beginMin.x);
+                window.draggingPos = uWindowPos_RightEdge;
+            }
+        
+            if (l || window.draggingPos == uWindowPos_LeftEdge) {
+                begin.x = MacroMin(mousePos.x, endMin.x);
+                window.draggingPos = uWindowPos_LeftEdge;
+            }
+
+            if (b || window.draggingPos == uWindowPos_BottomEdge) {
+                end.y = MacroMax(mousePos.y, beginMin.y);
+                window.draggingPos = uWindowPos_BottomEdge;
+            }
+
+            if (t || window.draggingPos == uWindowPos_TopEdge) {
+                begin.y = MacroMin(mousePos.y, endMin.y);
+                window.draggingPos = uWindowPos_TopEdge;
+            }
+        }
+
+        // corner detection
+        if ((rb || window.draggingPos == uWindowPos_RightBottom) && mouseDown) 
+        {
+            end = Max(mousePos, beginMin);
+            window.draggingPos = uWindowPos_RightBottom;
+        }
+        
+        if ((rt || window.draggingPos == uWindowPos_RightTop) && mouseDown) 
+        {
+            end.x   = MacroMax(mousePos.x, beginMin.x);
+            begin.y = MacroMin(mousePos.y, endMin.y);
+            window.draggingPos = uWindowPos_RightTop;
+        }
+
+        if ((lb || window.draggingPos == uWindowPos_LeftBottom) && mouseDown) {
+            end.y   = MacroMax(mousePos.y, beginMin.y); 
+            begin.x = MacroMin(mousePos.x, endMin.x);
+            window.draggingPos = uWindowPos_LeftBottom;
+        }
+
+        if ((lt || window.draggingPos == uWindowPos_LeftTop) && mouseDown) {
+            begin = Min(mousePos, endMin);
+            window.draggingPos = uWindowPos_LeftTop;
+        }
+
+        Vector2f invWindowRatio = Vector2f::One() / mWindowRatio;
+        window.position = begin * invWindowRatio;
+        window.scale = (end - begin) * invWindowRatio;
+
+        if (!mouseDown) window.draggingPos = 0;
+    }
+    
+    uPopFloat(uf::Depth);
+}
+
+static void WindowElementEnd(UWindow& window, bool selected)
+{
+    if (selected) {
+        window.selectedElement = window.currElement;
+    }    
+    window.elementPos.y += window.elementOffsetY;
+    window.currElement++;
+    window.numElements++;
+}
+
+bool uButtonW(const char* text, Vector2f scale, uButtonOptions opt)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uButton(text, window.elementPos, scale, opt);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+bool uTextBoxW(const char* label, Vector2f size, char* text)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uTextBox(label, window.elementPos, size, text);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+bool uCheckBoxW(const char* text, bool* isEnabled, bool cubeCheckMark)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uCheckBox(text, window.elementPos, isEnabled, cubeCheckMark);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+// val should be between 0 and 1
+// minimum value that slicer can represent is 0.01f lower than that will round to 0.0f, be aware of that
+bool uSliderW(const char* label, float* val, float scale)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uSlider(label, window.elementPos, val, scale);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+FieldRes uIntFieldW(const char* label, int* val, int minVal, int maxVal, float dragSpeed)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    FieldRes res = uIntField(label, window.elementPos, val, minVal, maxVal, dragSpeed);
+    WindowElementEnd(window, res);
+    return res;    
+}
+
+FieldRes uFloatFieldW(const char* label, float* val, float minVal, float maxVal, float dragSpeed)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    FieldRes res = uFloatField(label, window.elementPos, val, minVal, maxVal, dragSpeed);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+bool uIntVecFieldW(const char* label, int* val, int N, int* index, int minVal, int maxVal, float dragSpeed)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    static int orthoIndex = 0;
+    bool res = uIntVecField(label, window.elementPos, val, N, index, minVal, maxVal, dragSpeed);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+bool uFloatVecFieldW(const char* label, float* valArr, int N, int* index, float minVal, float maxVal, float dragSpeed)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uFloatVecField(label, window.elementPos, valArr, N, index, minVal, maxVal, dragSpeed);
+    WindowElementEnd(window, res);
+    return res;    
+}
+
+bool uColorFieldW(const char* label, uint* color)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uColorField(label, window.elementPos, color);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+bool uColorField3W(const char* label, float* color3Ptr) // rgb32f color
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uColorField3(label, window.elementPos, color3Ptr);
+    WindowElementEnd(window, res);
+    return res;
+}
+
+bool uColorField4W(const char* label, float* color4Ptr) // rgba32f color
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    bool res = uColorField4(label, window.elementPos, color4Ptr);
+    WindowElementEnd(window, res);
+    return res;    
+}
+
+int uChoiceW(const char* label, const char** elements, int numElements, int current)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    int res = uChoice(label, window.elementPos, elements, numElements, current);
+    WindowElementEnd(window, res);
+    return res;        
+}
+
+// similar to uChoice but when we click it opens dropdown menu and allows us to select
+int uDropdownW(const char* label, const char** names, int numNames, int current)
+{
+    UWindow& window = mWindows[mCurrentWindow];
+    uSetElementFocused(window.selectedElement == window.currElement);
+    int res = uDropdown(label, window.elementPos, names, numNames, current);
+    WindowElementEnd(window, res);
+    return res;            
+}
+
+//------------------------------------------------------------------------
 // Rendering
 
 void uBeginScissor(Vector2f pos, Vector2f scale, uScissorMask mask)
@@ -2342,6 +2811,7 @@ void uBegin()
     mAnyTextEdited = false;
     mAnyFloatEdited = false;
     mAnyElementClicked = false;
+    mNumWindows = 0;
     mQuadScissor.Reset();
     mTextScissor.Reset();
 }
@@ -2380,6 +2850,8 @@ void uRender()
         mCurrText.Editing = false;
         mLastFloatWriting = false, mFloatDigits = 3;
     }
+
+    HandleWindowEvents();
 
     rSetBlending(false);
     GetMouseWindowPos(&mMouseOld.x, &mMouseOld.y);

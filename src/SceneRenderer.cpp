@@ -1062,90 +1062,39 @@ void Destroy()
 void ShowEditor()
 {
     static bool open = false;
+    
     if (GetKeyPressed('B')) open = !open;
+    
     if (!open) return;
-    Vector2f bgPos   = { 20.0f, 90.0f };
-    Vector2f bgScale = { 450.0f, 600.0f };
-    Vector2f pos = bgPos;
 
-    uQuad(pos, bgScale, uGetColor(uColorQuad) & 0x77FFFFFFu);
-    uBorder(pos, bgScale);
+    uBeginWindow("Graphics", 23455, MakeVec2(20.0f, 90.0f), MakeVec2(450.0f, 600.0f));
 
-    const float textPadding = 13.0f;
-    Vector2f zero2 = { 0.0f, 0.0f };
-
-    // uSetFloat(ufContentStart, uGetFloat(ufContentStart) * 2.0f);
-    float settingElementWidth = bgScale.x / 1.15f;
-    float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
-
-    Vector2f textSize = uCalcTextSize("Graphics");
-    uPushFloat(ufContentStart, settingElementWidth);
- 
-    // uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.0f);
-    float settingsXStart = 20.0f;
-    pos.y += textSize.y + textPadding;
-    pos.x += settingsXStart;
-    uText("Graphics", pos);
-    // uPopFloat(ufTextScale);
-
-    float lineLength = bgScale.x * 0.85f;
-    float xoffset = (bgScale.x - lineLength) * 0.5f; // where line starts
-    pos.x += xoffset;
-    pos.y += 20.0f; // line padding
-    pos.x -= settingsXStart;
-
-    uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
-    uLineHorizontal(pos, lineLength, uTriEffect_None);
-    uPopColor(uColorLine);
-
-    pos.x -= xoffset;
-    pos.x += elementsXOffset;
-    pos.y += textSize.y + textPadding;
-
-    static int CurrElement = 0;
-    const int numElements = 11; // number of options plus back button
-
-    uPushFloat(ufTextScale, 0.6f);
-    uPushFloat(ufFieldWidth, uGetFloat(ufFieldWidth) * 0.8f);
-
-    uSetElementFocused(CurrElement == 0);
-    if (uFloatField("Ortho Size", pos, &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
+    if (uFloatFieldW("Ortho Size", &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
     {
-        CurrElement = 0;
         m_RedrawShadows = 1;
     }
-
-    pos.y += textSize.y + textPadding;
-    uSetElementFocused(CurrElement == 1);
+    
     static int orthoIndex = 0;
-    if (uFloatVecField("Ortho Offset", pos, &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
+    if (uFloatVecFieldW("Ortho Offset", &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
     {
-        CurrElement = 1;
         m_RedrawShadows = 1;
     }
 
-    pos.y += textSize.y + textPadding;
-    uSetElementFocused(CurrElement == 2);
-    if (uFloatField("Sun Angle", pos, &g_CurrentScene.m_SunAngle, -PI, PI+0.15f, 0.04f))
+    if (uFloatFieldW("Sun Angle", &g_CurrentScene.m_SunAngle, -PI, PI + 0.15f, 0.04f))
     {
         m_RedrawShadows = 1;
-        CurrElement = 2;
     }
 
-    pos.y += textSize.y + textPadding;
-    uSetElementFocused(CurrElement == 3);
-    if (uFloatField("Far Plane", pos, &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
+    if (uFloatFieldW("Far Plane", &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
     {
         m_RedrawShadows = 1;
-        CurrElement = 3;
     }
+    
+    uSeperatorW(uGetColor(uColor::SelectedBorder), uTriEffect_None, 0.95f);
 
-    HBAOEdit(pos, &CurrElement, textSize.y + textPadding);
+    HBAOEdit();
 
-    uPopFloat(ufTextScale);
-    uPopFloat(ufFieldWidth);
-    uPopFloat(ufContentStart);
-
+    uWindowEnd();
     // uSprite(MakeVec2(1100.0f, 500.0f), MakeVec2(800.0f, 550.0f), &m_ShadowTexture);
 
     if (GetKeyPressed('K'))

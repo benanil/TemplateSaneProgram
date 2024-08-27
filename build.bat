@@ -8,15 +8,18 @@ if "%1"=="Debug" (
     devenv build/SaneProgram.vcxproj /Build "Release|x64"
     start "" "build/Release/SaneProgram.exe"
 )
+REM zstddeclib.c
 
 REM Compile the C++ code using clang++
 REM clang++ -std=c++14 -O3 -mavx2 -march=native -mfma -msse4.2 -mwindows -luser32 ^
 REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS  ^
-REM External/zstddeclib.c ^
 REM ASTL/Additional/GLTFParser.cpp ^
 REM ASTL/Additional/OBJParser.cpp ^
 REM ASTL/Additional/Profiler.cpp ^
 REM External/vulkan/shVulkan.c ^
+REM External/zstd.c ^
+REM External/ufbx.c ^
+REM External/ProcessDxtc.cpp ^
 REM src/Animation.cpp ^
 REM src/AssetManager.cpp ^
 REM src/SaneProgram.cpp ^
@@ -31,6 +34,29 @@ REM src/Texture.cpp ^
 REM src/CharacterController.cpp ^
 REM src/BVH.cpp ^
 REM src/TLAS.cpp ^
+REM src/HBAO.cpp ^
+REM External/astc-encoder/astcenc_averages_and_directions.cpp     ^
+REM External/astc-encoder/astcenc_block_sizes.cpp                 ^
+REM External/astc-encoder/astcenc_color_quantize.cpp              ^
+REM External/astc-encoder/astcenc_color_unquantize.cpp            ^
+REM External/astc-encoder/astcenc_compress_symbolic.cpp           ^
+REM External/astc-encoder/astcenc_compute_variance.cpp            ^
+REM External/astc-encoder/astcenc_decompress_symbolic.cpp         ^
+REM External/astc-encoder/astcenc_diagnostic_trace.cpp            ^
+REM External/astc-encoder/astcenc_entry.cpp                       ^
+REM External/astc-encoder/astcenc_find_best_partitioning.cpp      ^
+REM External/astc-encoder/astcenc_ideal_endpoints_and_weights.cpp ^
+REM External/astc-encoder/astcenc_image.cpp                       ^
+REM External/astc-encoder/astcenc_integer_sequence.cpp            ^
+REM External/astc-encoder/astcenc_mathlib.cpp                     ^
+REM External/astc-encoder/astcenc_mathlib_softfloat.cpp           ^
+REM External/astc-encoder/astcenc_partition_tables.cpp            ^
+REM External/astc-encoder/astcenc_percentile_tables.cpp           ^
+REM External/astc-encoder/astcenc_pick_best_endpoint_format.cpp   ^
+REM External/astc-encoder/astcenc_quantization.cpp                ^
+REM External/astc-encoder/astcenc_symbolic_physical.cpp           ^
+REM External/astc-encoder/astcenc_weight_align.cpp                ^
+REM External/astc-encoder/astcenc_weight_quant_xfer_tables.cpp    ^
 REM -o SaneProgram.exe ^
 REM -lopengl32 -lgdi32  SaneProgram.res
 

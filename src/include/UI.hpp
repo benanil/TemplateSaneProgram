@@ -24,17 +24,18 @@ enum {
     uOptNone = 0
 };
 
-enum uColor_{
-    uColorText          , 
-    uColorQuad          , 
-    uColorHovered       , // < button hovered color
-    uColorLine          ,
-    uColorBorder        ,
-    uColorCheckboxBG    ,
-    uColorTextBoxBG     ,
-    uColorSliderInside  ,
-    uColorTextBoxCursor ,
-    uColorSelectedBorder, // < selected field, slider, textbox, checkbox...
+enum struct uColor : uint
+{
+    Text          , 
+    Quad          , 
+    Hovered       , // < button hovered color
+    Line          ,
+    Border        ,
+    CheckboxBG    ,
+    TextBoxBG     ,
+    SliderInside  ,
+    TextBoxCursor ,
+    SelectedBorder, // < selected field, slider, textbox, checkbox...
 };
 
 // uEmptyInside: if you want an circle fades like center is black the outer area is white set this true
@@ -55,18 +56,19 @@ enum uButtonOpt_ { // bitmask
     uButtonOpt_Border  = 512
 };
 
-enum uFloat_ {
-    ufLineThickness,
+enum struct uf : uint
+{
+    LineThickness,
     // if set to zero it will start at the end of the text
     // Content Start is: Vsync On _________ [X]  the space between label and content
-    ufContentStart ,
-    ufButtonSpace  , // Space between button text and button quad start
-    ufTextScale    , // 1.0 default
-    ufTextBoxWidth ,
-    ufSliderHeight ,
-    ufDepth        , // < between [0.0, 1.0] lower depth will shown on top
-    ufFieldWidth   , // < width of float or int fields
-    ufTextWrapWidth, // < only active if uTextFlags_WrapWidthDetermined flag is active
+    ContentStart ,
+    ButtonSpace  , // Space between button text and button quad start
+    TextScale    , // 1.0 default
+    TextBoxWidth ,
+    SliderHeight ,
+    Depth        , // < between [0.0, 1.0] lower depth will shown on top
+    FieldWidth   , // < width of float or int fields
+    TextWrapWidth, // < only active if uTextFlags_WrapWidthDetermined flag is active
 };
 
 enum uTextFlags_{
@@ -82,11 +84,10 @@ enum CheckOpt_ {
 
 typedef int uClickOpt;
 typedef uint FontHandle;
-typedef uint uColor;
 typedef uint uButtonOptions;
-typedef uint uFloat;
 typedef uint uTriEffect;
 typedef uint uTextFlags;
+typedef uf uFloat;
 
 //------------------------------------------------------------------------
 // also sets the current font to the loaded font
@@ -102,7 +103,7 @@ void uSetElementFocused(bool val); // next element that will drawn is going to b
 void uSetFont(FontHandle font);
 void uSetColor(uColor what, uint color); // set color of the buttons, texts etc.
 void uSetTheme(uint* colors);
-void uSetFloat(uFloat color, float val);
+void uSetFloat(uf color, float val);
 
 // 0xFF000000 is black and alpha is 1.0 0x00FF0000 is blue so ABGR when writing with hex
 void uPushColor(uColor color, uint val);
@@ -126,6 +127,17 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered);
 // text is an utf8 string
 void uText(const char* text, Vector2f position, uTextFlags flags = 0u);
 
+void uBorder(Vector2f begin, Vector2f scale);
+
+// quad shaped 
+void uQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0u);
+
+void uLineVertical(Vector2f begin, float size, uint properties = 0u);
+
+void uLineHorizontal(Vector2f begin, float size, uint properties = 0u);
+
+Vector2f uCalcCharSize(char c);
+
 Vector2f uCalcTextSize(const char* text, uTextFlags flags = 0u);
 
 int CalcTextNumLines(const char* text, uTextFlags flags = 0u);
@@ -133,16 +145,19 @@ int CalcTextNumLines(const char* text, uTextFlags flags = 0u);
 // returns true if clicked, make scale [0.0,0.0] if you want to scale the button according to text
 bool uButton(const char* text, Vector2f pos, Vector2f scale, uButtonOptions opt = 0);
 
-// quad shaped 
-void uQuad(Vector2f position, Vector2f scale, uint color, uint properties = 0u);
+bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text);
 
 // returns true if changed
 // if cubeCheckMark is true, selected checkbox will look like square instead of checkmark
-bool uCheckBox(const char* text, bool* isEnabled, Vector2f pos, bool cubeCheckMark = false);
+bool uCheckBox(const char* text, Vector2f pos, bool* isEnabled, bool cubeCheckMark = false);
 
 // val should be between 0 and 1
 // minimum value that slicer can represent is 0.01f lower than that will round to 0.0f, be aware of that
 bool uSlider(const char* label, Vector2f pos, float* val, float scale); 
+
+int uDropdown(const char* label, Vector2f pos, const char** names, int numNames, int current);
+
+int uChoice(const char* label, Vector2f pos, const char** names, int numNames, int current);
 
 enum FieldRes_ { FieldRes_Changed = 1, FieldRes_Clicked = 2 };
 typedef int FieldRes;
@@ -182,26 +197,6 @@ bool uColorField4(const char* label, Vector2f pos, float* color4Ptr); // rgba32f
 // and use sprite atlas like in font rendering
 // be aware that this works after scene rendering done, whenever you call this function, it will show the content when it is rendered(uRender function)
 void uSprite(Vector2f pos, Vector2f scale, struct Texture* texturePtr);
-
-// it will look like this: <  option  >
-// current is the current index of elements.
-// returns new index if value changed.
-// usage:
-//      const char* graphicsNames[] = { "Low" , "Medium", "High", "Ultra" };
-//      static int CurrentGraphics = 0;
-//      CurrentGraphics = uChoice("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics)
-int uChoice(const char* label, Vector2f pos, const char** elements, int numElements, int current);
-
-// similar to uChoice but when we click it opens dropdown menu and allows us to select
-int uDropdown(const char* label, Vector2f pos, const char** names, int numNames, int current);
-
-bool uTextBox(const char* label, Vector2f pos, Vector2f size, char* text);
-
-void uLineVertical(Vector2f begin, float size, uint properties = 0u);
-
-void uLineHorizontal(Vector2f begin, float size, uint properties = 0u);
-
-void uBorder(Vector2f begin, Vector2f scale);
 
 //------------------------------------------------------------------------
 // Triangle Tendering
@@ -245,7 +240,71 @@ void uBeginScissor(Vector2f pos, Vector2f scale, uScissorMask mask);
 
 void uEndScissor(uScissorMask mask);
 
+
+
 //------------------------------------------------------------------------
+// Window API
+
+void uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale);
+
+void uWindowEnd();
+
+void uSeperatorW(uint color, uTriEffect triEffect, float occupancy = 0.85f);
+
+bool uButtonW(const char* text, Vector2f scale, uButtonOptions opt = 0);
+
+// it will look like this: <  option  >
+// current is the current index of elements.
+// returns new index if value changed.
+// usage:
+//      const char* graphicsNames[] = { "Low" , "Medium", "High", "Ultra" };
+//      static int CurrentGraphics = 0;
+//      CurrentGraphics = uChoice("Graphics", pos, graphicsNames, ArraySize(graphicsNames), CurrentGraphics)
+bool uTextBoxW(const char* label, Vector2f size, char* text);
+
+// returns true if changed
+// if cubeCheckMark is true, selected checkbox will look like square instead of checkmark
+bool uCheckBoxW(const char* text, bool* isEnabled, bool cubeCheckMark = false);
+
+// val should be between 0 and 1
+// minimum value that slicer can represent is 0.01f lower than that will round to 0.0f, be aware of that
+bool uSliderW(const char* label, float* val, float scale); 
+
+FieldRes uIntFieldW(const char* label, int* val, int minVal = 0, int maxVal = INT32_MAX, float dragSpeed = 1.0f);
+
+FieldRes uFloatFieldW(const char* label, float* val, float minVal = 0.0f, float maxVal = 1.0f, float dragSpeed = 0.1f);
+
+bool uIntVecFieldW(const char* label,
+                   int* val, 
+                   int N, // number of vec elements
+                   int* index = nullptr, // holds the current selected element index
+                   int minVal = 0, 
+                   int maxVal = INT32_MAX, 
+                   float dragSpeed = 1.0f);
+
+bool uFloatVecFieldW(const char* label, 
+                    float* valArr, 
+                    int N, // number of vec elements
+                    int* index = nullptr, // holds the current selected element index
+                    float minVal = 0,
+                    float maxVal = 99999.0f, 
+                    float dragSpeed = 1.0f);
+
+bool uColorFieldW(const char* label, uint* color);
+
+bool uColorField3W(const char* label, float* color3Ptr); // rgb32f color
+
+bool uColorField4W(const char* label, float* color4Ptr); // rgba32f color
+
+int uChoiceW(const char* label, const char** elements, int numElements, int current);
+
+// similar to uChoice but when we click it opens dropdown menu and allows us to select
+int uDropdownW(const char* label, const char** names, int numNames, int current);
+
+
+
+//------------------------------------------------------------------------
+// Rendering
 
 void uBegin();
 
@@ -256,3 +315,6 @@ void uDestroy();
 void PlayButtonClickSound();
 
 void PlayButtonHoverSound();
+
+
+

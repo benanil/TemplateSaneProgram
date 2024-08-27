@@ -352,42 +352,17 @@ void HBAODestroy()
     rDeleteFrameBuffer(mDeinterleaveFB);
 }
 
-void HBAOEdit(Vector2f pos, int* CurrElement, float textPadding)
+void HBAOEdit()
 {
-    pos.y += textPadding;
-    uSetElementFocused(*CurrElement == 4);
-    if (uFloatField("Radius", pos, &mRadius, 0.1f, 8.0f, 0.1f))
-    {
-        *CurrElement = 4;
-    }
+    uFloatFieldW("Radius", &mRadius, 0.1f, 8.0f, 0.1f);
 
-    pos.y += textPadding;
-    uSetElementFocused(*CurrElement == 5);
-    if (uFloatField("MattersToViewSpace", pos, &mMattersToViewSpace, 0.1f, 8.0f, 0.1f))
-    {
-        *CurrElement = 5;
-    }
+    uFloatFieldW("MattersToViewSpace", &mMattersToViewSpace, 0.1f, 8.0f, 0.1f);
 
-    pos.y += textPadding;
-    uSetElementFocused(*CurrElement == 6);
-    if (uFloatField("Intensity", pos, &mIntensity, 0.0f, 8.0f, 0.1f))
-    {
-        *CurrElement = 6;
-    }
+    uFloatFieldW("Intensity", &mIntensity, 0.0f, 8.0f, 0.1f);
     
-    pos.y += textPadding;
-    uSetElementFocused(*CurrElement == 7);
-    if (uFloatField("Bias", pos, &mBias, 0.0f, 2.0f, 0.01f))
-    {
-        *CurrElement = 7;
-    }
+    uFloatFieldW("Bias", &mBias, 0.0f, 2.0f, 0.01f);
         
-    pos.y += textPadding;
-    uSetElementFocused(*CurrElement == 8);
-    if (uCheckBox("SSAO", &mIsOpen, pos, true))
-    {
-        *CurrElement = 8;
-    }
+    uCheckBoxW("SSAO", &mIsOpen, true);
 
     // uSprite(MakeVec2(40.0f, 750.0f), MakeVec2(500.0f, 250.0f), &mBlurResultTX);
     // uSprite(MakeVec2(540.0f, 750.0f), MakeVec2(500.0f, 250.0f), normalTex);

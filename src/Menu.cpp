@@ -112,17 +112,17 @@ static void OptionsMenu()
     float elementsXOffset = bgScale.x / 2.0f - (settingElementWidth / 2.0f);
     Vector2f textSize = uCalcTextSize("Settings");
 
-    uPushFloat(ufContentStart, settingElementWidth);
+    uPushFloat(uf::ContentStart, settingElementWidth);
 
-    uQuad(pos, bgScale, uGetColor(uColorQuad));
+    uQuad(pos, bgScale, uGetColor(uColor::Quad));
     uBorder(pos, bgScale);
 
-    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 1.2f);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 1.2f);
     float settingsXStart = (bgScale.x/2.0f) - (textSize.x/2.0f);
     pos.y += textSize.y + textPadding;
     pos.x += settingsXStart;
     uText("Settings", pos);
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
 
     float lineLength = bgScale.x * 0.85f;
     float xoffset = (bgScale.x - lineLength) * 0.5f; // where line starts
@@ -130,9 +130,9 @@ static void OptionsMenu()
     pos.y += 20.0f; // line padding
     pos.x -= settingsXStart;
 
-    uPushColor(uColorLine, uGetColor(uColorSelectedBorder));
+    uPushColor(uColor::Line, uGetColor(uColor::SelectedBorder));
         uLineHorizontal(pos, lineLength, uFadeBit | uCenterFadeBit | uIntenseFadeBit);
-    uPopColor(uColorLine);
+    uPopColor(uColor::Line);
 
     pos.x -= xoffset;
     pos.x += elementsXOffset;
@@ -141,9 +141,9 @@ static void OptionsMenu()
     static int CurrElement = 0;
     const int numElements = 11; // number of options plus back button
     
-    uPushFloat(ufTextScale, elementScale);
+    uPushFloat(uf::TextScale, elementScale);
     uSetElementFocused(CurrElement == 0);
-    if (uCheckBox("Vsync", &isVsyncEnabled, pos, true))
+    if (uCheckBox("Vsync", pos, &isVsyncEnabled, true))
     {
         wSetVSync(isVsyncEnabled);
     }
@@ -151,11 +151,11 @@ static void OptionsMenu()
     textSize.y = uCalcTextSize("V").y;
     uSetElementFocused(CurrElement == 1);
     pos.y += textSize.y + textPadding;
-    uCheckBox("Show Fps", &showFPS, pos, true);
+    uCheckBox("Show Fps", pos, &showFPS, true);
     
     pos.y += textSize.y + textPadding;
     uSetElementFocused(CurrElement == 2);
-    uCheckBox("Show Details", &showDetails, pos, true);
+    uCheckBox("Show Details", pos, &showDetails, true);
     
     pos.y += textSize.y + textPadding;
     static char name[128] = {};
@@ -167,7 +167,7 @@ static void OptionsMenu()
     pos.y += textSize.y + textPadding;
     static float volume = 0.5f;
     uSetElementFocused(CurrElement == 4);
-    if (uSlider("Volume", pos, &volume, uGetFloat(ufTextBoxWidth))) {
+    if (uSlider("Volume", pos, &volume, uGetFloat(uf::TextBoxWidth))) {
         CurrElement = 4;
         SetGlobalVolume(volume);
     }
@@ -222,14 +222,14 @@ static void OptionsMenu()
     // draw border only if we selected or it is android
     uSetElementFocused(CurrElement == 10);
     uButtonOptions buttonOpt = uButtonOpt_Border | (CurrElement == 10 ? uButtonOpt_Hovered : 0);
-    uPushFloat(ufTextScale, uGetFloat(ufTextScale) * 0.8f);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.8f);
     if (uButton("Back", pos, zero2, buttonOpt)) {
         menuState = MenuState_PauseMenu;
     }
-    uPopFloat(ufTextScale);
+    uPopFloat(uf::TextScale);
     
-    uPopFloat(ufTextScale);
-    uPopFloat(ufContentStart);
+    uPopFloat(uf::TextScale);
+    uPopFloat(uf::ContentStart);
     
     bool tabPressed = GetKeyPressed(Key_TAB) && CurrElement != 8; // if we are at int field we don't want to increase current element instead we want to go next element in vector field
     if (GetKeyPressed(Key_UP))
@@ -316,7 +316,7 @@ bool ShowMenu()
     bool pauseMenuOpenned = false;
 
     if (IsAndroid() && menuState == MenuState_Gameplay) {
-        uSetFloat(ufTextScale, 1.125f);
+        uSetFloat(uf::TextScale, 1.125f);
 
         Vector2f buttonPos = MakeVec2(1850.0f, 30.0f);
         if (uButton(nullptr, buttonPos, MakeVec2(40.0f), uButtonOpt_Border))

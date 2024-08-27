@@ -10,7 +10,7 @@ void HBAOResize(int width, int height);
 void HBAOLinearizeDepth(Texture* depthTex, float near, float far); // < first call this
 void HBAORender(CameraBase* camera, Texture* depthTex, Texture* normalTex); // then call this
 
-void HBAOEdit(Vector2f pos, int* currElement, float textPadding);
+void HBAOEdit();
 void HBAODestroy();
 
 Texture* HBAOGetResult();
