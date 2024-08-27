@@ -62,8 +62,8 @@ int AXStart()
     g_CurrentScene.Init();
     InitBVH();
 
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -155,7 +155,7 @@ static void CastRay()
     if (rayResult.t != RayacastMissDistance) 
     {
         int nodeIndex = bistro->nodes[SelectedNodeIndex].index;
-        if (nodeIndex != 0) return;
+        if (nodeIndex == -1) return;
 
         AMesh* mesh = bistro->meshes + nodeIndex;
 
@@ -168,7 +168,7 @@ static void CastRay()
         mesh = bistro->meshes + bistro->nodes[SelectedNodeIndex].index;
         mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = true;
         
-        // sphere->globalNodeTransforms[0].r[3] = rayResult.position;
+        sphere->globalNodeTransforms[0].r[3] = rayResult.position;
     }
     else
     {
