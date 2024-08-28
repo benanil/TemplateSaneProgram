@@ -108,6 +108,9 @@ void uSetFloat(uf color, float val);
 // 0xFF000000 is black and alpha is 1.0 0x00FF0000 is blue so ABGR when writing with hex
 void uPushColor(uColor color, uint val);
 void uPushFloat(uFloat what, float val);
+// additive push, adds value to the end of the stack, 
+// equals to uPushFloat(what, uGetFloat(what) + val);
+void uPushFloatAdd(uFloat what, float val);
 
 void uPopColor(uColor color);
 void uPopFloat(uFloat what);
@@ -220,7 +223,10 @@ void uCapsule(Vector2f center, float radius, float width, uint color, uint prope
 
 void uRoundedRectangle(Vector2f pos, float width, float height, uint color, uint properties = 0u);
 
-void uDrawTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
+void uTriangle(Vector2f pos0, Vector2f pos1, Vector2f pos2, uint color);
+
+// draws X shape from triangles
+void uDrawCross(Vector2f center, float halfSize, uint color); 
 
 // axis is -1 or 1, you may want to scale it as well (ie: 2x)
 void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
@@ -245,7 +251,8 @@ void uEndScissor(uScissorMask mask);
 //------------------------------------------------------------------------
 // Window API
 
-void uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale);
+// returns false if window is closed, otherwise it returns true
+bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale, bool* open = nullptr);
 
 void uWindowEnd();
 

@@ -52,13 +52,13 @@ TLAS::TLAS(Prefab* scene)
             // calculate world-space bounds using the new matrix
             instance->bounds = AABB();
         
-            vec_t vmin = VecSet1(1e30f);  
-            vec_t vmax = VecSet1(-1e30f); 
+            Vector4x32f vmin = VecSet1(1e30f);  
+            Vector4x32f vmax = VecSet1(-1e30f); 
 
             // convert local Bounds to global bounds
             for (int i = 0; i < 8; i++)
             {
-                vec_t point = VecSetR(i & 1 ? primitive.max[0] : primitive.min[0],
+                Vector4x32f point = VecSetR(i & 1 ? primitive.max[0] : primitive.min[0],
                                       i & 2 ? primitive.max[1] : primitive.min[1],
                                       i & 4 ? primitive.max[2] : primitive.min[2], 1.0f);
                 point = Vector4Transform(point, model.r);
@@ -95,26 +95,26 @@ void TLAS::Build()
     root.instanceCount = blasCount;
     numNodesUsed = 0u;
 
-    vec_t centeroidMin, centeroidMax;
+    Vector4x32f centeroidMin, centeroidMax;
     UpdateNodeBounds(numNodesUsed, &centeroidMin, &centeroidMax);
     
     SubdivideBVH(numNodesUsed++, 0, centeroidMin, centeroidMax);
 }
 
-void TLAS::UpdateNodeBounds(uint nodeIdx, vec_t* centeroidMinOut, vec_t* centeroidMaxOut)
+void TLAS::UpdateNodeBounds(uint nodeIdx, Vector4x32f* centeroidMinOut, Vector4x32f* centeroidMaxOut)
 {
     TLASNode* node = tlasNodes + nodeIdx;
 
-    vec_t nodeMin = VecSet1(1e30f), nodeMax = VecSet1(-1e30f);
-    vec_t centeroidMin = VecSet1(1e30f);
-    vec_t centeroidMax = VecSet1(-1e30f);
+    Vector4x32f nodeMin = VecSet1(1e30f), nodeMax = VecSet1(-1e30f);
+    Vector4x32f centeroidMin = VecSet1(1e30f);
+    Vector4x32f centeroidMax = VecSet1(-1e30f);
 
     const BVHInstance* leafPtr = instances + node->leftFirst;
 
     for (uint i = 0; i < node->instanceCount; i++)
     {
-        vec_t v0 = leafPtr->bounds.bmin;
-        vec_t v1 = leafPtr->bounds.bmax;
+        Vector4x32f v0 = leafPtr->bounds.bmin;
+        Vector4x32f v1 = leafPtr->bounds.bmax;
 
         nodeMin = VecMin(nodeMin, v0);
         nodeMin = VecMin(nodeMin, v1);
@@ -122,7 +122,7 @@ void TLAS::UpdateNodeBounds(uint nodeIdx, vec_t* centeroidMinOut, vec_t* centero
         nodeMax = VecMax(nodeMax, v0);
         nodeMax = VecMax(nodeMax, v1);
         
-        vec_t centeroid = VecLoadA(&leafPtr->centeroid.x);
+        Vector4x32f centeroid = VecLoadA(&leafPtr->centeroid.x);
         centeroidMin = VecMin(centeroidMin, centeroid);
         centeroidMax = VecMax(centeroidMax, centeroid);
 
@@ -138,8 +138,8 @@ void TLAS::UpdateNodeBounds(uint nodeIdx, vec_t* centeroidMinOut, vec_t* centero
 float TLAS::FindBestSplitPlane(const TLASNode* node, 
                                int* outAxis,
                                int* splitPos,
-                               vec_t centeroidMin, 
-                               vec_t centeroidMax)
+                               Vector4x32f centeroidMin, 
+                               Vector4x32f centeroidMax)
 {
     float bestCost = 1e30f;
     uint instanceCount = node->instanceCount, leftFirst = node->leftFirst;
@@ -198,7 +198,7 @@ float TLAS::FindBestSplitPlane(const TLASNode* node,
     return bestCost;
 }
 
-void TLAS::SubdivideBVH(uint nodeIdx, uint depth, vec_t centeroidMin, vec_t centeroidMax)
+void TLAS::SubdivideBVH(uint nodeIdx, uint depth, Vector4x32f centeroidMin, Vector4x32f centeroidMax)
 {
     // terminate recursion
     TLASNode* node = tlasNodes + nodeIdx;
@@ -263,7 +263,7 @@ void TLAS::TraverseBVH(const Ray& ray, uint rootNode, Triout* out)
     
     int nodesToVisit[32] = { (int)rootNode };
     int currentNodeIndex = 1;
-    vec_t invDir = VecRcp(ray.direction);
+    Vector4x32f invDir = VecRcp(ray.direction);
     int protection = 0;
     
     while (currentNodeIndex > 0 && protection++ < 250)

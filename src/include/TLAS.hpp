@@ -4,8 +4,8 @@
 
 struct TLASNode // | tlasNodes
 {
-    union { vec_t minv; struct { float3 aabbMin; uint leftFirst;     }; };
-    union { vec_t maxv; struct { float3 aabbMax; uint instanceCount; }; };
+    union { Vector4x32f minv; struct { float3 aabbMin; uint leftFirst;     }; };
+    union { Vector4x32f maxv; struct { float3 aabbMax; uint instanceCount; }; };
 };
 
 // instance of a BVH, with transform and world bounds
@@ -38,17 +38,17 @@ struct TLAS
 
 private:
 
-    void UpdateNodeBounds(uint nodeIdx, vec_t* centeroidMinOut, vec_t* centeroidMaxOut);
+    void UpdateNodeBounds(uint nodeIdx, Vector4x32f* centeroidMinOut, Vector4x32f* centeroidMaxOut);
     
     void RecurseBuild(TLASNode* parent, int depth);
     
-    void SubdivideBVH(uint nodeIdx, uint depth, vec_t centeroidMin, vec_t centeroidMax);
+    void SubdivideBVH(uint nodeIdx, uint depth, Vector4x32f centeroidMin, Vector4x32f centeroidMax);
     
     float FindBestSplitPlane(const TLASNode* node,
                              int* outAxis,
                              int* splitPos,
-                             vec_t centeroidMin,
-                             vec_t centeroidMax);
+                             Vector4x32f centeroidMin,
+                             Vector4x32f centeroidMax);
 };
 
 

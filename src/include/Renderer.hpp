@@ -95,7 +95,7 @@ struct GPUMesh
     void* indices;
     
     // w value is undefined, it could be anything or trash data
-    vec_t GetPosition(int index)
+    Vector4x32f GetPosition(int index)
     {
         const char* bytePtr = (const char*)vertices;
         bytePtr += stride * index;
@@ -103,12 +103,12 @@ struct GPUMesh
     }
 
     // todo GPUMesh GetNormal
-    vec_t GetNormal(int index)
+    Vector4x32f GetNormal(int index)
     {
         const char* bytePtr = (const char*)vertices;
         bytePtr += stride * index + sizeof(Vector3f); // skip position
         uint32_t normalPacked = *(uint32_t *)bytePtr;
-        union S { vec_t v; float3 s; };
+        union S { Vector4x32f v; float3 s; };
         S s = {};
         s.s = Unpack_INT_2_10_10_10_REV(normalPacked);
         return s.v; // VecLoad(bytePtr);

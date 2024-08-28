@@ -114,7 +114,7 @@ struct ScissorRect
     int numElements;
 };
 
-const int MaxScissor = 32;
+const int MaxScissor = 64;
 
 // we are going to use two pointer algorithm, stencilled quads or texts will be at the beginning of the array
 // so we will render stencilled and non stencilled with seperate draw calls, this way we don't need extra array too
@@ -125,6 +125,7 @@ struct ScissorData
     ScissorRect rects[MaxScissor];
     
     void PushNewRect(Vector2f pos, Vector2f scale) {
+        ASSERTR(numRect < MaxScissor, return);
         ScissorRect& rect = rects[numRect];
         rect.position = pos;
         rect.sizeX = (ushort)scale.x;
@@ -151,8 +152,12 @@ enum uWindowPos_
     uWindowPos_LeftBottom   = 1 << 6,
     uWindowPos_RightBottom  = 1 << 7,
     uWindowPos_CornerMask   = 0b11110000, 
+    
+    uWindowPos_TabBar       = 1 << 8, 
 
-    uWindowPos_NumPos = 8
+    uWindowPos_NumPos       = 9,
+
+    uWindowPos_Make32Bit    = 1 << 31
 };
 
 typedef uint32_t uWindowPos;
@@ -162,6 +167,7 @@ struct UWindow
     Vector2f position;
     Vector2f scale;
     Vector2f elementPos; // we increment y gradually, and reset this to position every frame
+    bool* isOpenPtr;
 
     float elementOffsetY;
 
@@ -169,12 +175,10 @@ struct UWindow
     int currElement; // each frame zeroing this, and incrementing with each element
     int selectedElement;
     int numElements;
-
-    uWindowPos draggingPos;
     
+    uint8_t depth; 
     bool started; // hash is created, variables initialized ? (if false window is openning first time)
-    bool isOpen;
-    bool holdingTop;
+    bool isColapsed;
 };
 
 namespace
@@ -330,10 +334,16 @@ namespace
     
     const int MaxWindows = 32;
     int mNumWindows = 0;
-    int mCurrentWindow = 0;
+    int mCurrentWindow = 0; // while rendering
+    int mActiveWindow = -1; // selected window
     UWindow mWindows[MaxWindows] = {};
 
+    uWindowPos mWindowDraggingPos;
+
     bool mBeginnedWindow = false;
+
+    bool mAnyDragging = false; // int or float fields
+    bool mLastAnyDragging = false; // int or float fields
 }
 
 void PlayButtonClickSound() {
@@ -768,6 +778,14 @@ void uPushFloat(uFloat what, float val) {
     mFloatStack[(uint)what][++index] = val;
 }
 
+void uPushFloatAdd(uFloat what, float val) 
+{
+    int& index = mFloatStackCnt[(uint)what];
+    ASSERTR(index < StackSize, return);
+    float old = uGetFloat(what);
+    mFloatStack[(uint)what][++index] = old + val;
+}
+
 void uPopColor(uColor color) {
     int& index = mColorStackCnt[(uint)color];
     ASSERTR(index != -1, return);
@@ -790,7 +808,8 @@ bool uIsHovered() {
 // it works like this: 123.4 * 10 = 1234.0 -> 1234 when we unpacking we devide by 10: 1234.0/10= 123.4
 inline ushort MakeFixed(float f)
 {
-    return ushort(Clamp(uint(f * 10.0f), 0u, 0xFFFFu));
+    f = Clamp(f * 10.0f, 0.0f, (float)0xFFFFu);
+    return ushort(f);
 }
 
 // reference resolution is always 1920x1080,
@@ -893,19 +912,23 @@ void uText(const char* text, Vector2f position, uTextFlags flags)
         pos.x += float(character.xoff) * scale;
         pos.y += float(character.yoff) * scale;
 
-        textData[numChars].posX = MakeFixed(pos.x);
-        textData[numChars].posY = MakeFixed(pos.y);
+        // if position and size is less then 0 we don't have to draw
+        if (All2(GreaterThan(pos + size, Vector2f::Zero())))
+        {
+            textData[numChars].posX = MakeFixed(pos.x);
+            textData[numChars].posY = MakeFixed(pos.y);
 
-        textData[numChars].size  = uint32_t(MakeFixed(size.x + 0.5f));
-        textData[numChars].size |= uint32_t(MakeFixed(size.y + 0.5f)) << 16;
+            textData[numChars].size  = uint32_t(MakeFixed(size.x + 0.5f));
+            textData[numChars].size |= uint32_t(MakeFixed(size.y + 0.5f)) << 16;
 
-        textData[numChars].character = chr;  
-        textData[numChars].depth = currentDepth;
-        textData[numChars].scale = scalef16;
-        textData[numChars].color = color;
+            textData[numChars].character = chr;  
+            textData[numChars].depth = currentDepth;
+            textData[numChars].scale = scalef16;
+            textData[numChars].color = color;
+            numChars++;
+        }
 
         position.x += character.advence * scale;
-        numChars++;
     }
     if (usingScissor) {
         mTextScissor.count += numChars;
@@ -1021,6 +1044,13 @@ void uQuad(Vector2f position, Vector2f scale, uint color, uint properties)
     ASSERTR(mQuadIndex < MaxQuads, return);
     position *= mWindowRatio;
     QuadData* quadData = nullptr;
+
+    if (position.x < 0.0f)
+    {
+        if (-position.x > scale.x) return; // don't draw it is outside
+        scale.x -= -position.x;
+        position.x = 0.0f;
+    }
 
     if (!(mScissorMask & uScissorMask_Quad)) { 
         quadData = &mQuadData[mQuadIndex];
@@ -1612,6 +1642,7 @@ FieldRes uIntField(const char* label, Vector2f pos, int* val, int minVal, int ma
         {
             value += int(mouseDiff * dragSpeed);
             result |= FieldRes_Changed;
+            mAnyDragging = true;
         }
         value += GetKeyReleased(Key_RIGHT);
         value -= GetKeyReleased(Key_LEFT);
@@ -1706,6 +1737,7 @@ FieldRes uFloatField(const char* label, Vector2f pos, float* valPtr, float minVa
             mLastFloatWriting = false, mFloatDigits = 3;
             changed = true;
             result |= FieldRes_Changed;
+            mAnyDragging = true;
         }
         value += GetKeyReleased(Key_RIGHT) * dragSpeed;
         value -= GetKeyReleased(Key_LEFT) * dragSpeed;
@@ -2267,16 +2299,134 @@ static int FindWindow(uint32_t hash)
     for (int i = 0; i < mNumWindows; i++)
         if (mWindows[i].hash == hash)
             return i;
-    return 0;
+    return mNumWindows;
 }
 
-void uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale)
+// checks if there is any blocking window of given window
+static bool CheckAnyWindowOnTop(int targetIdx,  Vector2f pos)
 {
-    mNumWindows++;
+    char targetDepth = mWindows[targetIdx].depth;
+
+    for (int i = 0; i < mNumWindows; i++)
+    {
+        if (i == targetIdx) continue;
+
+        UWindow& window = mWindows[i];
+        
+        Vector2f scale    = window.scale * mWindowRatio;
+        Vector2f position = window.position * mWindowRatio;
+        
+        if (PointBoxIntersection(position, position + scale, pos) && window.depth > targetDepth)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void CheckEdgesAndCornersAndResize(Vector2f mousePos, int windowIdx);
+
+void uDrawCross(Vector2f center, float halfSize, uint color)
+{
+    Vector2f lt = center - halfSize;
+    Vector2f rb = center + halfSize;
+    
+    Vector2f lb = rb; lb.x -= halfSize * 2.0f;
+    Vector2f rt = lt; rt.x += halfSize * 2.0f;
+
+    float width = halfSize * 0.4f; // line width
+    
+    Vector2f widthX = { width, 0.0f };
+
+    uTriangle(rb, lt + widthX, rb - widthX, color);
+    uTriangle(lt, rb - widthX, lt + widthX, color);
+    
+    uTriangle(lb + widthX, rt, lb, color);
+    uTriangle(rt - widthX, lb, rt, color);
+}
+
+static void DrawTabBar(UWindow& window, float topHeight, Vector2f mouseTestPos, bool mousePressed, bool* open)
+{
+    Vector2f end = window.position;
+    end.x += window.scale.x;
+    end.y += topHeight * 0.5f;
+    end.x -= 16.0f;
+    
+    uint iconColor = ~0u;
+    float iconHeight = topHeight * 0.2f;
+
+    if (PointBoxIntersection(end - iconHeight, end + iconHeight, mouseTestPos))
+    {
+        iconColor = 0xFF0C0CFFu;
+        if (mousePressed && open) {
+            *open = false;
+        }
+    }
+
+    // x icon for closing
+    uDrawCross(end, iconHeight, iconColor);
+
+    end -= iconHeight;
+    // collapse icon --
+    end.x -= 16.0f + iconHeight;
+    iconColor = ~0u;
+    
+    if (PointBoxIntersection(end, end + (iconHeight * 2.0f), mouseTestPos))
+    {
+        iconColor = 0xFF0000FFu;
+        window.isColapsed ^= mousePressed;
+    }
+    
+    uQuad(end, MakeVec2(iconHeight * 2.0f, iconHeight), iconColor, 0);
+}
+
+static void DrawTabBarNameAndDragWindow(UWindow& window, Vector2f mouseTestPos, bool mouseDown, 
+                                        float elementHeight, float labelPadding, float topHeight, int windowIndex, const char* name)
+{
+    const float edgeAvoid = 8.0f; // avoid collission with top edge and tab bar
+    // handle holding and dragging top of the window, to move the window
+    Vector2f topPos  = window.position + edgeAvoid;
+    Vector2f topSize = MakeVec2(window.scale.x - edgeAvoid * 2.0f, topHeight - edgeAvoid);
+
+    bool movingEdgesOrCorners = !!(mWindowDraggingPos & ~uWindowPos_TabBar);
+    bool topIntersect = PointBoxIntersection(topPos, topPos + topSize, mouseTestPos) && !movingEdgesOrCorners;
+
+    topSize.y = window.scale.y;
+    bool hovering = PointBoxIntersection(topPos, topPos + topSize, mouseTestPos);
+    bool isActiveWindow = mActiveWindow == windowIndex;
+
+    if ((mWindowDraggingPos == uWindowPos_TabBar || topIntersect) && mouseDown && isActiveWindow)
+    {
+        Vector2f old = mMouseOld / mWindowRatio;
+        window.position += mouseTestPos - old;
+        mWindowDraggingPos = uWindowPos_TabBar;
+    }
+    
+    if (isActiveWindow && mWindowDraggingPos == uWindowPos_TabBar && !mouseDown)
+        mWindowDraggingPos = 0;
+    
+    float labelXStart = window.scale.x * 0.012f;
+    window.elementPos.y += elementHeight + labelPadding;
+    window.elementPos.x += labelXStart;
+    
+    uText(name, window.elementPos);
+    uPopFloat(uf::TextScale);
+    
+    window.elementPos.x -= labelXStart;
+}
+
+bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale, bool* open)
+{
+    if (open && *open == false) return false;
     
     int windowIndex = FindWindow(hash);
     mCurrentWindow = windowIndex;
+    
     UWindow& window = mWindows[windowIndex];
+    window.isOpenPtr = open;
+    window.elementPos = window.position;
+    window.currElement = 0;
+    window.numElements = 0;
 
     if (!window.started)
     {
@@ -2284,86 +2434,118 @@ void uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f s
         window.position = position;
         window.scale = scale;
         window.hash = hash;
+        window.selectedElement = -1;
+        window.depth = mNumWindows++;
     }
  
-    float settingElementWidth = window.scale.x / 1.10f;
-    float elementsXOffset = window.scale.x / 2.0f - (settingElementWidth / 2.0f);
+    Vector2f mousePos;
+    GetMouseWindowPos(&mousePos.x, &mousePos.y);
 
-    window.elementPos = window.position;
-    window.currElement = 0;
-    window.numElements = 0;
+    Vector2f mouseTestPos = mousePos / mWindowRatio;
+    bool mouseDown = GetMouseDown(MouseButton_Left);
+    bool mousePressed = GetMousePressed(MouseButton_Left);
 
-
-    uQuad(window.position, window.scale, uGetColor(uColor::Quad) & 0xFEFFFFFFu); // background
-    uBorder(window.position, window.scale);
-
-    uPushFloat(uf::ContentStart, settingElementWidth);
-    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.7f);
-    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.9f);
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.7f); // tab bar text size
     
     float elementHeight = uCalcCharSize('G').y;
     float lineThickness = uGetFloat(uf::LineThickness);
     float labelPadding = elementHeight * 0.33f;
     float topHeight = elementHeight + labelPadding * 2.0f;
 
-    uBeginScissor(window.position-lineThickness*2.0f, window.scale + lineThickness*2.0f, uScissorMask_Text | uScissorMask_Quad);
+    float settingElementWidth = window.scale.x / 1.10f;
+    float elementsXOffset = window.scale.x / 2.0f - (settingElementWidth / 2.0f);
 
-    uQuad(window.position + lineThickness, MakeVec2(window.scale.x - lineThickness * 2.0f, topHeight), uGetColor(uColor::Quad) & 0xFD636363u);
+    float windowDepth = (float)(MaxWindows - window.depth) / (float)MaxWindows;
+    uPushFloat(uf::Depth, windowDepth);
+
+    Vector2f tabBarSize = MakeVec2(window.scale.x - lineThickness * 2.0f, topHeight);
+    
+    if (window.isColapsed)
+    {
+        uQuad(window.position + lineThickness, tabBarSize, uGetColor(uColor::Quad) & 0xFD636363u);
+        uBorder(window.position, tabBarSize);
+
+        DrawTabBar(window, topHeight, mouseTestPos, mousePressed, open);
+        DrawTabBarNameAndDragWindow(window, mouseTestPos, mouseDown, elementHeight, 
+                                    labelPadding, topHeight, windowIndex, name);
+
+        uPopFloat(uf::Depth);
+        return false;
+    }
+
+    uQuad(window.position, window.scale, uGetColor(uColor::Quad) & 0xFEFFFFFFu); // background
+    uBorder(window.position, window.scale);
+
+    uPushFloat(uf::Depth, windowDepth * 0.984f);
+    uPushFloat(uf::ContentStart, settingElementWidth);
+
+    uQuad(window.position + lineThickness, tabBarSize, uGetColor(uColor::Quad) & 0xFD636363u);
     
     uPushColor(uColor::Line, uGetColor(uColor::Border));
         uLineHorizontal(window.position + lineThickness + MakeVec2(0.0f, topHeight), window.scale.x - lineThickness * 2.0f);
     uPopColor(uColor::Line);
 
-    Vector2f mousePos;
-    GetMouseWindowPos(&mousePos.x, &mousePos.y);
+    DrawTabBar(window, topHeight, mouseTestPos, mousePressed, open);
+    DrawTabBarNameAndDragWindow(window, mouseTestPos, mouseDown, elementHeight, 
+                                labelPadding, topHeight, windowIndex, name);
 
-    // handle holding and dragging top of the window, to move the window
-    Vector2f topPos  = window.position + 8.0f;
-    Vector2f topSize = MakeVec2(window.scale.x - 16.0f, topHeight - 8.0f);
+    // bottom right triangle that indicates window is resizable
+    Vector2f end = window.position + window.scale;
+    uVertex(end, 0xFF); end.y -= 10;
+    uVertex(end, 0xFF); end.y += 10.0f; end.x -= 10.0f;
+    uVertex(end, 0xFF);
 
-    topPos *= mWindowRatio;
-    topSize *= mWindowRatio;
-    bool topIntersect = PointBoxIntersection(topPos, topPos + topSize, mousePos);
+    bool draggingSomething = mWindowDraggingPos > 0;
+    bool hovering = PointBoxIntersection(window.position, window.position + window.scale, mouseTestPos);
+    bool onTopOfAll = hovering && !CheckAnyWindowOnTop(mCurrentWindow, mouseTestPos);
 
-    if ((window.holdingTop || topIntersect) && GetMouseDown(MouseButton_Left) && window.draggingPos == 0)
+    // if window clicked, set as active window
+    if (onTopOfAll && !draggingSomething && mousePressed)
     {
-        Vector2f old = mMouseOld / mWindowRatio;
-        mousePos /= mWindowRatio;
-        window.position += mousePos - old;
-        window.holdingTop = true;
+        mActiveWindow = mCurrentWindow;
+        for (int i = 0; i < mNumWindows; i++)
+        {
+            if (mWindows[i].depth > window.depth)
+                mWindows[i].depth--;
+        }
+        window.depth = mNumWindows - 1; // make the top window
     }
-    else
-        window.holdingTop = false;
 
-    float labelXStart = window.scale.x * 0.012f;
-    window.elementPos.y += elementHeight + labelPadding;
-    window.elementPos.x += labelXStart;
-    uText(name, window.elementPos);
-
-    uPopFloat(uf::TextScale);
+    if ((mActiveWindow == windowIndex || mActiveWindow == -1) && !mLastAnyDragging)
+    {
+        uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.9f);
+        CheckEdgesAndCornersAndResize(mousePos, windowIndex);
+        uPopFloat(uf::Depth);
+    }
     
     float lineLength = window.scale.x;
     window.elementPos.y += elementHeight + labelPadding * 3.0f; 
-    window.elementPos.x -= labelXStart;
     window.elementPos.x += elementsXOffset * 1.2f;
+
+    uBeginScissor(window.position-lineThickness*2.0f, window.scale + (lineThickness * 4.0f), uScissorMask_Text | uScissorMask_Quad);
 
     uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.72f);
     elementHeight = uCalcCharSize('G').y;
     window.elementOffsetY = elementHeight + (elementHeight * 0.35f);
 
     uPushFloat(uf::FieldWidth, uGetFloat(uf::FieldWidth) * 0.8f);
+    return true;
 }
 
 void uWindowEnd()
 {
+    UWindow& window = mWindows[mCurrentWindow];
     uPopFloat(uf::TextScale);
     uPopFloat(uf::FieldWidth);
     uPopFloat(uf::ContentStart);
     uPopFloat(uf::Depth);
+    uPopFloat(uf::Depth);
     
     uEndScissor(uScissorMask_Text | uScissorMask_Quad);
 
-    UWindow& window = mWindows[mCurrentWindow];
+    if (mActiveWindow != mCurrentWindow)
+        return;
+
     int currElement = window.selectedElement;
     int numElements = window.numElements;
 
@@ -2377,137 +2559,164 @@ void uWindowEnd()
 static inline bool EdgePointIntersection(Vector2f point, Vector2f lineCenter, int axis, float halfSize, float dist)
 {
     return Abs(point[axis] - lineCenter[axis]) < dist && 
-        Abs(point[1 - axis] - lineCenter[1 - axis]) < halfSize;
+        Abs(point[1 - axis] - lineCenter[1 - axis]) < halfSize * 0.9f;
+}
+
+static void CheckEdgesAndCornersAndResize(Vector2f mousePos, int windowIdx)
+{
+    UWindow& window = mWindows[windowIdx];
+
+    if (mWindowDraggingPos == uWindowPos_TabBar) return;
+
+    Vector2f scaledPos = window.position * mWindowRatio;
+    Vector2f scaledScale = window.scale * mWindowRatio;
+
+    Vector2f halfSize = scaledScale * 0.5f;
+    Vector2f center = scaledPos + halfSize;
+
+    int edgeDragging = (mWindowDraggingPos & uWindowPos_EdgeMask) > 0;
+        
+    float edgeDist = 5.0f * (1.0f + edgeDragging);
+    // edge detection, right, left, up, bottom
+    int r = EdgePointIntersection(mousePos, center + MakeVec2( halfSize.x, 0.0f), 0, halfSize[1], edgeDist);
+    int l = EdgePointIntersection(mousePos, center + MakeVec2(-halfSize.x, 0.0f), 0, halfSize[1], edgeDist);
+    int t = EdgePointIntersection(mousePos, center + MakeVec2(0.0f, -halfSize.y), 1, halfSize[0], edgeDist);
+    int b = EdgePointIntersection(mousePos, center + MakeVec2(0.0f,  halfSize.y), 1, halfSize[0], edgeDist);
+
+    int cornerDragging = !!(mWindowDraggingPos & uWindowPos_CornerMask);
+        
+    // detect corner intersection
+    float corDist  = 24.0f;
+    float corDistH = corDist / 2.0f;
+
+    // right upper, left upper, right bottom, left bottom
+    int rt = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(scaledScale.x, 0.0f)) < corDist;
+    int lt = Vector2f::DistanceSq(mousePos, scaledPos) < corDist;
+    int rb = Vector2f::DistanceSq(mousePos, scaledPos + scaledScale) < corDist;
+    int lb = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(0.0f, scaledScale.y)) < corDist;
+        
+    Vector2f quadSize = MakeVec2(corDistH) / mWindowRatio;
+    // show cube at corner if user expanding window
+    if (rt) uQuad(window.position + MakeVec2(window.scale.x - corDistH, 0.0f), quadSize, 0xFF008CFAu);
+    if (lt) uQuad(window.position, quadSize, 0xFF008CFAu);
+    if (rb) uQuad(window.position + MakeVec2(window.scale.x - corDistH, window.scale.y - corDistH), quadSize, 0xFF008CFAu);
+    if (lb) uQuad(window.position + MakeVec2(0.0f, window.scale.y - corDistH), quadSize, 0xFF008CFAu);
+
+    uPushColor(uColor::Line, uGetColor(uColor::SelectedBorder));
+    uPushFloat(uf::LineThickness, uGetFloat(uf::LineThickness) * 2.0f);
+
+    int anyCorner = rt | lt | rb | lb | cornerDragging;
+    // show line in edge if player scaling window
+    if (r && !anyCorner) uLineVertical(window.position + MakeVec2(window.scale.x, 0.0f), window.scale.y, 0);
+    if (l && !anyCorner) uLineVertical(window.position, window.scale.y, 0);
+    if (t && !anyCorner) uLineHorizontal(window.position, window.scale.x, 0);
+    if (b && !anyCorner) uLineHorizontal(window.position + MakeVec2(0.0f, window.scale.y), window.scale.x, 0);
+        
+    uPopFloat(uf::LineThickness);
+    uPopColor(uColor::Line);
+
+    bool mouseDown = GetMouseDown(MouseButton_Left);
+
+    Vector2f begin = scaledPos;
+    Vector2f end = begin + scaledScale;
+        
+    const float winMinSize = 125.0f;
+
+    Vector2f beginMin = begin + MakeVec2(winMinSize);
+    Vector2f endMin   = end - MakeVec2(winMinSize);
+
+    if (!anyCorner && mouseDown)
+    {
+        // do edge movement, if selected and dragging
+        if (r | (mWindowDraggingPos & uWindowPos_RightEdge)) {
+            end.x = MacroMax(mousePos.x, beginMin.x);
+            mWindowDraggingPos = uWindowPos_RightEdge;
+            wSetCursor(wCursor_ResizeEW);
+        }
+        
+        if (l | (mWindowDraggingPos & uWindowPos_LeftEdge)) {
+            begin.x = MacroMin(mousePos.x, endMin.x);
+            mWindowDraggingPos = uWindowPos_LeftEdge;
+            wSetCursor(wCursor_ResizeEW);
+        }
+
+        if (b | (mWindowDraggingPos & uWindowPos_BottomEdge)) {
+            end.y = MacroMax(mousePos.y, beginMin.y);
+            mWindowDraggingPos = uWindowPos_BottomEdge;
+            wSetCursor(wCursor_ResizeNS);
+        }
+
+        if (t | (mWindowDraggingPos & uWindowPos_TopEdge)) {
+            begin.y = MacroMin(mousePos.y, endMin.y);
+            mWindowDraggingPos = uWindowPos_TopEdge;
+            wSetCursor(wCursor_ResizeNS);
+        }
+    }
+
+    // corner detection
+    if ((rb || mWindowDraggingPos == uWindowPos_RightBottom) && mouseDown) 
+    {
+        end = Max(mousePos, beginMin);
+        mWindowDraggingPos = uWindowPos_RightBottom;
+        wSetCursor(wCursor_ResizeNWSE);
+    }
+        
+    if ((rt || mWindowDraggingPos == uWindowPos_RightTop) && mouseDown) 
+    {
+        end.x   = MacroMax(mousePos.x, beginMin.x);
+        begin.y = MacroMin(mousePos.y, endMin.y);
+        mWindowDraggingPos = uWindowPos_RightTop;
+        wSetCursor(wCursor_ResizeNESW);
+    }
+
+    if ((lb || mWindowDraggingPos == uWindowPos_LeftBottom) && mouseDown) {
+        end.y   = MacroMax(mousePos.y, beginMin.y); 
+        begin.x = MacroMin(mousePos.x, endMin.x);
+        mWindowDraggingPos = uWindowPos_LeftBottom;
+        wSetCursor(wCursor_ResizeNESW);
+    }
+
+    if ((lt || mWindowDraggingPos == uWindowPos_LeftTop) && mouseDown) {
+        begin = Min(mousePos, endMin);
+        mWindowDraggingPos = uWindowPos_LeftTop;
+        wSetCursor(wCursor_ResizeNWSE);
+    }
+
+    Vector2f invWindowRatio = Vector2f::One() / mWindowRatio;
+    window.position = begin * invWindowRatio;
+    window.scale = (end - begin) * invWindowRatio;
+    if (!mouseDown)
+    {
+        mWindowDraggingPos = 0;
+        wSetCursor(wCursor_Arrow);
+    }
 }
 
 static void HandleWindowEvents()
 {
-    Vector2f mousePos;
-    GetMouseWindowPos(&mousePos.x, &mousePos.y);
-    
-    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.7f);
-
-    for (int w = 0; w < mNumWindows; w++)
+    // if mouse pressed but none of the windows are touched
+    // reset selected elements
+    if (GetMousePressed(MouseButton_Left))
     {
-        UWindow& window = mWindows[w];
-        if (window.holdingTop) continue;
+        Vector2f mousePos;
+        GetMouseWindowPos(&mousePos.x, &mousePos.y);
 
-        Vector2f scaledPos = window.position * mWindowRatio;
-        Vector2f scaledScale = window.scale * mWindowRatio;
-
-        Vector2f halfSize = scaledScale * 0.5f;
-        Vector2f center = scaledPos + halfSize;
-
-        int edgeDragging = (window.draggingPos & uWindowPos_EdgeMask) > 0;
-        
-        float edgeDist = 5.0f * (1.0f + edgeDragging);
-        // edge detection, right, left, up, bottom
-        int r = EdgePointIntersection(mousePos, center + MakeVec2( halfSize.x, 0.0f), 0, halfSize[1], edgeDist);
-        int l = EdgePointIntersection(mousePos, center + MakeVec2(-halfSize.x, 0.0f), 0, halfSize[1], edgeDist);
-        int t = EdgePointIntersection(mousePos, center + MakeVec2(0.0f, -halfSize.y), 1, halfSize[0], edgeDist);
-        int b = EdgePointIntersection(mousePos, center + MakeVec2(0.0f,  halfSize.y), 1, halfSize[0], edgeDist);
-
-        int cornerDragging = !!(window.draggingPos & uWindowPos_CornerMask);
-        
-        // detect corner intersection
-        float corDist  = 12.0f * (1.0f + cornerDragging);
-        float corDistH = corDist / 2.0f;
-
-        // right upper, left upper, right bottom, left bottom
-        int rt = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(scaledScale.x, 0.0f)) < corDist;
-        int lt = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(0.0f)) < corDist;
-        int rb = Vector2f::DistanceSq(mousePos, scaledPos + scaledScale) < corDist;
-        int lb = Vector2f::DistanceSq(mousePos, scaledPos + MakeVec2(0.0f, scaledScale.y)) < corDist;
-        
-        // uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.8f);
-
-        Vector2f quadSize = MakeVec2(corDistH) / mWindowRatio;
-        // show cube at corner if user expanding window
-        if (rt) uQuad(window.position + MakeVec2(window.scale.x - corDistH, 0.0f), quadSize, 0xFF008CFAu);
-        if (lt) uQuad(window.position, quadSize, 0xFF008CFAu);
-        if (rb) uQuad(window.position + MakeVec2(window.scale.x - corDistH, window.scale.y - corDistH), quadSize, 0xFF008CFAu);
-        if (lb) uQuad(window.position + MakeVec2(0.0f, window.scale.y - corDistH), quadSize, 0xFF008CFAu);
-
-        uPushColor(uColor::Line, uGetColor(uColor::SelectedBorder));
-        uPushFloat(uf::LineThickness, uGetFloat(uf::LineThickness) * 2.0f);
-
-        int anyCorner = rt | lt | rb | lb | cornerDragging;
-        // show line in edge if player scaling window
-        if (r && !anyCorner) uLineVertical(window.position + MakeVec2(window.scale.x, 0.0f), window.scale.y, 0);
-        if (l && !anyCorner) uLineVertical(window.position, window.scale.y, 0);
-        if (t && !anyCorner) uLineHorizontal(window.position, window.scale.x, 0);
-        if (b && !anyCorner) uLineHorizontal(window.position + MakeVec2(0.0f, window.scale.y), window.scale.x, 0);
-        
-        uPopFloat(uf::LineThickness);
-        uPopColor(uColor::Line);
-
-        bool mouseDown = GetMouseDown(MouseButton_Left);
-
-        Vector2f begin = scaledPos;
-        Vector2f end = begin + scaledScale;
-        
-        const float winMinSize = 125.0f;
-
-        Vector2f beginMin = begin + MakeVec2(winMinSize);
-        Vector2f endMin   = end - MakeVec2(winMinSize);
-
-        if (!anyCorner && mouseDown)
+        bool anyHit = false;
+        for (int i = 0; i < mNumWindows; i++)
         {
-            // do edge movement, if selected and dragging
-            if (r || window.draggingPos == uWindowPos_RightEdge) {
-                end.x = MacroMax(mousePos.x, beginMin.x);
-                window.draggingPos = uWindowPos_RightEdge;
-            }
-        
-            if (l || window.draggingPos == uWindowPos_LeftEdge) {
-                begin.x = MacroMin(mousePos.x, endMin.x);
-                window.draggingPos = uWindowPos_LeftEdge;
-            }
-
-            if (b || window.draggingPos == uWindowPos_BottomEdge) {
-                end.y = MacroMax(mousePos.y, beginMin.y);
-                window.draggingPos = uWindowPos_BottomEdge;
-            }
-
-            if (t || window.draggingPos == uWindowPos_TopEdge) {
-                begin.y = MacroMin(mousePos.y, endMin.y);
-                window.draggingPos = uWindowPos_TopEdge;
-            }
+            UWindow& window = mWindows[i];
+            Vector2f pos = window.position * mWindowRatio;
+            Vector2f scale = window.scale * mWindowRatio;
+            
+            anyHit |= PointBoxIntersection(pos, pos + scale, mousePos);
         }
 
-        // corner detection
-        if ((rb || window.draggingPos == uWindowPos_RightBottom) && mouseDown) 
+        if (!anyHit)
         {
-            end = Max(mousePos, beginMin);
-            window.draggingPos = uWindowPos_RightBottom;
+            for (int i = 0; i < mNumWindows; i++)
+                mWindows[i].selectedElement = -1;
         }
-        
-        if ((rt || window.draggingPos == uWindowPos_RightTop) && mouseDown) 
-        {
-            end.x   = MacroMax(mousePos.x, beginMin.x);
-            begin.y = MacroMin(mousePos.y, endMin.y);
-            window.draggingPos = uWindowPos_RightTop;
-        }
-
-        if ((lb || window.draggingPos == uWindowPos_LeftBottom) && mouseDown) {
-            end.y   = MacroMax(mousePos.y, beginMin.y); 
-            begin.x = MacroMin(mousePos.x, endMin.x);
-            window.draggingPos = uWindowPos_LeftBottom;
-        }
-
-        if ((lt || window.draggingPos == uWindowPos_LeftTop) && mouseDown) {
-            begin = Min(mousePos, endMin);
-            window.draggingPos = uWindowPos_LeftTop;
-        }
-
-        Vector2f invWindowRatio = Vector2f::One() / mWindowRatio;
-        window.position = begin * invWindowRatio;
-        window.scale = (end - begin) * invWindowRatio;
-
-        if (!mouseDown) window.draggingPos = 0;
     }
-    
-    uPopFloat(uf::Depth);
 }
 
 static void WindowElementEnd(UWindow& window, bool selected)
@@ -2523,7 +2732,7 @@ static void WindowElementEnd(UWindow& window, bool selected)
 bool uButtonW(const char* text, Vector2f scale, uButtonOptions opt)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uButton(text, window.elementPos, scale, opt);
     WindowElementEnd(window, res);
     return res;
@@ -2532,7 +2741,7 @@ bool uButtonW(const char* text, Vector2f scale, uButtonOptions opt)
 bool uTextBoxW(const char* label, Vector2f size, char* text)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uTextBox(label, window.elementPos, size, text);
     WindowElementEnd(window, res);
     return res;
@@ -2541,7 +2750,7 @@ bool uTextBoxW(const char* label, Vector2f size, char* text)
 bool uCheckBoxW(const char* text, bool* isEnabled, bool cubeCheckMark)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uCheckBox(text, window.elementPos, isEnabled, cubeCheckMark);
     WindowElementEnd(window, res);
     return res;
@@ -2552,7 +2761,7 @@ bool uCheckBoxW(const char* text, bool* isEnabled, bool cubeCheckMark)
 bool uSliderW(const char* label, float* val, float scale)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uSlider(label, window.elementPos, val, scale);
     WindowElementEnd(window, res);
     return res;
@@ -2561,7 +2770,7 @@ bool uSliderW(const char* label, float* val, float scale)
 FieldRes uIntFieldW(const char* label, int* val, int minVal, int maxVal, float dragSpeed)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     FieldRes res = uIntField(label, window.elementPos, val, minVal, maxVal, dragSpeed);
     WindowElementEnd(window, res);
     return res;    
@@ -2570,7 +2779,7 @@ FieldRes uIntFieldW(const char* label, int* val, int minVal, int maxVal, float d
 FieldRes uFloatFieldW(const char* label, float* val, float minVal, float maxVal, float dragSpeed)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     FieldRes res = uFloatField(label, window.elementPos, val, minVal, maxVal, dragSpeed);
     WindowElementEnd(window, res);
     return res;
@@ -2579,7 +2788,7 @@ FieldRes uFloatFieldW(const char* label, float* val, float minVal, float maxVal,
 bool uIntVecFieldW(const char* label, int* val, int N, int* index, int minVal, int maxVal, float dragSpeed)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     static int orthoIndex = 0;
     bool res = uIntVecField(label, window.elementPos, val, N, index, minVal, maxVal, dragSpeed);
     WindowElementEnd(window, res);
@@ -2589,7 +2798,7 @@ bool uIntVecFieldW(const char* label, int* val, int N, int* index, int minVal, i
 bool uFloatVecFieldW(const char* label, float* valArr, int N, int* index, float minVal, float maxVal, float dragSpeed)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uFloatVecField(label, window.elementPos, valArr, N, index, minVal, maxVal, dragSpeed);
     WindowElementEnd(window, res);
     return res;    
@@ -2598,7 +2807,7 @@ bool uFloatVecFieldW(const char* label, float* valArr, int N, int* index, float 
 bool uColorFieldW(const char* label, uint* color)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uColorField(label, window.elementPos, color);
     WindowElementEnd(window, res);
     return res;
@@ -2607,7 +2816,7 @@ bool uColorFieldW(const char* label, uint* color)
 bool uColorField3W(const char* label, float* color3Ptr) // rgb32f color
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uColorField3(label, window.elementPos, color3Ptr);
     WindowElementEnd(window, res);
     return res;
@@ -2616,7 +2825,7 @@ bool uColorField3W(const char* label, float* color3Ptr) // rgb32f color
 bool uColorField4W(const char* label, float* color4Ptr) // rgba32f color
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     bool res = uColorField4(label, window.elementPos, color4Ptr);
     WindowElementEnd(window, res);
     return res;    
@@ -2625,7 +2834,7 @@ bool uColorField4W(const char* label, float* color4Ptr) // rgba32f color
 int uChoiceW(const char* label, const char** elements, int numElements, int current)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     int res = uChoice(label, window.elementPos, elements, numElements, current);
     WindowElementEnd(window, res);
     return res;        
@@ -2635,7 +2844,7 @@ int uChoiceW(const char* label, const char** elements, int numElements, int curr
 int uDropdownW(const char* label, const char** names, int numNames, int current)
 {
     UWindow& window = mWindows[mCurrentWindow];
-    uSetElementFocused(window.selectedElement == window.currElement);
+    uSetElementFocused(window.selectedElement == window.currElement && mCurrentWindow == mActiveWindow);
     int res = uDropdown(label, window.elementPos, names, numNames, current);
     WindowElementEnd(window, res);
     return res;            
@@ -2810,8 +3019,8 @@ void uBegin()
 {
     mAnyTextEdited = false;
     mAnyFloatEdited = false;
+    mAnyDragging = false;
     mAnyElementClicked = false;
-    mNumWindows = 0;
     mQuadScissor.Reset();
     mTextScissor.Reset();
 }
@@ -2838,6 +3047,8 @@ void uRender()
 
     if (!mAnyFloatEdited)
         mLastFloatWriting = false, mFloatDigits = 3;
+
+    mLastAnyDragging = mAnyDragging;
 
     bool released = GetMouseReleased(1);
     if (mColorPick.isOpen && released && !uClickCheck(mColorPick.pos, mColorPick.size, CheckOpt_BigColission))

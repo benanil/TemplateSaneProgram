@@ -144,8 +144,8 @@ void AnimationController::SampleAnimationPose(Pose* pose, int animIdx, float nor
 
         if (reverse) Swap(beginIdx, endIdx);
 
-        vec_t begin = ((vec_t*)sampler.output)[beginIdx];
-        vec_t end   = ((vec_t*)sampler.output)[endIdx];
+        Vector4x32f begin = ((Vector4x32f*)sampler.output)[beginIdx];
+        Vector4x32f end   = ((Vector4x32f*)sampler.output)[endIdx];
     
         float beginTime = MAX(0.0001f, realTime - sampler.input[beginIdx]);
         float endTime   = MAX(0.0001f, sampler.input[endIdx] - sampler.input[beginIdx]);

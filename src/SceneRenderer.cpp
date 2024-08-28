@@ -747,14 +747,14 @@ void RenderPrefab(Scene* scene, PrefabID prefabID, AnimationController* animSyst
             bool hasMaterial = prefab->materials && primitive.material != UINT16_MAX;
             AMaterial material = hasMaterial ? prefab->materials[primitive.material] : m_defaultMaterial;
 
-            vec_t vmin = VecSet1(1e30f);  
-            vec_t vmax = VecSet1(-1e30f); 
+            Vector4x32f vmin = VecSet1(1e30f);  
+            Vector4x32f vmax = VecSet1(-1e30f); 
 
             // convert local Bounds to global bounds
             // todo move this to scene.cpp 
             for (int i = 0; i < 8; i++)
             {
-                vec_t point = VecSetR(i & 1 ? primitive.max[0] : primitive.min[0],
+                Vector4x32f point = VecSetR(i & 1 ? primitive.max[0] : primitive.min[0],
                                       i & 2 ? primitive.max[1] : primitive.min[1],
                                       i & 4 ? primitive.max[2] : primitive.min[2], 1.0f);
                 point = Vector3Transform(point, model.r);
@@ -1059,49 +1059,48 @@ void Destroy()
 }
 
 
-void ShowEditor()
+void ShowEditor(float offset, bool* open)
 {
-    static bool open = false;
-    
-    if (GetKeyPressed('B')) open = !open;
-    
-    if (!open) return;
+    const Vector2f position = MakeVec2(20.0f, 90.0f) + offset;
+    const Vector2f scale = MakeVec2(450.0f, 600.0f);
 
-    uBeginWindow("Graphics", 23455, MakeVec2(20.0f, 90.0f), MakeVec2(450.0f, 600.0f));
-
-    if (uFloatFieldW("Ortho Size", &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
+    if (uBeginWindow("Graphics", 23455u + (uint)offset, position, scale, open))
     {
-        m_RedrawShadows = 1;
-    }
+        if (uFloatFieldW("Ortho Size", &ShadowSettings::OrthoSize, 16.0f, 512.0f, 0.5f))
+        {
+            m_RedrawShadows = 1;
+        }
     
-    static int orthoIndex = 0;
-    if (uFloatVecFieldW("Ortho Offset", &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
-    {
-        m_RedrawShadows = 1;
-    }
+        static int orthoIndex = 0;
+        if (uFloatVecFieldW("Ortho Offset", &ShadowSettings::OrthoOffset.x, 3, &orthoIndex, -200.0f, +200.0f, 0.2f))
+        {
+            m_RedrawShadows = 1;
+        }
 
-    if (uFloatFieldW("Sun Angle", &g_CurrentScene.m_SunAngle, -PI, PI + 0.15f, 0.04f))
-    {
-        m_RedrawShadows = 1;
-    }
+        if (uFloatFieldW("Sun Angle", &g_CurrentScene.m_SunAngle, -PI, PI + 0.15f, 0.04f))
+        {
+            m_RedrawShadows = 1;
+        }
 
-    if (uFloatFieldW("Far Plane", &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
-    {
-        m_RedrawShadows = 1;
-    }
+        if (uFloatFieldW("Far Plane", &ShadowSettings::FarPlane, 8.0f, 256.0f, 0.04f))
+        {
+            m_RedrawShadows = 1;
+        }
     
-    uSeperatorW(uGetColor(uColor::SelectedBorder), uTriEffect_None, 0.95f);
+        uSeperatorW(uGetColor(uColor::SelectedBorder), uTriEffect_None, 0.95f);
 
-    HBAOEdit();
+        HBAOEdit();
 
-    uWindowEnd();
+        uWindowEnd();
+
+        if (GetKeyPressed('K'))
+        {
+            DeleteShaders();
+            CreateShaders();
+        }
+    }
+
     // uSprite(MakeVec2(1100.0f, 500.0f), MakeVec2(800.0f, 550.0f), &m_ShadowTexture);
-
-    if (GetKeyPressed('K'))
-    {
-        DeleteShaders();
-        CreateShaders();
-    }
 }
 
 } // scene renderer namespace endndndnd

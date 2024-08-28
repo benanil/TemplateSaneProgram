@@ -62,8 +62,8 @@ int AXStart()
     g_CurrentScene.Init();
     InitBVH();
 
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/Bistro/Bistro.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -229,8 +229,15 @@ void AXLoop(bool canRender)
         RenderOutlined(currentScene, MainScenePrefab, SelectedNodeIndex, SelectedNodePrimitiveIndex);
         
         ShowGBuffer(); // draw all of the graphics to back buffer (inside all window)
-
-        SceneRenderer::ShowEditor();
+        
+        static bool open0 = true, open1 = true, open2 = true;
+        
+        if (GetKeyPressed('B'))
+            open0 = open1 = open2 = true;
+        
+        SceneRenderer::ShowEditor(0.0f  , &open0);
+        SceneRenderer::ShowEditor(256.0f, &open1);
+        SceneRenderer::ShowEditor(512.0f, &open2);
         
         PauseMenuOpened = false;
     }

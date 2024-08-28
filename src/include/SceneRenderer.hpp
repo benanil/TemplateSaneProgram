@@ -58,5 +58,5 @@ namespace SceneRenderer
 
     bool ShouldReRender();
 
-    void ShowEditor();
+    void ShowEditor(float offset = 0.0f, bool* open = nullptr);
 }

@@ -152,6 +152,27 @@ bool wOpenFolder(const char* folderPath)
     return true;
 }
 
+void wSetCursor(wCursor cursor)
+{
+    LPTSTR winCursor = IDC_ARROW;
+
+    switch (cursor)
+    {
+        case wCursor_Arrow:        winCursor = IDC_ARROW;    break;
+        case wCursor_TextInput:    winCursor = IDC_IBEAM;    break;
+        case wCursor_ResizeAll:    winCursor = IDC_SIZEALL;  break;
+        case wCursor_ResizeEW:     winCursor = IDC_SIZEWE;   break;
+        case wCursor_ResizeNS:     winCursor = IDC_SIZENS;   break;
+        case wCursor_ResizeNESW:   winCursor = IDC_SIZENESW; break;
+        case wCursor_ResizeNWSE:   winCursor = IDC_SIZENWSE; break;
+        case wCursor_Hand:         winCursor = IDC_HAND;     break;
+        case wCursor_NotAllowed:   winCursor = IDC_NO;       break;
+    };
+
+    ::SetCursor(::LoadCursor(nullptr, winCursor));
+}
+
+
 //------------------------------------------------------------------------
 // Audio
 

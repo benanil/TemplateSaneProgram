@@ -49,6 +49,20 @@ inline constexpr const char* GetFileName(const char* path)
 //------------------------------------------------------------------------
 //  Window
 
+enum wCursor_
+{
+    wCursor_Arrow,
+    wCursor_TextInput,
+    wCursor_ResizeAll,
+    wCursor_ResizeEW,
+    wCursor_ResizeNS,
+    wCursor_ResizeNESW,
+    wCursor_ResizeNWSE,
+    wCursor_Hand,
+    wCursor_NotAllowed
+};
+typedef unsigned int wCursor;
+
 #ifndef __ANDROID__
 void wSetWindowSize(int width, int height);
 void wSetWindowPosition(int x, int y);
@@ -65,6 +79,8 @@ bool wEnterFullscreen(int fullscreenWidth, int fullscreenHeight);
 bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHeight);
 
 bool wOpenFolder(const char* folderPath);
+
+void wSetCursor(wCursor cursor);
 
 // android only functions
 inline void wShowKeyboard(bool value) { }
@@ -84,6 +100,7 @@ inline bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int win
 inline void SetMousePos(float x, float y) {}
 inline void SetMouseWindowPos(float x, float y) {}
 inline bool wOpenFolder(const char* folderPath) { return false; } // < not implemented
+inline void wSetCursor(wCursor cursor) { }
 
 void wShowKeyboard(bool value); // shows keyboard on android devices
 void wVibrate(long miliseconds);

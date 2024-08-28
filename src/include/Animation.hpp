@@ -8,9 +8,9 @@ struct Prefab;
 
 struct Pose
 {
-    vec_t translation;
-    vec_t rotation;
-    // vec_t scale;
+    Vector4x32f translation;
+    Vector4x32f rotation;
+    // Vector4x32f scale;
 };
 
 struct Matrix3x4f16

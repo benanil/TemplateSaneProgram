@@ -7,8 +7,8 @@ AX_NAMESPACE
 
 struct alignas(16) BVHNode
 {
-    union { struct { float3 aabbMin; uint leftFirst; }; vec_t minv; };
-    union { struct { float3 aabbMax; uint triCount; };  vec_t maxv; };
+    union { struct { float3 aabbMin; uint leftFirst; }; Vector4x32f minv; };
+    union { struct { float3 aabbMax; uint triCount; };  Vector4x32f maxv; };
 };
 
 struct RGBA8 
@@ -43,8 +43,8 @@ struct Triout {
     uint primitiveIndex;
     uint triIndex;
     uint padd;
-    vec_t position;
-    vec_t normal;
+    Vector4x32f position;
+    Vector4x32f normal;
 };
 
 constexpr int BINS = 8;
@@ -57,7 +57,7 @@ void DestroyBVH();
 
 uint BuildBVH(struct SceneBundle_* prefab);
 
-bool VECTORCALL IntersectTriangle(const Ray& ray, vec_t v0, vec_t v1, vec_t v2, Triout* o, int i);
+bool VECTORCALL IntersectTriangle(const Ray& ray, Vector4x32f v0, Vector4x32f v1, Vector4x32f v2, Triout* o, int i);
 
 bool IntersectBVH(const Ray& ray, struct GPUMesh* mesh, uint rootNode, Triout* out);
 
@@ -75,12 +75,12 @@ Triout RayCastScene(Ray ray,
 
 struct AABB
 { 
-    union { vec_t bmin; float3 bmin3; };
-    union { vec_t bmax; float3 bmax3; };
+    union { Vector4x32f bmin; float3 bmin3; };
+    union { Vector4x32f bmax; float3 bmax3; };
     
     AABB() : bmin(VecSet1(1e30f)), bmax(VecSet1(-1e30f)) {}
     
-    void grow(vec_t p)
+    void grow(Vector4x32f p)
     { 
         bmin = VecMin(bmin, p);
         bmax = VecMax(bmax, p);
@@ -99,14 +99,14 @@ struct AABB
     
     float area() 
     { 
-        // vec_t e = VecMask(VecSub(bmax, bmin), VecMask3); // box extent
-        vec_t e = VecSub(bmax, bmin); // box extent
+        // Vector4x32f e = VecMask(VecSub(bmax, bmin), VecMask3); // box extent
+        Vector4x32f e = VecSub(bmax, bmin); // box extent
         VecSetW(e, 0.0f);
         return VecDotf(e, VecSwizzle(e, 1, 2, 0, 3));
     }
 };
 
-forceinline void GetAABBCorners(Vector3f res[8], vec_t minv, vec_t maxv)
+forceinline void GetAABBCorners(Vector3f res[8], Vector4x32f minv, Vector4x32f maxv)
 {
     Vector3f min; Vec3Store(min.arr, minv);
     Vector3f max; Vec3Store(max.arr, maxv);
@@ -121,9 +121,9 @@ forceinline void GetAABBCorners(Vector3f res[8], vec_t minv, vec_t maxv)
     res[7] = { min.x, max.y, max.z };
 }
 
-purefn float VECTORCALL CalculateNodeCost(vec_t min, vec_t max, int triCount)
+purefn float VECTORCALL CalculateNodeCost(Vector4x32f min, Vector4x32f max, int triCount)
 { 
-    vec_t e = VecMask(VecSub(max, min), VecMask3); // box extent
+    Vector4x32f e = VecMask(VecSub(max, min), VecMask3); // box extent
     return triCount * VecDotf(e, VecSwizzle(e, 1, 2, 0, 3));
 }
 

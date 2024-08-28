@@ -45,7 +45,7 @@ void Scene::Destroy()
             // all of the sampler input and outputs are allocated in one buffer.
             // at the end of the CreateVerticesIndicesSkined function
             delete[] prefab->animations[0].samplers[0].input;
-            delete[] (vec_t*)prefab->animations[0].samplers[0].output;
+            delete[] (Vector4x32f*)prefab->animations[0].samplers[0].output;
         }
 
         delete[] prefab->gpuTextures;
@@ -291,13 +291,13 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
             uint64_t vertexSize = hasSkin ? sizeof(ASkinedVertex) : sizeof(AVertex);
             char* vertices = (char*)primitive.vertices;
 
-            vec_t minv = VecSet1(FLT_MAX);
-            vec_t maxv = VecSet1(FLT_MIN);
+            Vector4x32f minv = VecSet1(FLT_MAX);
+            Vector4x32f maxv = VecSet1(FLT_MIN);
 
             // todo: multi thread this
             for (int v = 0; v < primitive.numVertices; v++)
             {
-                vec_t l = VecLoad((float*)vertices); // at the begining of the vertex we have position
+                Vector4x32f l = VecLoad((float*)vertices); // at the begining of the vertex we have position
                 minv = VecMin(minv, l);
                 maxv = VecMax(maxv, l);
                 vertices += vertexSize;

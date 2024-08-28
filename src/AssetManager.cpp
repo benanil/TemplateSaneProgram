@@ -33,7 +33,7 @@ inline uint32_t Pack_INT_2_10_10_10_REV(Vector3f v) {
            xs << 9  | ((uint32_t)(v.x * 511 + (xs << 9)) & 511);
 }
 
-inline uint32_t Pack_INT_2_10_10_10_REV(vec_t v)
+inline uint32_t Pack_INT_2_10_10_10_REV(Vector4x32f v)
 {
 	float x = VecGetX(v), y = VecGetY(v), z = VecGetZ(v), w = VecGetW(v); 
 
@@ -174,7 +174,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
             }
             if (umesh->vertex_tangent.exists)
             {
-                vec_t tangent = Vec3Load((float*)(umesh->vertex_normal.values.data + j));
+                Vector4x32f tangent = Vec3Load((float*)(umesh->vertex_normal.values.data + j));
                 VecSetW(tangent, 1.0f);
                 currentVertex[j].tangent = Pack_INT_2_10_10_10_REV(tangent);
             }
@@ -414,7 +414,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
         }
         
         SmallMemCpy(anode.translation, &unode->world_transform.translation.x, sizeof(Vector3f));
-        SmallMemCpy(anode.rotation, &unode->world_transform.rotation.x, sizeof(vec_t));
+        SmallMemCpy(anode.rotation, &unode->world_transform.rotation.x, sizeof(Vector4x32f));
         SmallMemCpy(anode.scale, &unode->world_transform.scale.x, sizeof(Vector3f));
         
         if (anode.type == 0)
@@ -472,11 +472,11 @@ void CreateVerticesIndices(SceneBundle* gltf)
             Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
             Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
             Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
-            vec_t* tangents     = (vec_t*)primitive.vertexAttribs[3];
+            Vector4x32f* tangents     = (Vector4x32f*)primitive.vertexAttribs[3];
             
             for (int v = 0; v < primitive.numVertices; v++)
             {
-                vec_t    tangent  = tangents  ? tangents[v]  : VecZero();
+                Vector4x32f    tangent  = tangents  ? tangents[v]  : VecZero();
                 Vector2f texCoord = texCoords ? texCoords[v] : Vector2f{0.0f, 0.0f};
                 Vector3f normal   = normals   ? normals[v]   : Vector3f{0.5f, 0.5f, 0.0};
 
@@ -550,11 +550,11 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
             Vector3f* positions = (Vector3f*)primitive.vertexAttribs[0];
             Vector2f* texCoords = (Vector2f*)primitive.vertexAttribs[1];
             Vector3f* normals   = (Vector3f*)primitive.vertexAttribs[2];
-            vec_t*    tangents  = (vec_t*)primitive.vertexAttribs[3];
+            Vector4x32f*    tangents  = (Vector4x32f*)primitive.vertexAttribs[3];
 
             for (int v = 0; v < primitive.numVertices; v++)
             {
-                vec_t tangent     = tangents  ? tangents[v]  : VecZero();
+                Vector4x32f tangent     = tangents  ? tangents[v]  : VecZero();
                 Vector2f texCoord = texCoords ? texCoords[v] : Vector2f{0.0f, 0.0f};
                 Vector3f normal   = normals   ? normals[v]   : Vector3f{0.5f, 0.5f, 0.0};
 
@@ -643,7 +643,7 @@ void CreateVerticesIndicesSkined(SceneBundle* gltf)
                 totalSamplerInput += gltf->animations[a].samplers[s].count;
         
         float* currSampler = new float[totalSamplerInput]{};
-        vec_t* currOutput  = new vec_t[totalSamplerInput]{};
+        Vector4x32f* currOutput  = new Vector4x32f[totalSamplerInput]{};
 
         for (int a = 0; a < gltf->numAnimations; a++)
         {
@@ -882,7 +882,7 @@ int SaveGLTFBinary(SceneBundle* gltf, const char* path)
     if (totalAnimSamplerInput > 0) {
         // all sampler input and outputs are allocated in one buffer each. at the end of the CreateVerticesIndicesSkined function
         AFileWrite(gltf->animations[0].samplers[0].input, sizeof(float) * totalAnimSamplerInput, file);
-        AFileWrite(gltf->animations[0].samplers[0].output, sizeof(vec_t) * totalAnimSamplerInput, file);
+        AFileWrite(gltf->animations[0].samplers[0].output, sizeof(Vector4x32f) * totalAnimSamplerInput, file);
     }
 
     for (int i = 0; i < gltf->numAnimations; i++)
@@ -1147,13 +1147,13 @@ int LoadSceneBundleBinary(const char* path, SceneBundle* gltf)
     int totalAnimSamplerInput = 0;
     AFileRead(&totalAnimSamplerInput, sizeof(int), file);
     float* currSamplerInput;
-    vec_t* currSamplerOutput;
+    Vector4x32f* currSamplerOutput;
 
     if (totalAnimSamplerInput) {
         currSamplerInput = new float[totalAnimSamplerInput]{};
-        currSamplerOutput = new vec_t[totalAnimSamplerInput]{};
+        currSamplerOutput = new Vector4x32f[totalAnimSamplerInput]{};
         AFileRead(currSamplerInput, sizeof(float) * totalAnimSamplerInput, file);
-        AFileRead(currSamplerOutput, sizeof(vec_t) * totalAnimSamplerInput, file);
+        AFileRead(currSamplerOutput, sizeof(Vector4x32f) * totalAnimSamplerInput, file);
     }
 
     if (gltf->numAnimations) gltf->animations = new AAnimation[gltf->numAnimations]{};
