@@ -93,7 +93,7 @@ static void PauseMenu()
         wRequestQuit();
     }
 
-    uText(logText, MakeVec2(1750.0f, 920.0f));
+    uText(logText, Vec2(1750.0f, 920.0f));
 }
 
 static void OptionsMenu()
@@ -218,7 +218,7 @@ static void OptionsMenu()
         CurrElement = 9;
     }
 
-    pos = bgPos + bgScale - MakeVec2(100.0f, 100.0f);
+    pos = bgPos + bgScale - Vec2(100.0f, 100.0f);
     // draw border only if we selected or it is android
     uSetElementFocused(CurrElement == 10);
     uButtonOptions buttonOpt = uButtonOpt_Border | (CurrElement == 10 ? uButtonOpt_Hovered : 0);
@@ -253,7 +253,7 @@ static void ShowFPS()
         IntToString(fpsTxt, fps);
     }
 
-    uText(fpsTxt, MakeVec2(1810.0f, 85.0f));
+    uText(fpsTxt, Vec2(1810.0f, 85.0f));
 }
 
 static void TriangleTest()
@@ -263,7 +263,7 @@ static void TriangleTest()
 
     const uint color0 = 0xFF4444FDu, color1 = 0xFF008CFAu, color2 = 0xFF44FD44u;
     static uint8 cutStart = 0, even = 0;
-    Vector2f circlePos = MakeVec2(1520.0f, 540.0f);
+    Vector2f circlePos = Vec2(1520.0f, 540.0f);
 
     even ^= 1;
     if (even) cutStart++;
@@ -285,7 +285,7 @@ static void TriangleTest()
     uCapsule(circlePos, 15.0f, 200.0f, color1, properties);  circlePos.y += 45.0f;
 
     Vector2f quadPos = circlePos;
-    Vector2f quadSize = MakeVec2(200.0f, 15.0f);
+    Vector2f quadSize = Vec2(200.0f, 15.0f);
     // test with uquad
     uint color = PackColorToUint(35, 181, 30, 255);
     uRoundedRectangle(quadPos, 50.0f, 50.0f, color, uTriEffect_None);
@@ -318,7 +318,7 @@ bool ShowMenu()
     if (IsAndroid() && menuState == MenuState_Gameplay) {
         uSetFloat(uf::TextScale, 1.125f);
 
-        Vector2f buttonPos = MakeVec2(1850.0f, 30.0f);
+        Vector2f buttonPos = Vec2(1850.0f, 30.0f);
         if (uButton(nullptr, buttonPos, MakeVec2(40.0f), uButtonOpt_Border))
         {
             menuState = MenuState_PauseMenu;
@@ -326,15 +326,15 @@ bool ShowMenu()
         }
 
         // make pause icon ||
-        buttonPos += MakeVec2(10.0f, 7.0f);
-        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        buttonPos += Vec2(10.0f, 7.0f);
+        uQuad(buttonPos, Vec2(7.0f, 30.0f), ~0u);
         buttonPos.x += 15.0f;
-        uQuad(buttonPos, MakeVec2(7.0f, 30.0f), ~0u);
+        uQuad(buttonPos, Vec2(7.0f, 30.0f), ~0u);
     }
 
     if (showDetails) {
         // write to left bottom side of the screen
-        uText("Cratoria: Dubrovnik-Sponza", MakeVec2(100.0f, 950.0f));
+        uText("Cratoria: Dubrovnik-Sponza", Vec2(100.0f, 950.0f));
     }
 
     switch (menuState)

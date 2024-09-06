@@ -86,6 +86,7 @@ TLAS::~TLAS()
 {
     delete[] instances;
     delete[] tlasNodes;
+    delete[] instancesGPU;
 }
 
 void TLAS::Build()
@@ -99,6 +100,13 @@ void TLAS::Build()
     UpdateNodeBounds(numNodesUsed, &centeroidMin, &centeroidMax);
     
     SubdivideBVH(numNodesUsed++, 0, centeroidMin, centeroidMax);
+
+    instancesGPU = new BVHInstanceGPU[blasCount];
+    for (uint i = 0; i < blasCount; i++)
+    {
+        instancesGPU[i].nodeIndex = instances[i].nodeIndex;
+        instancesGPU[i].bvhIndex  = instances[i].bvhIndex;
+    }
 }
 
 void TLAS::UpdateNodeBounds(uint nodeIdx, Vector4x32f* centeroidMinOut, Vector4x32f* centeroidMaxOut)
@@ -210,7 +218,7 @@ void TLAS::SubdivideBVH(uint nodeIdx, uint depth, Vector4x32f centeroidMin, Vect
     float splitCost = FindBestSplitPlane(node, &axis, &splitPos, centeroidMin, centeroidMax);
     float nosplitCost = CalculateNodeCost(node->minv, node->maxv, node->instanceCount);
     
-    if (splitCost >= nosplitCost || depth >= 12u || node->instanceCount <= 6u) return;
+    if (splitCost >= nosplitCost) return; // || depth >= 12u || node->instanceCount <= 6u
 
     // in-place partition
     uint i = leftFirst;
@@ -323,4 +331,5 @@ void TLAS::TraverseBVH(const Ray& ray, uint rootNode, Triout* out)
         }
     }
 }
+
 

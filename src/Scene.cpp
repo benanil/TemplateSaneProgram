@@ -332,8 +332,8 @@ void Scene::ShowUI()
 void Scene::Update()
 {
     // float time = (float)(3.15 + (sin(TimeSinceStartup() * 0.11) * 0.165)); // (float)(sin(TimeSinceStartup() * 0.11));
-    // m_SunLight.dir = Vector3f::Normalize(MakeVec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
-    m_SunLight.dir = Vector3f::NormalizeEst(MakeVec3(-0.20f, Abs(Cos(m_SunAngle)) + 0.1f, Sin(m_SunAngle)));
+    // m_SunLight.dir = Vector3f::Normalize(Vec3(-0.20f, Abs(Cos(time)) + 0.1f, Sin(time)));
+    m_SunLight.dir = Vector3f::NormalizeEst(Vec3(-0.20f, Abs(Cos(m_SunAngle)) + 0.1f, Sin(m_SunAngle)));
     ShowUI();
 }
 

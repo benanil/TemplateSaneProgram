@@ -24,7 +24,7 @@ void CharacterController::Start(Prefab* _character)
     wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
     mCharacter  = _character;
-    mTouchStart = MakeVec2(0.0f, 0.0f);
+    mTouchStart = Vec2(0.0f, 0.0f);
     // we don't need to set zero the poses
     constexpr size_t poseSize = sizeof(AnimationController::mAnimPoseA) * 4 
                               + sizeof(AnimationController::mBoneMatrices) + sizeof(AnimationController::mOutMatrices);
@@ -46,7 +46,7 @@ void CharacterController::Start(Prefab* _character)
     mPosPtr = _character->nodes[mRootNodeIdx].translation;
     mRotPtr = _character->nodes[mRootNodeIdx].rotation;
     
-    mStartPos = MakeVec3(mPosPtr);
+    mStartPos = Vec3(mPosPtr);
     mStartRotation = VecLoad(mRotPtr);
     mStartPos.y = 0.65f;
 
@@ -247,8 +247,8 @@ Vector2f CharacterController::GetTargetMovement()
         // use rsqrt and mul instead of sqrt and div, to avoid devide zero by zero
         targetMovement = Vector2f::NormalizeEst(mTouchStart - cursorPos);  
     
-    targetMovement = Min(targetMovement, MakeVec2( 1.0f,  1.0f));
-    targetMovement = Max(targetMovement, MakeVec2(-1.0f, -1.0f));
+    targetMovement = Min(targetMovement, Vec2( 1.0f,  1.0f));
+    targetMovement = Max(targetMovement, Vec2(-1.0f, -1.0f));
     targetMovement.x = -targetMovement.x;
     #endif
     return targetMovement;
@@ -291,10 +291,10 @@ void CharacterController::MovementState(bool isSponza)
     }
 
     if (mAnimController.IsTrigerred() && mAnimController.mTriggerredAnim == mKickIndex)
-        mCurrentMovement = {0.0f, 0.0f  };
+        mCurrentMovement = { 0.0f, 0.0f  };
 
     // handle character position
-    Vector3f forward = MakeVec3(Sin(x), 0.0f, Cos(x));
+    Vector3f forward = { Sin(x), 0.0f, Cos(x) };
     Vector3f progress = forward * mMovementSpeed * deltaTime;
     
     float movementAmount = mCurrentMovement.LengthSafe();

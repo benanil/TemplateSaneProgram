@@ -369,7 +369,7 @@ void rUpdateTexture(Texture texture, void* data)
     TextureFormat format = TextureFormatTable[texture.type];
     glBindTexture(GL_TEXTURE_2D, texture.handle);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, texture.width, texture.height, format.format, format.type, data);
-    CHECK_GL_ERROR();
+    CHECK_GL_WARNING();
 }
 
 static bool IsCompressed(const char* path, int pathLen)
@@ -889,7 +889,16 @@ void rDispatchCompute(Shader shader, int workGroupsX, int workGroupsY, int workG
 }
 
 void rComputeBarier() {
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    // int GL_FRAMEBUFFER_BARRIER_BIT = 0x00000400;
+    // glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
+    GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    // ... other work you might want to do that does not impact the buffer...
+    uint64_t timeoutInNs = ~0ull;
+    GLenum res = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, timeoutInNs);
+    if(res == GL_TIMEOUT_EXPIRED || res == GL_WAIT_FAILED) {
+        // ...handle timeouts and failures
+        AX_WARN("GL_TIMEOUT_EXPIRED");
+    }
 }
 
 Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile, const char* fragFile)

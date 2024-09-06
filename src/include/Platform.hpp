@@ -51,15 +51,16 @@ inline constexpr const char* GetFileName(const char* path)
 
 enum wCursor_
 {
-    wCursor_Arrow,
-    wCursor_TextInput,
-    wCursor_ResizeAll,
-    wCursor_ResizeEW,
-    wCursor_ResizeNS,
-    wCursor_ResizeNESW,
-    wCursor_ResizeNWSE,
-    wCursor_Hand,
-    wCursor_NotAllowed
+    wCursor_Arrow     ,
+    wCursor_TextInput , // < | for text
+    wCursor_ResizeAll , // < +  
+    wCursor_ResizeEW  , // < - 
+    wCursor_ResizeNS  , // < | 
+    wCursor_ResizeNESW, // < /
+    wCursor_ResizeNWSE, 
+    wCursor_Hand      , // < hand
+    wCursor_NotAllowed, // < not allowed
+    wCursor_None        // < remove the cursor
 };
 typedef unsigned int wCursor;
 

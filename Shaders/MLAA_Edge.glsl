@@ -100,10 +100,8 @@ mediump uint MLAA_SeperatingLines(lowp sampler2D Sampler, ivec2 Offset)
     bvec2 result = greaterThan(abs(center - upright), vec2(fInvEdgeDetectionTreshold)); // CompareColors2(center, upright);
     
     // Check for seperating lines
-    if (result.y)
-    rVal |= kUpperMask;
-    if (result.x)
-    rVal |= kRightMask;
+    if (result.y) rVal |= kUpperMask;
+    if (result.x) rVal |= kRightMask;
     
     return rVal;
 }

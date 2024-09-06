@@ -69,6 +69,7 @@ enum struct uf : uint
     Depth        , // < between [0.0, 1.0] lower depth will shown on top
     FieldWidth   , // < width of float or int fields
     TextWrapWidth, // < only active if uTextFlags_WrapWidthDetermined flag is active
+    ScrollWidth  , // scrollbar width
 };
 
 enum uTextFlags_{
@@ -77,9 +78,9 @@ enum uTextFlags_{
     uTextFlags_WrapWidthDetermined = 2,
 };
 
-enum CheckOpt_ { 
-    CheckOpt_WhileMouseDown = 1, 
-    CheckOpt_BigColission = 2 
+enum uClickOpt_ { 
+    ClickOpt_WhileMouseDown = 1, 
+    ClickOpt_BigColission = 2 
 };
 
 typedef int uClickOpt;
@@ -247,12 +248,26 @@ void uBeginScissor(Vector2f pos, Vector2f scale, uScissorMask mask);
 void uEndScissor(uScissorMask mask);
 
 
-
 //------------------------------------------------------------------------
 // Window API
 
+enum uWindowFlags_
+{
+    uWindowFlags_NoMove   = 1,
+    uWindowFlags_NoResize = 2, 
+    uWindowFlags_NoTabBar = 4 // < not implemented yet
+};
+
+typedef uint uWindowFlags;
+
+bool uTreeBegin(const char* text, bool collapsable, bool open);
+
+void uTreeEnd();
+
 // returns false if window is closed, otherwise it returns true
-bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale, bool* open = nullptr);
+bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale, bool* open = nullptr, uWindowFlags flags = 0);
+
+bool uBeginWindow(const char* name, bool* open = nullptr, uWindowFlags flags = 0);
 
 void uWindowEnd();
 

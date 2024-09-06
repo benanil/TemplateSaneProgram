@@ -170,7 +170,7 @@ int LoadFBX(const char* path, SceneBundle* fbxScene, float scale)
                 currentVertex[j].texCoord = ConvertFloat2ToHalf2((float*)(umesh->vertex_uv.values.data + j));
             }
             if (umesh->vertex_normal.exists) {
-                currentVertex[j].normal = Pack_INT_2_10_10_10_REV(MakeVec3((float*)(umesh->vertex_normal.values.data + j)));
+                currentVertex[j].normal = Pack_INT_2_10_10_10_REV(Vec3((float*)(umesh->vertex_normal.values.data + j)));
             }
             if (umesh->vertex_tangent.exists)
             {

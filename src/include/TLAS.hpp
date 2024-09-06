@@ -19,18 +19,25 @@ struct alignas(16) BVHInstance // Tri
     uint padd2;
 };
 
+struct BVHInstanceGPU
+{
+    uint nodeIndex;
+    uint bvhIndex;
+};
+
 // top-level BVH class
 struct TLAS
 {
-	TLAS(struct Prefab* scene);
-	~TLAS();
-
-	void Build();
+    TLAS(struct Prefab* scene);
+    ~TLAS();
     
-	struct Prefab* prefab = 0;
-	TLASNode*    tlasNodes = 0; // | nodes
-	BVHInstance* instances = 0; // | tris
-	uint blasCount;
+    void Build();
+    
+    struct Prefab* prefab = 0;
+    TLASNode*    tlasNodes = 0; // | nodes
+    BVHInstance* instances = 0; // | tris
+    BVHInstanceGPU* instancesGPU = 0; // | tris
+    uint blasCount;
     
     uint numNodesUsed;
 

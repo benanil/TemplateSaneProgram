@@ -27,7 +27,7 @@ namespace SceneRenderer
 
     void RenderPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem = nullptr);
 
-    void EndRendering(bool renderToBackBuffer);
+    void EndRendering(bool renderToBackBuffer, Prefab* mainScene);
 
     void ShowGBuffer();
 
@@ -59,4 +59,8 @@ namespace SceneRenderer
     bool ShouldReRender();
 
     void ShowEditor(float offset = 0.0f, bool* open = nullptr);
+    
+    void InitRayTracing(Prefab* scene);
+
+    void RayTraceShadows(Prefab* scene);
 }

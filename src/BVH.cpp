@@ -17,19 +17,21 @@
 
 #include "../ASTL/Additional/Profiler.hpp"
 
-const size_t MAX_TRIANGLES = 3'800'000; // 6'000'000; // more than bistro num triangles * 2
-const size_t MAX_BVHNODES = MAX_TRIANGLES;
+const size_t MAX_TRIANGLES = 2048 * 2048; // 4'194'304; // more than bistro num triangles * 2
 
-static uint totalNodesUsed = 0;
-static uint currTriangle = 0;
+uint g_TotalBVHNodesUsed = 0;
+uint g_CurrTriangleFace = 0;
 
-BVHNode* g_BVHNodes;
-Tri*     g_Triangles;
+BVHNode*  g_BVHNodes;
+Tri*      g_Triangles;
+Vector3f* centeroids; // 4th is padding
+
 
 void InitBVH()
 {
-    totalNodesUsed = 0;
-    currTriangle   = 0;
+    g_TotalBVHNodesUsed = 0;
+    g_CurrTriangleFace   = 0;
+    centeroids  = new Vector3f[MAX_TRIANGLES];
     g_Triangles = new Tri[MAX_TRIANGLES]{};
     g_BVHNodes  = new BVHNode[MAX_TRIANGLES]{};
 }
@@ -38,6 +40,7 @@ void DestroyBVH()
 {
     delete[] g_Triangles;
     delete[] g_BVHNodes;
+    delete[] centeroids;
 }
 
 static void UpdateNodeBounds(SceneBundle* mesh, uint nodeIdx, Vector4x32f* centeroidMinOut, Vector4x32f* centeroidMaxOut)
@@ -65,7 +68,7 @@ static void UpdateNodeBounds(SceneBundle* mesh, uint nodeIdx, Vector4x32f* cente
         nodeMax = VecMax(nodeMax, v1);
         nodeMax = VecMax(nodeMax, v2);
         
-        Vector4x32f centeroid = VecLoadA(leafPtr->centeroid);
+        Vector4x32f centeroid = VecLoad(centeroids[node->leftFirst + i].arr);
         centeroidMin = VecMin(centeroidMin, centeroid);
         centeroidMax = VecMax(centeroidMax, centeroid);
 
@@ -104,10 +107,11 @@ static float FindBestSplitPlane(const BVHNode* node,
         struct Bin { AABB bounds; int triCount = 0; } bin[BINS] = {};
         for (uint i = 0; i < node->triCount; i++)
         {
-            ASSERT(i + leftFirst < MAX_TRIANGLES);
-            Tri* triangle = g_Triangles + leftFirst + i;
+            int triIdx = leftFirst + i;
+            ASSERT(triIdx < MAX_TRIANGLES);
+            Tri* triangle = g_Triangles + triIdx;
             
-            float centeroid = triangle->centeroid[axis];
+            float centeroid = centeroids[triIdx][axis];
             int binIdx = MIN(BINS - 1, (int)((centeroid - boundsMin) * scale));
             
             ASSERT(binIdx < BINS && binIdx >= 0);
@@ -167,7 +171,7 @@ static void SubdivideBVH(uint depth, SceneBundle* mesh, APrimitive* primitive, u
     float splitCost = FindBestSplitPlane(node, mesh, primitive, &axis, &splitPos, centeroidMin, centeroidMax);
     float nosplitCost = CalculateNodeCost(node->minv, node->maxv, node->triCount);
     
-    if (splitCost >= nosplitCost || depth >= 20 || node->triCount <= 32) return;
+    if (splitCost >= nosplitCost) return; // || depth >= 20 || node->triCount <= 24
 
     // in-place partition
     int i = leftFirst;
@@ -184,7 +188,7 @@ static void SubdivideBVH(uint depth, SceneBundle* mesh, APrimitive* primitive, u
     {
         ASSERT(i < MAX_TRIANGLES);
         Tri* tri = g_Triangles + i;
-        float centeroid = tri->centeroid[axis];
+        float centeroid = centeroids[i][axis];
         
         int binIdx = MIN(BINS - 1, (int)((centeroid - centeroidMinAxis) * scale));
         
@@ -199,8 +203,8 @@ static void SubdivideBVH(uint depth, SceneBundle* mesh, APrimitive* primitive, u
     int leftCount = i - leftFirst;
     if (leftCount == 0 || leftCount == triCount) return;
     // create child nodes
-    uint leftChildIdx = totalNodesUsed++;
-    uint rightChildIdx = totalNodesUsed++;
+    uint leftChildIdx = g_TotalBVHNodesUsed++;
+    uint rightChildIdx = g_TotalBVHNodesUsed++;
     ASSERT(rightChildIdx < MAX_TRIANGLES);
     g_BVHNodes[leftChildIdx].leftFirst = leftFirst;
     g_BVHNodes[leftChildIdx].triCount = leftCount;
@@ -218,7 +222,7 @@ static void SubdivideBVH(uint depth, SceneBundle* mesh, APrimitive* primitive, u
 
 uint BuildBVH(SceneBundle* prefab)
 {
-    Tri* tris = g_Triangles + currTriangle;
+    Tri* tris = g_Triangles + g_CurrTriangleFace;
     const Tri* triEnd = g_Triangles + MAX_TRIANGLES;
 
     int totalTriangles = 0;
@@ -228,6 +232,7 @@ uint BuildBVH(SceneBundle* prefab)
     char* vertices = (char*)prefab->allVertices;
 
     Tri* tri = tris;
+    Vector3f* centeroid = centeroids + g_CurrTriangleFace;
     // for each primitive: calculate centroids and create tris for bvh
     for (int m = 0; m < prefab->numMeshes; m++)
     {
@@ -252,11 +257,12 @@ uint BuildBVH(SceneBundle* prefab)
                 Vector4x32f v1 = VecLoad((const float*)(vertices + (tri->v1 * stride)));
                 Vector4x32f v2 = VecLoad((const float*)(vertices + (tri->v2 * stride)));
     
-                tri->centeroid[0] = (VecGetX(v0) + VecGetX(v1) + VecGetX(v2)) * 0.333333f;
-                tri->centeroid[1] = (VecGetY(v0) + VecGetY(v1) + VecGetY(v2)) * 0.333333f;
-                tri->centeroid[2] = (VecGetZ(v0) + VecGetZ(v1) + VecGetZ(v2)) * 0.333333f;
+                centeroid->x = (VecGetX(v0) + VecGetX(v1) + VecGetX(v2)) * 0.333333f;
+                centeroid->y = (VecGetY(v0) + VecGetY(v1) + VecGetY(v2)) * 0.333333f;
+                centeroid->z = (VecGetZ(v0) + VecGetZ(v1) + VecGetZ(v2)) * 0.333333f;
     
                 tri++;
+                centeroid++;
                 ASSERT(tri < triEnd);
             }
     
@@ -264,7 +270,7 @@ uint BuildBVH(SceneBundle* prefab)
         }   
     }
 
-    uint nodesUsedStart = totalNodesUsed;
+    uint nodesUsedStart = g_TotalBVHNodesUsed;
 
     // create bvh for each primitive
     for (int m = 0; m < prefab->numMeshes; m++)
@@ -277,10 +283,10 @@ uint BuildBVH(SceneBundle* prefab)
             int numTriangles = primitive->numIndices / 3;
             
             // assign all triangles to root node
-            uint rootNodeIndex = totalNodesUsed++;
+            uint rootNodeIndex = g_TotalBVHNodesUsed++;
     
             BVHNode& root  = g_BVHNodes[rootNodeIndex];
-            root.leftFirst = currTriangle;
+            root.leftFirst = g_CurrTriangleFace;
             root.triCount  = numTriangles;
     
             primitive->bvhNodeIndex = rootNodeIndex;
@@ -290,11 +296,11 @@ uint BuildBVH(SceneBundle* prefab)
     
             // subdivide recursively
             SubdivideBVH(0, prefab, primitive, rootNodeIndex, centeroidMin, centeroidMax);
-            currTriangle += numTriangles;
+            g_CurrTriangleFace += numTriangles;
         } 
     }
     
-    return totalNodesUsed - nodesUsedStart;
+    return g_TotalBVHNodesUsed - nodesUsedStart;
 }
 
 purefn bool VECTORCALL IntersectTriangle(const Ray& ray, Vector4x32f v0, Vector4x32f v1, Vector4x32f v2, Triout* o, int i)
@@ -341,7 +347,7 @@ bool IntersectBVH(const Ray& ray, GPUMesh* mesh, uint rootNode, Triout* out)
     while (currentNodeIndex > 0 && protection++ < 250)
     {
         const BVHNode* node = g_BVHNodes + nodesToVisit[--currentNodeIndex];
-        ASSERT(node < g_BVHNodes + totalNodesUsed);
+        ASSERT(node < g_BVHNodes + g_TotalBVHNodesUsed);
 
     traverse:
         uint triCount = node->triCount, leftFirst = node->leftFirst;
@@ -350,7 +356,7 @@ bool IntersectBVH(const Ray& ray, GPUMesh* mesh, uint rootNode, Triout* out)
             for (uint i = leftFirst; i < leftFirst + triCount; ++i)
             {
                 const Tri* tri = g_Triangles + i;
-                ASSERT(tri < g_Triangles + currTriangle);
+                ASSERT(tri < g_Triangles + g_CurrTriangleFace);
 
                 Vector4x32f v0 = mesh->GetPosition(tri->v0);
                 Vector4x32f v1 = mesh->GetPosition(tri->v1);
@@ -363,7 +369,7 @@ bool IntersectBVH(const Ray& ray, GPUMesh* mesh, uint rootNode, Triout* out)
 
         uint leftIndex = leftFirst;
         uint rightIndex = leftIndex + 1;
-        ASSERT(rightIndex < currTriangle);
+        ASSERT(rightIndex < g_CurrTriangleFace);
 
         BVHNode leftNode  = g_BVHNodes[leftIndex];
         BVHNode rightNode = g_BVHNodes[rightIndex];
@@ -389,7 +395,7 @@ bool IntersectBVH(const Ray& ray, GPUMesh* mesh, uint rootNode, Triout* out)
 
 purefn int SampleTexture(Texture texture, float2 uv)
 {
-    uv -= MakeVec2(Floor(uv.x), Floor(uv.y));
+    uv -= Vec2(Floor(uv.x), Floor(uv.y));
     int uScaled = (int)(texture.width * uv.x);  // (0, 1) to (0, TextureWidth )
     int vScaled = (int)(texture.height * uv.y); // (0, 1) to (0, TextureHeight)
     return vScaled * texture.width + uScaled;
@@ -423,8 +429,8 @@ Triout RayCastScene(Ray ray,
     int hitNodeIdx = hitOut.nodeIndex;
     struct Triangle 
     {
-        Vector4x32f    pos[3];
-        Vector4x32f    normal[3];
+        Vector4x32f pos[3];
+        Vector4x32f normal[3];
         Vector2f uv[3];
     };
     
@@ -468,11 +474,11 @@ Triout RayCastScene(Ray ray,
 
 // todo ignore mask
 Triout RayCastFromCamera(CameraBase* camera,
-    Vector2f uv,
+    Vector2f screenPos,
     Scene* scene,
     ushort prefabID,
     AnimationController* animSystem)
 {
-    Ray ray = camera->ScreenPointToRay(uv);
+    Ray ray = camera->ScreenPointToRay(screenPos);
     return RayCastScene(ray, scene, prefabID, animSystem);
 }

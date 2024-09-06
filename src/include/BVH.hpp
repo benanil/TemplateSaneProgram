@@ -24,10 +24,9 @@ struct MeshInfo {
     const char* path;
 };
 
-struct alignas(16) Tri
+struct Tri
 {
     uint v0, v1, v2, padd;
-    float centeroid[4]; // 4th is padding
 };
 
 struct Triout {
@@ -63,7 +62,7 @@ bool IntersectBVH(const Ray& ray, struct GPUMesh* mesh, uint rootNode, Triout* o
 
 // todo ignore mask, animated meshes, returning hit color
 Triout RayCastFromCamera(struct CameraBase* camera, 
-                         Vector2f uv, 
+                         Vector2f screenPos, // between zero and window size 
                          struct Scene* scene,
                          ushort prefabID, 
                          struct AnimationController* animSystem);

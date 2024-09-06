@@ -15,6 +15,7 @@
 #include "include/TLAS.hpp"
 
 #include "../ASTL/String.hpp"
+#include "../ASTL/Queue.hpp"
 #include "../ASTL/Math/Half.hpp"
 #include "../ASTL/Additional/Profiler.hpp"
 
@@ -23,6 +24,8 @@
 static PrefabID MainScenePrefab = 0;
 static PrefabID AnimatedPrefab = 0;
 static PrefabID SpherePrefab = 0;
+
+static bool* isNodeOpenArray = 0;
 
 CharacterController characterController={};
 
@@ -83,7 +86,7 @@ int AXStart()
     }
 
     uInitialize();
-    uSetFloat(uf::TextScale, 0.81f);
+    uSetFloat(uf::TextScale, 0.71f);
     // very good font that has lots of icons: http://www.quivira-font.com/
     uLoadFont("Fonts/JetBrainsMono-Regular.ttf"); // "Fonts/Quivira.otf"
     MemsetZero(&characterController, sizeof(CharacterController));
@@ -99,6 +102,7 @@ int AXStart()
 
     mainScene->tlas = new TLAS(mainScene);
     mainScene->tlas->Build();
+    SceneRenderer::InitRayTracing(mainScene);
 
     SceneRenderer::Init();
  
@@ -106,6 +110,9 @@ int AXStart()
     wSetKeyPressCallback(KeyPressCallback);
 
     SetDoubleSidedMaterials(mainScene);
+
+    isNodeOpenArray = new bool[mainScene->numNodes]{};
+
     return 1;
 }
 
@@ -181,6 +188,48 @@ static void CastRay()
     // uDrawText(rayDistTxt, rayPos);
 }
 
+static void ShowPrefabView(Prefab* prefab)
+{
+    static Queue<int> queue = {};
+
+    static bool windowOpen = true, nodesOpen = true;
+
+    if (uBeginWindow("Prefab View", &windowOpen))
+    {
+        queue.Enqueue(prefab->GetRootNodeIdx());
+        nodesOpen ^= uTreeBegin("nodes", true, nodesOpen);
+        
+        if (nodesOpen) while (!queue.Empty())
+        {
+            int index = queue.Dequeue();
+            ANode* node = prefab->nodes + index;
+            AMesh* mesh = prefab->meshes + node->index;
+            
+            isNodeOpenArray[index] ^= uTreeBegin(node->name, true, isNodeOpenArray[index]);
+        
+            if (isNodeOpenArray[index])
+            for (int i = 0; i < mesh->numPrimitives; i++)
+            { 
+                char temp[64] = {'n', 'o', ' ', 'n', 'a', 'm', 'e', ' '};
+                IntToString(temp+8, i);
+                const char* name = mesh->name == nullptr ? temp : mesh->name;
+                uTreeBegin(name, false, false); uTreeEnd();
+            }
+        
+            uTreeEnd();
+        
+            for (int i = 0; i < node->numChildren; i++)
+            {
+                queue.Enqueue(node->children[i]);
+            }
+        }
+        
+        queue.Reset();
+        uTreeEnd();
+        uWindowEnd();
+    }
+}
+
 // do rendering and main loop here
 void AXLoop(bool canRender)
 {
@@ -224,7 +273,9 @@ void AXLoop(bool canRender)
         }
 
         bool renderToBackBuffer = !PauseMenuOpened;
-        SceneRenderer::EndRendering(renderToBackBuffer);
+        
+        Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+        SceneRenderer::EndRendering(renderToBackBuffer, mainScene);
 
         RenderOutlined(currentScene, MainScenePrefab, SelectedNodeIndex, SelectedNodePrimitiveIndex);
         
@@ -237,8 +288,9 @@ void AXLoop(bool canRender)
         
         SceneRenderer::ShowEditor(0.0f  , &open0);
         SceneRenderer::ShowEditor(256.0f, &open1);
-        SceneRenderer::ShowEditor(512.0f, &open2);
         
+        ShowPrefabView(mainScene);
+
         PauseMenuOpened = false;
     }
     else
@@ -270,4 +322,6 @@ void AXExit()
     characterController.Destroy();
     uDestroy();
     SceneRenderer::Destroy();
+
+    delete[] isNodeOpenArray;
 }

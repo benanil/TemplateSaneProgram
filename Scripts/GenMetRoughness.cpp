@@ -72,7 +72,7 @@ void MakeMetallicRoughness(const char* source)
                 float(diffuse[index + 2]) / 255.0f
             };
 
-            float luminance = Vector3f::Dot(albedo, MakeVec3(0.2126f, 0.7152f, 0.0722f));
+            float luminance = Vector3f::Dot(albedo, Vec3(0.2126f, 0.7152f, 0.0722f));
             float equality  = luminance / MAX(MAX(albedo.x, albedo.y), albedo.z);
             float vibrance  = rgb2vibrance(albedo);
     

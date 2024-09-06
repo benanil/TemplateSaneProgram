@@ -26,6 +26,8 @@
 
 #include "include/SceneRenderer.hpp"
 
+#include "../External/glad.hpp"
+
 #include "include/Scene.hpp"
 #include "include/Animation.hpp"
 #include "include/AssetManager.hpp"
@@ -35,6 +37,7 @@
 #include "include/UI.hpp"
 #include "include/HBAO.hpp"
 #include "include/BVH.hpp"
+#include "include/TLAS.hpp"
 
 #include "../ASTL/IO.hpp"
 #include "../ASTL/Array.hpp"
@@ -45,41 +48,58 @@
 // from Renderer.cpp
 extern unsigned int g_DefaultTexture;
 
+// from BVH.cpp
+extern BVHNode*  g_BVHNodes;
+extern Tri*      g_Triangles;
+extern uint g_TotalBVHNodesUsed;
+extern uint g_CurrTriangleFace;
+
 namespace SceneRenderer
 {
-    CameraBase* m_Camera;
+    CameraBase*  m_Camera;
     FreeCamera   m_FreeCamera;
     PlayerCamera m_PlayerCamera;
 
-    Matrix4     m_ViewProjection;
-    Matrix4     m_LightMatrix;
+    Matrix4      m_ViewProjection;
+    Matrix4      m_LightMatrix;
 
-    Shader      m_ShadowShader;
-    Shader      m_GBufferShader;
-    Shader      m_GBufferShaderAlpha;
-    Shader      m_SkyboxShader;
-    Shader      m_DepthCopyShader;
-    Shader      m_MLAAEdgeShader;
-    Shader      m_MLAAShader;
-    Shader      m_GodRaysShader;
-    Shader      m_DeferredPBRShader;
-    Shader      m_BlackShader;
-    Shader      m_OutlineShader;
+    Shader       m_ShadowShader;
+    Shader       m_GBufferShader;
+    Shader       m_GBufferShaderAlpha;
+    Shader       m_SkyboxShader;
+    Shader       m_DepthCopyShader;
+    Shader       m_MLAAEdgeShader;
+    Shader       m_MLAAShader;
+    Shader       m_GodRaysShader;
+    Shader       m_DeferredPBRShader;
+    Shader       m_BlackShader;
+    Shader       m_OutlineShader;
+    // Shader       m_ShadowShaderRT; 
+    // Shader       m_ShadowComputeShaderRT;
 
-    GPUMesh     m_BoxMesh; // -0.5, 0.5 scaled
-    
-    FrameBuffer m_ShadowFrameBuffer;
-    FrameBuffer m_MLAAEdgeFrameBuffer;
-    FrameBuffer m_LightingFrameBuffer;
-    FrameBuffer m_PostProcessingFrameBuffer;
-    FrameBuffer m_GodRaysFB;
+    GPUMesh      m_BoxMesh; // -0.5, 0.5 scaled
+                 
+    FrameBuffer  m_ShadowFrameBuffer;
+    FrameBuffer  m_MLAAEdgeFrameBuffer;
+    FrameBuffer  m_LightingFrameBuffer;
+    FrameBuffer  m_PostProcessingFrameBuffer;
+    FrameBuffer  m_GodRaysFB;
+    // FrameBuffer  m_ShadowRTFrameBuffer;
 
-    Texture     m_GodRaysTex;
-    Texture     m_MLAAEdgeTex;
-    Texture     m_ShadowTexture;
-    Texture     m_LightingTexture;
-    Texture     m_SkyNoiseTexture; // 32x32 small noise
-    Texture     m_WhiteTexture;
+    Texture      m_GodRaysTex;
+    Texture      m_MLAAEdgeTex;
+    Texture      m_ShadowTexture;
+    Texture      m_LightingTexture;
+    Texture      m_SkyNoiseTexture; // 32x32 small noise
+    Texture      m_WhiteTexture;
+
+    // ray tracing
+    // Texture      m_ShadowResultTexRT;
+    // Texture      m_BVHNodesTex;
+    // Texture      m_TLASNodesTex;
+    // Texture      m_GlobalMatricesTex;
+    // Texture      m_TrianglesTex;
+    // Texture      m_BVHInstanceTex;
 
     struct GBuffer
     {
@@ -109,6 +129,9 @@ namespace SceneRenderer
     int dColorTex, dNormalTex, dDepthTex;
 
     int uMLAAColorTex, uMLAAEdgeTex, uMLAAInputTex, uMLAAGodRaysTex, uMLAAAmbientOcclussionTex;
+
+    // int uDepthMap, uBVHNodes, uTLASNodes, uGlobalMatrices; 
+    // int uBVHInstances, uTriangles, uInvViewProj, uSunDir;
 
     struct LightUniforms
     {
@@ -340,12 +363,27 @@ static void GetUniformLocations()
     lShadowModel       = rGetUniformLocation(m_ShadowShader, "model");
     lShadowLightMatrix = rGetUniformLocation(m_ShadowShader, "lightMatrix");
     
-    uMLAAColorTex   = rGetUniformLocation(m_MLAAShader, "uColorTex"); 
-    uMLAAEdgeTex    = rGetUniformLocation(m_MLAAShader, "uEdgesTex"); 
-    uMLAAGodRaysTex = rGetUniformLocation(m_MLAAShader, "uGodRaysTex"); 
-    uMLAAAmbientOcclussionTex = rGetUniformLocation(m_MLAAShader, "uAmbientOcclussion");
+    rBindShader(m_MLAAShader);
+    uMLAAColorTex   = rGetUniformLocation("uColorTex"); 
+    uMLAAEdgeTex    = rGetUniformLocation("uEdgesTex"); 
+    uMLAAGodRaysTex = rGetUniformLocation("uGodRaysTex"); 
+    uMLAAAmbientOcclussionTex = rGetUniformLocation("uAmbientOcclussion");
 
     uMLAAInputTex = rGetUniformLocation(m_MLAAEdgeShader, "uInputTex");
+
+    // rBindShader(m_ShadowShaderRT);
+    // uDepthMap       = rGetUniformLocation("uDepthMap"); 
+    // uBVHNodes       = rGetUniformLocation("uBVHNodes");
+    // uTLASNodes      = rGetUniformLocation("uTLASNodes"); 
+    // uGlobalMatrices = rGetUniformLocation("uGlobalMatrices");
+    // uBVHInstances   = rGetUniformLocation("uBVHInstances"); 
+    // uTriangles      = rGetUniformLocation("uTriangles");
+    // uInvViewProj    = rGetUniformLocation("uInvViewProj");
+    // uSunDir         = rGetUniformLocation("uSunDir");
+    
+    // rBindShader(m_ShadowComputeShaderRT); 
+    // uInvViewProj = rGetUniformLocation("uInvViewProj");
+    // uSunDir = rGetUniformLocation("uSunDir");
 }
 
 static void CreateShaders()
@@ -386,6 +424,10 @@ static void CreateShaders()
     );
 
     m_OutlineShader = rImportShader("Shaders/OutlineVert.glsl", "Shaders/OutlineFrag.glsl");
+    
+    // m_ShadowShaderRT = rImportFullScreenShader("Shaders/ShadowRT.glsl");
+
+    // m_ShadowComputeShaderRT = rImportComputeShader("Shaders/ShadowRTCompute.glsl");
 
     GetUniformLocations();
 }
@@ -887,29 +929,110 @@ static bool MeshInstanceIndexCompare(MeshInstance* a, MeshInstance* b)
     return a->meshIndex < b->meshIndex;
 }
 
+void InitRayTracing(Prefab* scene)
+{
+    #if 0
+    int numMatrices = scene->numNodes << 2;
+    int numInstances = scene->tlas->numNodesUsed;
+    int numTLASNodes = scene->tlas->numNodesUsed << 1;
+    int numBLASNodes = g_TotalBVHNodesUsed << 1;
+    int numTriangles = g_CurrTriangleFace;
+    
+    m_ShadowResultTexRT  = rCreateTexture(1920/4, 1088/4, nullptr, TextureType_RGBA8, TexFlags_RawData);
+    
+    m_GlobalMatricesTex  = rCreateTexture(MIN(1024, numMatrices), (scene->numNodes >> 8) + 1, scene->globalNodeTransforms, TextureType_RGBA32F, TexFlags_RawData);
+    
+    m_BVHInstanceTex = rCreateTexture(MIN(1024, numInstances), (scene->tlas->numNodesUsed >> 10) + 1, scene->tlas->instancesGPU, TextureType_RG32UI, TexFlags_RawData);
+    
+    m_TLASNodesTex = rCreateTexture(MIN(1024, numTLASNodes), (scene->tlas->numNodesUsed >> 9) + 1, scene->tlas->tlasNodes, TextureType_RGBA32F, TexFlags_RawData);
+    m_BVHNodesTex  = rCreateTexture(MIN(1024, numBLASNodes), (g_TotalBVHNodesUsed >> 9) + 1, g_BVHNodes, TextureType_RGBA32F, TexFlags_RawData);
+    m_TrianglesTex = rCreateTexture(MIN(1024, numTriangles), (g_CurrTriangleFace >> 10) + 1, g_Triangles, TextureType_RGBA32UI, TexFlags_RawData);
+    
+    m_ShadowRTFrameBuffer = rCreateFrameBuffer(true);
+    rFrameBufferAttachColor(m_ShadowResultTexRT, 0);
+    
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, scene->bigMesh.vertexHandle);
+    #endif
+}
+
+void RayTraceShadows(Prefab* scene)
+{
+    #if 0
+    // // 2. Create a sync object
+    // GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    // 
+    // // 3. Wait for the sync object to be signaled before dispatching the compute shader
+    // glClientWaitSync(sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+    
+    rBindFrameBuffer(m_ShadowRTFrameBuffer);
+    rSetViewportSize(1920/4, 1080/4);
+    rBindShader(m_ShadowShaderRT);
+    
+    Vector2i size = { 1920 / 4, 1088 / 4 };
+    // rBindShader(m_ShadowComputeShaderRT);
+    
+    DirectionalLight sunLight = g_CurrentScene.m_SunLight;
+    Matrix4 invViewProj = Matrix4::Inverse(m_Camera->view * m_Camera->projection);
+    
+    rSetShaderValue(invViewProj.GetPtr(), uInvViewProj, GraphicType_Matrix4);
+    rSetShaderValue(&sunLight.dir.x, uSunDir, GraphicType_Vector3f);
+    rSetShaderValue(m_Camera->inverseView.GetPtr(), rGetUniformLocation("uInvView"), GraphicType_Matrix4);
+    rSetShaderValue(m_Camera->inverseProjection.GetPtr(), rGetUniformLocation("uInvProj"), GraphicType_Matrix4);
+    
+    rSetTexture(m_BVHNodesTex.handle, 0, uBVHNodes);
+    rSetTexture(m_TLASNodesTex.handle, 1, uTLASNodes);
+    rSetTexture(m_TrianglesTex.handle, 2, uTriangles);
+    rSetTexture(m_GlobalMatricesTex.handle, 3, uGlobalMatrices);
+    rSetTexture(m_Gbuffer.DepthTexture, 4, uDepthMap);
+    rSetTexture(m_BVHInstanceTex.handle, 5, uBVHInstances);
+    rSetTexture(m_Gbuffer.NormalTexture, 6, rGetUniformLocation("uNormal"));
+    
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, scene->bigMesh.vertexHandle);
+    
+    // rSetTexture(m_Gbuffer.DepthTexture, 0, rGetUniformLocation("uDepthMap"));
+    // rComputeBindTexture(m_BVHNodesTex          , 1, TextureAccess_ReadOnly);
+    // rComputeBindTexture(m_TLASNodesTex         , 2, TextureAccess_ReadOnly);
+    // rComputeBindTexture(m_GlobalMatricesTex    , 3, TextureAccess_ReadOnly);
+    // rComputeBindTexture(m_Gbuffer.NormalTexture, 4, TextureAccess_ReadOnly);
+    // rComputeBindTexture(m_BVHInstanceTex       , 5, TextureAccess_ReadOnly);
+    // rComputeBindTexture(m_TrianglesTex         , 6, TextureAccess_ReadOnly);
+    // rComputeBindTexture(m_ShadowResultTexRT    , 7, TextureAccess_WriteOnly);
+    
+    // rDispatchCompute(m_ShadowComputeShaderRT, size.x / 16, size.y / 16, 1);
+    // // 5. Clean up sync object
+    // glDeleteSync(sync);
+    
+    // rComputeBarier();
+    rRenderFullScreen();
+    uSprite(Vec2(700.0f, 40.0f), Vec2(1920.0f/3.0f, 1080.0f/3.0f), &m_ShadowResultTexRT);
+    #endif
+}
+
 void RenderAllSceneContent(Scene* scene)
 {
-    // MeshInstance* instances = scene->m_MeshInstances.Data();
-    // const int numInstances = scene->m_MeshInstances.Size();
-    // 
-    // QuickSortFn(instances, 0, numInstances - 1, MeshInstanceIndexCompare);
-    // 
-    // {
-    //     rBindShader(m_GBufferShader);
-    //     rSetShaderValue(&scene->m_SunLight.dir.x, lSunDirG, GraphicType_Vector3f);
-    //     rSetShaderValue(hasAnimation, lHasAnimation);
-    // 
-    //     rBindMesh(prefab->bigMesh);
-    // 
-    //     Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
-    //     rSetShaderValue(viewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
-    //     rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
-    // }
-    // 
-    // for (const MeshInstance& instance : scene->m_MeshInstances.Size())
-    // {
-    //     
-    // }
+    #if 0
+    MeshInstance* instances = scene->m_MeshInstances.Data();
+    const int numInstances = scene->m_MeshInstances.Size();
+    
+    QuickSortFn(instances, 0, numInstances - 1, MeshInstanceIndexCompare);
+    
+    {
+        rBindShader(m_GBufferShader);
+        rSetShaderValue(&scene->m_SunLight.dir.x, lSunDirG, GraphicType_Vector3f);
+        rSetShaderValue(hasAnimation, lHasAnimation);
+    
+        rBindMesh(prefab->bigMesh);
+    
+        Matrix4 viewProjection = m_Camera.view * m_Camera.projection;
+        rSetShaderValue(viewProjection.GetPtr(), lViewProj, GraphicType_Matrix4);
+        rSetShaderValue(m_LightMatrix.GetPtr(), lLightMatrix, GraphicType_Matrix4);
+    }
+    
+    for (const MeshInstance& instance : scene->m_MeshInstances.Size())
+    {
+        
+    }
+    #endif
 }
 
 static void LightingPass()
@@ -998,8 +1121,10 @@ static void GodRaysPass()
     }
 }
 
-void EndRendering(bool renderToBackBuffer)
+void EndRendering(bool renderToBackBuffer, Prefab* mainScene)
 {
+    RayTraceShadows(mainScene);
+
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
     int smallerWidth  = GetRBWidth(windowSize.x, windowSize.y);
@@ -1061,8 +1186,8 @@ void Destroy()
 
 void ShowEditor(float offset, bool* open)
 {
-    const Vector2f position = MakeVec2(20.0f, 90.0f) + offset;
-    const Vector2f scale = MakeVec2(450.0f, 600.0f);
+    const Vector2f position = Vec2(20.0f, 90.0f) + offset;
+    const Vector2f scale = Vec2(450.0f, 600.0f);
 
     if (uBeginWindow("Graphics", 23455u + (uint)offset, position, scale, open))
     {
@@ -1091,6 +1216,35 @@ void ShowEditor(float offset, bool* open)
 
         HBAOEdit();
 
+        static bool t1, t2, t3;
+        const char* testText = "test tree node";
+
+        if (t1 ^= uTreeBegin(testText, true, t1))
+        {
+            uTreeBegin(testText, false, false); uTreeEnd();
+            uTreeBegin(testText, false, false); uTreeEnd();
+            uTreeBegin(testText, false, false); uTreeEnd();
+            uTreeBegin(testText, false, false); uTreeEnd();
+        }
+        uTreeEnd();
+        
+        if (t2 ^= uTreeBegin(testText, true, t2))
+        {
+            uTreeBegin(testText, false, false); uTreeEnd();
+            uTreeBegin(testText, false, false); uTreeEnd();
+            uTreeBegin(testText, false, false); uTreeEnd();
+        }
+        uTreeEnd();
+
+        if (t3 ^= uTreeBegin(testText, true, t3))
+        {
+            uTreeBegin(testText, false, false); uTreeEnd();
+            uTreeBegin(testText, false, false); uTreeEnd();
+        }
+        uTreeEnd();
+        
+        HBAOEdit();
+        
         uWindowEnd();
 
         if (GetKeyPressed('K'))
@@ -1103,4 +1257,4 @@ void ShowEditor(float offset, bool* open)
     // uSprite(MakeVec2(1100.0f, 500.0f), MakeVec2(800.0f, 550.0f), &m_ShadowTexture);
 }
 
-} // scene renderer namespace endndndnd
+} // scene renderer namespace end

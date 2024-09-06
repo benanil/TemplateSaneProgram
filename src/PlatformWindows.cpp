@@ -167,11 +167,12 @@ void wSetCursor(wCursor cursor)
         case wCursor_ResizeNWSE:   winCursor = IDC_SIZENWSE; break;
         case wCursor_Hand:         winCursor = IDC_HAND;     break;
         case wCursor_NotAllowed:   winCursor = IDC_NO;       break;
+        case wCursor_None:       ::SetCursor(nullptr);      return;
+        default: winCursor = IDC_ARROW; break;
     };
 
     ::SetCursor(::LoadCursor(nullptr, winCursor));
 }
-
 
 //------------------------------------------------------------------------
 // Audio

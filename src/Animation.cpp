@@ -286,7 +286,7 @@ void AnimationController::EvaluateLocomotion(float x, float y, float animSpeed)
 
         float animStep = 1.0f / mPrefab->animations[mTriggerredAnim].duration;
         mTrigerredNorm = Clamp01(mTrigerredNorm + (animSpeed * animStep * deltaTime));
-
+          
         if (mTrigerredNorm >= 1.0f)
         {
             mTrigerredNorm = 0.0f; // trigger stage complated
