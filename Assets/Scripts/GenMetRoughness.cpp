@@ -115,7 +115,7 @@ int main(int argc, const char* argv[])
     // char currentDir[256] = {};
     // GetCurrentDirectory(sizeof(currentDir), currentDir);
     // 
-    // VisitFolder(currentDir, MakeMetallicRoughness);
+    // VisitFolder(currentDir, MakeMetallicRoughness, nullptr);
     if (!FileExist(argv[1])) {
         printf("file is not exist!");
         return 0;

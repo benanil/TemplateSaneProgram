@@ -172,11 +172,11 @@ static void InitFrameBuffers(int width, int height)
 void HBAOInit(int width, int height)
 {
     // Init shaders
-    mLinearizeDepthSH  = rImportFullScreenShader("Shaders/LinearizeDepth.glsl");
-    mReinterleaveSH    = rImportFullScreenShader("Shaders/HBAOReinterleave.glsl");
-    mDeinterleaveSH    = rImportFullScreenShader("Shaders/HBAODeinterleave.glsl");
-    mHBAOSH            = rImportFullScreenShader("Shaders/HBAO.glsl");
-    mBlurShader        = rImportFullScreenShader("Shaders/HBAOBlur.glsl"); 
+    mLinearizeDepthSH  = rImportFullScreenShader("Assets/Shaders/LinearizeDepth.glsl");
+    mReinterleaveSH    = rImportFullScreenShader("Assets/Shaders/HBAOReinterleave.glsl");
+    mDeinterleaveSH    = rImportFullScreenShader("Assets/Shaders/HBAODeinterleave.glsl");
+    mHBAOSH            = rImportFullScreenShader("Assets/Shaders/HBAO.glsl");
+    mBlurShader        = rImportFullScreenShader("Assets/Shaders/HBAOBlur.glsl"); 
 
     mWhiteShader = rCreateFullScreenShader(
         AX_SHADER_VERSION_PRECISION()
@@ -364,6 +364,6 @@ void HBAOEdit()
         
     uCheckBoxW("SSAO", &mIsOpen, true);
 
-    // uSprite(MakeVec2(40.0f, 750.0f), MakeVec2(500.0f, 250.0f), &mBlurResultTX);
-    // uSprite(MakeVec2(540.0f, 750.0f), MakeVec2(500.0f, 250.0f), normalTex);
+    // uSprite(Vec2(40.0f, 750.0f), Vec2(500.0f, 250.0f), &mBlurResultTX);
+    // uSprite(Vec2(540.0f, 750.0f), Vec2(500.0f, 250.0f), normalTex);
 }

@@ -35,6 +35,7 @@ REM src/CharacterController.cpp ^
 REM src/BVH.cpp ^
 REM src/TLAS.cpp ^
 REM src/HBAO.cpp ^
+REM src/Editor.cpp ^
 REM External/astc-encoder/astcenc_averages_and_directions.cpp     ^
 REM External/astc-encoder/astcenc_block_sizes.cpp                 ^
 REM External/astc-encoder/astcenc_color_quantize.cpp              ^
@@ -81,6 +82,7 @@ REM src/SceneRenderer.cpp ^
 REM src/Texture.cpp ^
 REM src/BVH.cpp ^
 REM src/TLAS.cpp ^
+REM src/Editor.cpp ^
 REM -o SaneProgram ^
 REM -lopengl32 -lgdi32 SaneProgram.res
 

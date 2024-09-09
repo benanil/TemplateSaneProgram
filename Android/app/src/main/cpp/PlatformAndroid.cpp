@@ -154,13 +154,13 @@ int LoadSound(const char* path)
     const char* internalDataPath = g_android_app->activity->obbPath;
     char internalPath[512] = {};
     int internalPathSize = StringLength(internalDataPath);
-    int pathSize = StringLength(path);
+    int AssetsLen = StringLength(path);
 
     SmallMemCpy(internalPath, internalDataPath, internalPathSize);
     SmallMemCpy(internalPath + internalPathSize, "/Audio", sizeof("/Audio"));
     mkdir(internalPath, 0777);
     internalPath[internalPathSize++] = '/';
-    SmallMemCpy(internalPath + internalPathSize, path, pathSize);
+    SmallMemCpy(internalPath + internalPathSize, path, AssetsLen);
 
     ScopedPtr<char> soundFile = ReadAllFile(path);
     FILE* file = fopen(internalPath, "wb");

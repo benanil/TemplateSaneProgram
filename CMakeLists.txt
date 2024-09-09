@@ -36,6 +36,7 @@ set(SOURCES
     src/CharacterController.cpp
 	src/BVH.cpp
     src/TLAS.cpp
+    src/Editor.cpp
 )
 
 if(AX_GAME_BUILD)

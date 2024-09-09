@@ -244,6 +244,7 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
 
         if (isGLTF) {
             ChangeExtension(path, pathLen, "gltf");
+            ASSERTR(!FileExist(path), return 0);
             parsed &= ParseGLTF(path, (SceneBundle*)scene, scale); ASSERT(parsed);
         }
         else if (isOBJ) {

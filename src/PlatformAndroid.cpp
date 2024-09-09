@@ -154,13 +154,13 @@ int LoadSound(const char* path)
     const char* internalDataPath = g_android_app->activity->obbPath;
     char internalPath[512] = {};
     int internalPathSize = StringLength(internalDataPath);
-    int pathSize = StringLength(path);
+    int AssetsLen = StringLength(path);
 
     SmallMemCpy(internalPath, internalDataPath, internalPathSize);
     SmallMemCpy(internalPath + internalPathSize, "/Audio", sizeof("/Audio"));
     mkdir(internalPath, 0777);
     internalPath[internalPathSize++] = '/';
-    SmallMemCpy(internalPath + internalPathSize, path, pathSize);
+    SmallMemCpy(internalPath + internalPathSize, path, AssetsLen);
 
     ScopedPtr<char> soundFile = ReadAllFile(path);
     FILE* file = fopen(internalPath, "wb");
@@ -224,6 +224,10 @@ bool AnyMouseKeyDown()  { return PlatformCtx.FingerDown > 0; }
 bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.FingerDown & button); }
 bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.FingerReleased & button); }
 bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.FingerPressed & button); }
+
+bool IsDoubleClick() {
+    return PlatformCtx.SecondsSinceLastClick < 1.5f && GetMousePressed(MouseButton_Left); 
+}
 
 void GetMousePos(float* x, float* y) { *x = PlatformCtx.Fingers[0].positionX; *y = PlatformCtx.Fingers[0].positionY; }
 void GetMouseWindowPos(float* x, float* y) { *x = PlatformCtx.Fingers[0].positionX; *y = PlatformCtx.Fingers[0].positionY; }

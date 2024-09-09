@@ -109,7 +109,7 @@ int main(int argc, const char* argv[])
 {
     char currentDir[256] = {};
     GetCurrentDirectory(sizeof(currentDir), currentDir);
-    VisitFolder(currentDir, HalfResize);
+    VisitFolder(currentDir, HalfResize, nullptr);
 
     if (!FileExist(argv[1])) {
         printf("file is not exist!");

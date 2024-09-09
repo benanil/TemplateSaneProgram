@@ -4,20 +4,19 @@
 #include "../../ASTL/Math/Vector.hpp"
 
 // usefull icons. Usage:  DrawText(IC_ALARM ": 12:00pm, " IC_CIRCLE) // c string concatanation
-#define IC_LEFT_TRIANGLE  "\xE2\x8F\xB4"
-#define IC_RIGHT_TRIANGLE "\xE2\x8F\xB5"
-#define IC_UP_TRIANGLE    "\xE2\x8F\xB6"
-#define IC_DOWN_TRIANGLE  "\xE2\x8F\xB7"
-#define IC_PAUSE          "\xE2\x8F\xB8"
-#define IC_SQUARE         "\xE2\x8F\xB9" 
-#define IC_CIRCLE         "\xE2\x8F\xBA"
-#define IC_RESTART        "\xE2\x86\xBA"
-#define IC_HOUR_GLASS     "\xE2\x8F\xB3"
-#define IC_ALARM          "\xE2\x8F\xB0"
-#define IC_CHECK_MARK     "\xE2\x9C\x94"
-#define IC_HEART          "\xE2\x9D\xA4"
-#define IC_STAR           "\xE2\x98\x85"
-
+#define IC_LEFT_TRIANGLE    "\xE2\x8F\xB4"
+#define IC_RIGHT_TRIANGLE   "\xE2\x8F\xB5"
+#define IC_UP_TRIANGLE      "\xE2\x8F\xB6"
+#define IC_DOWN_TRIANGLE    "\xE2\x8F\xB7"
+#define IC_PAUSE            "\xE2\x8F\xB8"
+#define IC_SQUARE           "\xE2\x8F\xB9" 
+#define IC_CIRCLE           "\xE2\x8F\xBA"
+#define IC_RESTART          "\xE2\x86\xBA"
+#define IC_HOUR_GLASS       "\xE2\x8F\xB3"
+#define IC_ALARM            "\xE2\x8F\xB0"
+#define IC_CHECK_MARK       "\xE2\x9C\x94"
+#define IC_HEART            "\xE2\x9D\xA4"
+#define IC_STAR             "\xE2\x98\x85"
 
 enum {
     InvalidFontHandle = -1,
@@ -70,12 +69,14 @@ enum struct uf : uint
     FieldWidth   , // < width of float or int fields
     TextWrapWidth, // < only active if uTextFlags_WrapWidthDetermined flag is active
     ScrollWidth  , // scrollbar width
+    QuadYMin     , // works like stencil
 };
 
 enum uTextFlags_{
     uTextFlags_None      = 0,
     uTextFlags_NoNewLine = 1,
     uTextFlags_WrapWidthDetermined = 2,
+    uTextFlags_WrapImmediately = 4,
 };
 
 enum uClickOpt_ { 
@@ -104,7 +105,7 @@ void uSetElementFocused(bool val); // next element that will drawn is going to b
 void uSetFont(FontHandle font);
 void uSetColor(uColor what, uint color); // set color of the buttons, texts etc.
 void uSetTheme(uint* colors);
-void uSetFloat(uf color, float val);
+void uSetFloat(uFloat color, float val);
 
 // 0xFF000000 is black and alpha is 1.0 0x00FF0000 is blue so ABGR when writing with hex
 void uPushColor(uColor color, uint val);
@@ -119,8 +120,10 @@ void uPopFloat(uFloat what);
 uint uGetColor(uColor color);
 float uGetFloat(uFloat what);
 bool uIsHovered(); // last button was hovered?
+uint uGetWindowState(); 
+Vector2f uGetMouseTestPos();
 
-bool ClickCheck(Vector2f pos, Vector2f scale, uClickOpt flags = 0);
+bool uClickCheck(Vector2f pos, Vector2f scale, uClickOpt flags = 0);
 bool uClickCheckCircle(Vector2f pos, float radius, uClickOpt flags = 0);
 
 //
@@ -130,6 +133,8 @@ float uToolTip(const char* text, float timeRemaining, bool wasHovered);
 
 // text is an utf8 string
 void uText(const char* text, Vector2f position, uTextFlags flags = 0u);
+
+void uDrawIcon(uint unicode, Vector2f position);
 
 void uBorder(Vector2f begin, Vector2f scale);
 
@@ -200,7 +205,7 @@ bool uColorField4(const char* label, Vector2f pos, float* color4Ptr); // rgba32f
 // if you want to make an menu with thumbnails preferably you should resize all of the textures to 64x64 
 // and use sprite atlas like in font rendering
 // be aware that this works after scene rendering done, whenever you call this function, it will show the content when it is rendered(uRender function)
-void uSprite(Vector2f pos, Vector2f scale, struct Texture* texturePtr);
+void uSprite(Vector2f pos, Vector2f scale, struct Texture* texturePtr, bool invertY = true);
 
 //------------------------------------------------------------------------
 // Triangle Tendering
@@ -236,9 +241,11 @@ void uHorizontalTriangle(Vector2f pos, float size, float axis, uint color);
 void uVerticalTriangle(Vector2f pos, float size, float axis, uint color);
 
 enum uScissorMask_ {
-    uScissorMask_Quad = 1, // effects the quads
-    uScissorMask_Text = 2, // effects the texts
+    uScissorMask_Quad   = 1, // effects the quads
+    uScissorMask_Text   = 2, // effects the texts
     uScissorMask_Vertex = 4, // effects the circles, capsules, vertices
+    uScissorMask_Sprite = 8,
+    uScissorMask_All    = 0b1111
 };
 typedef uint uScissorMask;
 
@@ -254,15 +261,48 @@ void uEndScissor(uScissorMask mask);
 enum uWindowFlags_
 {
     uWindowFlags_NoMove   = 1,
-    uWindowFlags_NoResize = 2, 
-    uWindowFlags_NoTabBar = 4 // < not implemented yet
+    uWindowFlags_NoResize = 2,
+    uWindowFlags_FixedElementStart = 4,
+    uWindowFlags_NoTabBar = 8, // < not implemented yet
 };
 
 typedef uint uWindowFlags;
 
-bool uTreeBegin(const char* text, bool collapsable, bool open);
+struct UWindow
+{
+    Vector2f position;
+    Vector2f scale;
+    Vector2f elementPos; // we increment y gradually, and reset this to position every frame
+    bool* isOpenPtr;
 
-void uTreeEnd();
+    float elementOffsetY;
+    float lastElementsTotalHeight; // total length of all elements
+    float elementsTotalHeight;
+    float scrollPercent; // between 0 and window.scale.y
+    float topHeight;
+
+    uWindowFlags flags;
+
+    uint hash; // unique identifier
+    int currElement; // each frame zeroing this, and incrementing with each element
+    int selectedElement;
+    int numElements;
+    
+    uint8_t depth; 
+    bool started; // hash is created, variables initialized ? (if false window is openning first time)
+    bool isColapsed;
+    bool isFocused;
+
+    Vector2f GetScale() {
+        Vector2f result = scale;
+        if (isColapsed) result.y = topHeight;
+        return result;
+    }
+
+    bool IsOpen() {
+        return isOpenPtr && *isOpenPtr;
+    }
+};
 
 // returns false if window is closed, otherwise it returns true
 bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f scale, bool* open = nullptr, uWindowFlags flags = 0);
@@ -270,6 +310,16 @@ bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f s
 bool uBeginWindow(const char* name, bool* open = nullptr, uWindowFlags flags = 0);
 
 void uWindowEnd();
+
+bool uAnyWindowHovered(Vector2f mouseWindowPos);
+
+int uFindWindow(uint hash);
+
+UWindow* uGetWindow(int index);
+
+bool uTreeBegin(const char* text, bool collapsable, bool open, float width = 0.0f);
+
+void uTreeEnd();
 
 void uSeperatorW(uint color, uTriEffect triEffect, float occupancy = 0.85f);
 

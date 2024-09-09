@@ -50,8 +50,8 @@ void CharacterController::Start(Prefab* _character)
     mStartRotation = VecLoad(mRotPtr);
     mStartPos.y = 0.65f;
 
-    mKickHuhSound    = LoadSound("Audio/KickHuh.mp3");
-    mSwordSlashSound = LoadSound("Audio/SwordSlash.wav");
+    mKickHuhSound    = LoadSound("Assets/Audio/KickHuh.mp3");
+    mSwordSlashSound = LoadSound("Assets/Audio/SwordSlash.wav");
 
     int a_idle           = FindAnimIndex(_character, "Idle");
     int a_walk           = FindAnimIndex(_character, "Walk");

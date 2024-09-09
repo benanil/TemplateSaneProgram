@@ -138,6 +138,7 @@ struct FreeCamera : public CameraBase
         Vector2f mousePos;
         GetMousePos(&mousePos.x, &mousePos.y);
         Vector2f diff = mousePos - mouseOld;
+        wSetCursor(wCursor_ResizeAll);
         
         // if platform is android left side is for movement, right side is for rotating camera
 #ifdef __ANDROID__
@@ -184,7 +185,7 @@ struct PlayerCamera : public CameraBase
     void Init(Vector2i xviewPortSize) override
     {
         senstivity = 0.1f;
-        angle = Vector2f::Zero(); //MakeVec2(3.12f, 0.0f);
+        angle = Vector2f::Zero(); // Vec2(3.12f, 0.0f);
         viewportSize = xviewPortSize;
         targetPos = Vec3(0.0f, 0.0f, 0.0f);
         

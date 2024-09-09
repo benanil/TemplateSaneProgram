@@ -36,16 +36,6 @@
     #define AX_WARN(format, ...) 
 #endif
 
-inline constexpr const char* GetFileName(const char* path)
-{
-    int length = 0;
-    while (path[length]) length++;
-
-    while (path[length-1] != '\\' && path[length-1] != '/') 
-        length--;
-    return path + length;
-}
-
 //------------------------------------------------------------------------
 //  Window
 
@@ -81,6 +71,8 @@ bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int windowedHe
 
 bool wOpenFolder(const char* folderPath);
 
+bool wOpenFile(const char* filePath);
+
 void wSetCursor(wCursor cursor);
 
 // android only functions
@@ -101,6 +93,7 @@ inline bool wExitFullscreen(int windowX, int windowY, int windowedWidth, int win
 inline void SetMousePos(float x, float y) {}
 inline void SetMouseWindowPos(float x, float y) {}
 inline bool wOpenFolder(const char* folderPath) { return false; } // < not implemented
+bool wOpenFile(const char* filePath){}
 inline void wSetCursor(wCursor cursor) { }
 
 void wShowKeyboard(bool value); // shows keyboard on android devices
@@ -151,13 +144,16 @@ bool AnyKeyDown();
 //  Mouse is finger in Android, and MouseButton is finger id.
 enum MouseButton_
 {
-    MouseButton_Left   = 1, /* same -> */ MouseButton_Touch0 = 1,
-    MouseButton_Right  = 2, /* same -> */ MouseButton_Touch1 = 2,
-    MouseButton_Middle = 4, /* same -> */ MouseButton_Touch2 = 4
+    MouseButton_Left    = 1, /* same -> */ MouseButton_Touch0 = 1,
+    MouseButton_Right   = 2, /* same -> */ MouseButton_Touch1 = 2,
+    MouseButton_Middle  = 4, /* same -> */ MouseButton_Touch2 = 4,
+    MouseButton_Forward  = 8, 
+    MouseButton_Backward = 16, 
 };
 typedef int MouseButton;
 
 bool AnyMouseKeyDown();
+bool IsDoubleClick();
 bool AnyNumberPressed();
 int GetPressedNumber();
 
@@ -211,6 +207,7 @@ double TimeSinceStartup();
 
 enum KeyboardKey_
 {
+    Key_MouseBack  = 0x05, 
     Key_BACK       = 0x08,   
     Key_TAB        = 0x09,   
     Key_CLEAR      = 0x0C,   

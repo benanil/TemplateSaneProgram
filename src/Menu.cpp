@@ -319,7 +319,7 @@ bool ShowMenu()
         uSetFloat(uf::TextScale, 1.125f);
 
         Vector2f buttonPos = Vec2(1850.0f, 30.0f);
-        if (uButton(nullptr, buttonPos, MakeVec2(40.0f), uButtonOpt_Border))
+        if (uButton(nullptr, buttonPos, Vec2(40.0f), uButtonOpt_Border))
         {
             menuState = MenuState_PauseMenu;
             pauseMenuOpenned = true;

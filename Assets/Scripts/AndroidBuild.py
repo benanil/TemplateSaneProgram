@@ -73,9 +73,9 @@ def AndroidMoveShaders():
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
     
     # Define source and destination paths
-    sourcePath = os.path.join(workspacePath, "Shaders")
+    sourcePath = os.path.join(workspacePath, "Assets/Shaders")
     destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Shaders")
-    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets")
+    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets/Assets")
     ensure_directory_exists(assetsPath)
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".glsl")
@@ -84,8 +84,8 @@ def AndroidMoveShaders():
 def AndroidMoveFontFiles():
     print("Moving Font files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
-    sourcePath = os.path.join(workspacePath, "Fonts")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Fonts")
+    sourcePath = os.path.join(workspacePath, "Assets/Fonts")
+    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Fonts")
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".bft")
 
@@ -93,8 +93,8 @@ def AndroidMoveFontFiles():
 def AndroidMoveAudioFiles():
     print("Moving Font files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
-    sourcePath = os.path.join(workspacePath, "Audio")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Audio")
+    sourcePath = os.path.join(workspacePath, "Assets/Audio")
+    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Audio")
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".mp3")
     copy_files(sourcePath, destPath, ".wav")
@@ -105,20 +105,33 @@ def AndroidMoveMeshes():
     print("Moving mesh and astc files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
     # Define source and destination paths
-    sourcePath = os.path.join(workspacePath, "Meshes")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Meshes")
-    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets")
+    sourcePath = os.path.join(workspacePath, "Assets/Meshes")
+    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Meshes")
+    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets/Assets")
     ensure_directory_exists(assetsPath)
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".abm")
     copy_files(sourcePath, destPath, ".astc")
 
 
+def AndroidMoveTextures():
+    print("Moving texture files to Android path..")
+    workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
+    # Define source and destination paths
+    sourcePath = os.path.join(workspacePath, "Assets/Textures")
+    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Textures")
+    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets/Assets")
+    ensure_directory_exists(assetsPath)
+    ensure_directory_exists(destPath)
+    copy_files(sourcePath, destPath, ".png")
+    copy_files(sourcePath, destPath, ".jpg")
+
 def AndroidMoveAllAssets():
     AndroidMoveShaders()
     AndroidMoveFontFiles()
     AndroidMoveAudioFiles()
     AndroidMoveMeshes()
+    AndroidMoveTextures()
 
 #------------------------------------------------------------------------
 # you have to install android studio to run this

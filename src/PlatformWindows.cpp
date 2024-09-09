@@ -21,6 +21,7 @@
 
 #include <Windows.h>
 #include <bitset>
+#include <string>
 
 #include "../ASTL/Array.hpp"
 #include "../ASTL/Common.hpp"
@@ -56,17 +57,22 @@ struct PlatformContextWin
     std::bitset<128> PressedKeys;
     std::bitset<128> ReleasedKeys;
     // Mouse
-    int    MouseDown, MouseLast, MousePressed, MouseReleased;
-    float  MousePosX, MousePosY;
-    float  MouseWheelDelta;
+    int   MouseDown, MouseLast, MousePressed, MouseReleased;
+    float MousePosX, MousePosY;
+    float MouseWheelDelta;
+    float SecondsSinceLastClick;
+    wCursor RequestedCursor;
+
+    bool  DoubleClicked;
 
     LONGLONG StartupTime;
     LONGLONG Frequency;
     double   DeltaTime;
 
+    char* ClipboardString;
+
     bool VSyncActive;
     bool ShouldClose;
-    char* ClipboardString;
 } PlatformCtx;  
 
 StackArray<ma_sound, 16> mSounds={};
@@ -145,14 +151,36 @@ void wOpenURL(const char* url)
     ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 }
 
+static void FixSeperators(char* dst, const char* src)
+{
+    int len = StringLength(src);
+    SmallMemCpy(dst, src, len);
+    
+    for (int i = 0; i < len; i++) 
+        if (dst[i] == '/') dst[i] = '\\';
+}
+
 bool wOpenFolder(const char* folderPath) 
 {
-    if ((size_t)ShellExecuteA(nullptr, "open", folderPath, nullptr, nullptr, SW_SHOWNORMAL) <= 32) 
+    char copy[512] = {};
+    FixSeperators(copy, folderPath);
+
+    if ((size_t)ShellExecuteA(nullptr, "open", copy, nullptr, nullptr, SW_SHOWNORMAL) <= 32) 
         return false;
     return true;
 }
 
-void wSetCursor(wCursor cursor)
+bool wOpenFile(const char* filePath)
+{
+    char copy[512] = {};
+    FixSeperators(copy, filePath);  
+
+    if ((size_t)ShellExecuteA(nullptr, nullptr, copy, nullptr, nullptr, SW_SHOW) <= 32) 
+        return false;
+    return true;
+}
+
+static void SetCursorInternal(wCursor cursor)
 {
     LPTSTR winCursor = IDC_ARROW;
 
@@ -172,6 +200,11 @@ void wSetCursor(wCursor cursor)
     };
 
     ::SetCursor(::LoadCursor(nullptr, winCursor));
+}
+
+void wSetCursor(wCursor cursor)
+{
+    PlatformCtx.RequestedCursor = cursor;
 }
 
 //------------------------------------------------------------------------
@@ -255,6 +288,11 @@ bool GetMouseDown(MouseButton button)     { return !!(PlatformCtx.MouseDown     
 bool GetMouseReleased(MouseButton button) { return !!(PlatformCtx.MouseReleased & button); }
 bool GetMousePressed(MouseButton button)  { return !!(PlatformCtx.MousePressed  & button); }
 
+bool IsDoubleClick()  
+{
+    return PlatformCtx.DoubleClicked; 
+}
+
 int GetPressedNumber() {
     for (int i = '0'; i <= '9'; i++)
         if (PlatformCtx.ReleasedKeys[i])
@@ -314,10 +352,29 @@ static LRESULT CALLBACK WindowCallback(HWND window, UINT msg, WPARAM wparam, LPA
         case WM_LBUTTONDOWN: PlatformCtx.MouseDown |= MouseButton_Left;    break;
         case WM_RBUTTONDOWN: PlatformCtx.MouseDown |= MouseButton_Right;   break;
         case WM_MBUTTONDOWN: PlatformCtx.MouseDown |= MouseButton_Middle;  break;
-        case WM_LBUTTONUP:   PlatformCtx.MouseDown &= ~MouseButton_Left;   break;
+        case WM_XBUTTONDOWN:
+            
+            if (GET_XBUTTON_WPARAM(wparam) == XBUTTON1) 
+                PlatformCtx.MouseDown |= MouseButton_Forward; 
+            else
+                PlatformCtx.MouseDown |= MouseButton_Backward;
+
+            break;
+        case WM_LBUTTONUP:
+            PlatformCtx.DoubleClicked = PlatformCtx.SecondsSinceLastClick < 0.4f;
+            PlatformCtx.SecondsSinceLastClick = 0.0f;
+            PlatformCtx.MouseDown &= ~MouseButton_Left;   
+            break;
         case WM_RBUTTONUP:   PlatformCtx.MouseDown &= ~MouseButton_Right;  break;
         case WM_MBUTTONUP:   PlatformCtx.MouseDown &= ~MouseButton_Middle; break;
-        case WM_XBUTTONUP:   PlatformCtx.MouseDown &= ~MouseButton_Middle; break;
+        case WM_XBUTTONUP:
+
+            if (GET_XBUTTON_WPARAM(wparam) == XBUTTON1) 
+                PlatformCtx.MouseDown &= ~MouseButton_Forward; 
+            else
+                PlatformCtx.MouseDown &= ~MouseButton_Backward;
+
+            break;
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
         {
@@ -646,6 +703,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
 
         SetPressedAndReleasedKeys();
         
+        PlatformCtx.RequestedCursor = wCursor_Arrow;
         QueryPerformanceCounter(&currentTime);
         PlatformCtx.DeltaTime = (double)(currentTime.QuadPart - prevTime.QuadPart) / frequency.QuadPart;
         PlatformCtx.DeltaTime = Clamp(PlatformCtx.DeltaTime, 0.000001, 0.1);
@@ -664,6 +722,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd_line, int show)
         SwapBuffers(dc);
 
         RecordLastKeys();
+        SetCursorInternal(PlatformCtx.RequestedCursor);
+        PlatformCtx.SecondsSinceLastClick += (float)PlatformCtx.DeltaTime;
+        PlatformCtx.DoubleClicked = false;
         PlatformCtx.MouseWheelDelta = 0.0f;
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);

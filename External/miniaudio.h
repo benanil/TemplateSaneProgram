@@ -26590,7 +26590,7 @@ typedef struct ma_snd_pcm_info_t                ma_snd_pcm_info_t;
 typedef struct
 {
     void* addr;
-    unsigned int first;
+    unsigned int spriteFirst;
     unsigned int step;
 } ma_snd_pcm_channel_area_t;
 typedef struct

@@ -1,9 +1,11 @@
 
+layout(location = 0) out mediump vec2 vTexCoord;
+
 uniform ivec2 uScrSize;
 uniform vec2 uPos;
 uniform vec2 uSize;
-
-layout(location = 0) out mediump vec2 vTexCoord;
+uniform lowp int uInvertY;
+uniform lowp int uDepth;
 
 void main() 
 {
@@ -25,7 +27,7 @@ void main()
     vec2 proj = 2.0 / vec2(uScrSize);
     vec2 translate = proj * vertices[vertexID] - 1.0;
     translate.y = -translate.y;
-    gl_Position = vec4(translate, float(0.85), 1.0);
+    gl_Position = vec4(translate, float(uDepth) / 255.0f, 1.0);
 
     // ----    Create UV    ----
     const mediump vec2 uvs[6] = vec2[6](
@@ -36,6 +38,7 @@ void main()
         vec2(1.0, 1.0),
         vec2(1.0, 0.0)
     );
-
-    vTexCoord = uvs[vertexID];
+    vec2 uv = uvs[vertexID];
+    if (uInvertY == 1) uv.y = 1.0 - uv.y;
+    vTexCoord = uv;
 }

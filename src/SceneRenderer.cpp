@@ -388,10 +388,10 @@ static void GetUniformLocations()
 
 static void CreateShaders()
 {
-    m_DeferredPBRShader = rImportFullScreenShader("Shaders/DeferredPBR.glsl");
+    m_DeferredPBRShader = rImportFullScreenShader("Assets/Shaders/DeferredPBR.glsl");
 
-    ScopedText gbufferVertexShader   = ReadAllText("Shaders/3DVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    ScopedText gbufferFragmentShader = ReadAllText("Shaders/GBuffer.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText gbufferVertexShader   = ReadAllText("Assets/Shaders/3DVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText gbufferFragmentShader = ReadAllText("Assets/Shaders/GBuffer.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     m_GBufferShader = rCreateShader(gbufferVertexShader.text, gbufferFragmentShader.text, "gbufferVert", "gbufferFrag");
 
     // Compile alpha cutoff version of the gbuffer shader, to make sure early z test. I really don't want an branch for discard statement. 
@@ -406,16 +406,16 @@ static void CreateShaders()
                             "void main() { gl_FragDepth = texture(DepthTex, texCoord).r; }"
                         );
 
-    ScopedText shadowVertexShader = ReadAllText("Shaders/ShadowVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText shadowVertexShader = ReadAllText("Assets/Shaders/ShadowVert.glsl", nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     const char* shadowFragmentShader = AX_SHADER_VERSION_PRECISION() "void main() { }";
     m_ShadowShader      = rCreateShader(shadowVertexShader.text, shadowFragmentShader, "ShadowVert", "ShadowFrag");
 
-    m_SkyboxShader = rImportShader("Shaders/SkyboxVert.glsl", "Shaders/SkyboxFrag.glsl");
+    m_SkyboxShader = rImportShader("Assets/Shaders/SkyboxVert.glsl", "Assets/Shaders/SkyboxFrag.glsl");
 
-    m_GodRaysShader = rImportFullScreenShader("Shaders/GodRays.glsl");
+    m_GodRaysShader = rImportFullScreenShader("Assets/Shaders/GodRays.glsl");
 
-    m_MLAAEdgeShader = rImportFullScreenShader("Shaders/MLAA_Edge.glsl");
-    m_MLAAShader     = rImportFullScreenShader("Shaders/MLAA.glsl");
+    m_MLAAEdgeShader = rImportFullScreenShader("Assets/Shaders/MLAA_Edge.glsl");
+    m_MLAAShader     = rImportFullScreenShader("Assets/Shaders/MLAA.glsl");
 
     m_BlackShader = rCreateFullScreenShader(
         AX_SHADER_VERSION_PRECISION()
@@ -423,11 +423,11 @@ static void CreateShaders()
         "void main() { result = 0.0; }"
     );
 
-    m_OutlineShader = rImportShader("Shaders/OutlineVert.glsl", "Shaders/OutlineFrag.glsl");
+    m_OutlineShader = rImportShader("Assets/Shaders/OutlineVert.glsl", "Assets/Shaders/OutlineFrag.glsl");
     
-    // m_ShadowShaderRT = rImportFullScreenShader("Shaders/ShadowRT.glsl");
+    // m_ShadowShaderRT = rImportFullScreenShader("Assets/Shaders/ShadowRT.glsl");
 
-    // m_ShadowComputeShaderRT = rImportComputeShader("Shaders/ShadowRTCompute.glsl");
+    // m_ShadowComputeShaderRT = rImportComputeShader("Assets/Shaders/ShadowRTCompute.glsl");
 
     GetUniformLocations();
 }
@@ -500,7 +500,7 @@ static void PrepareSkybox()
     const InputLayoutDesc desc = { 1, sizeof(Vector3f), &layout, false };
 
     m_BoxMesh = rCreateMesh(vertices, triangles, ArraySize(vertices), ArraySize(triangles), GraphicType_UnsignedShort, &desc);
-    m_SkyNoiseTexture = rImportTexture("Shaders/PerlinNoise.png");
+    m_SkyNoiseTexture = rImportTexture("Assets/Textures/PerlinNoise.png");
 }
 
 void Init()
@@ -1153,7 +1153,7 @@ void EndRendering(bool renderToBackBuffer, Prefab* mainScene)
     
     // char culledText[16]={};
     // IntToString(culledText, numCulled);
-    // uDrawText(culledText, MakeVec2(1810.0f, 185.0f));
+    // uDrawText(culledText, Vec2(1810.0f, 185.0f));
     // numCulled = 0;
 }
 
@@ -1223,8 +1223,6 @@ void ShowEditor(float offset, bool* open)
         {
             uTreeBegin(testText, false, false); uTreeEnd();
             uTreeBegin(testText, false, false); uTreeEnd();
-            uTreeBegin(testText, false, false); uTreeEnd();
-            uTreeBegin(testText, false, false); uTreeEnd();
         }
         uTreeEnd();
         
@@ -1254,7 +1252,7 @@ void ShowEditor(float offset, bool* open)
         }
     }
 
-    // uSprite(MakeVec2(1100.0f, 500.0f), MakeVec2(800.0f, 550.0f), &m_ShadowTexture);
+    // uSprite(Vec2(1100.0f, 500.0f), Vec2(800.0f, 550.0f), &m_ShadowTexture);
 }
 
 } // scene renderer namespace end
