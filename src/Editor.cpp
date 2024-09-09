@@ -252,6 +252,20 @@ static Texture* GetIconByFileType(const char* path)
     return &mFileIcons[FileType_File];
 }
 
+static char copiedResource[512];
+
+static void PasteResource(void* unused) {
+    if (copiedResource[0] == 0 || !FileExist(copiedResource)) return;
+    char destination[512] = {};
+    CombinePaths(destination, mCurrentFolder, GetFileName(copiedResource));
+    CopyFile(copiedResource, destination);
+}
+
+static void DeleteResource(void* unused) {
+    if (copiedResource[0] == 0 || !FileExist(copiedResource)) return;
+    remove(copiedResource);
+}
+
 static void DrawResource(const char* path, 
                          bool isDir, 
                          float textSize,
@@ -271,11 +285,17 @@ static void DrawResource(const char* path,
         Vector2f mouseTestPos = uGetMouseTestPos();
         bool hovered = RectPointIntersect(mResWin->elementPos, Vec2(mBoxSize), mouseTestPos);
         
-        if (hovered && IsDoubleClick() && mSelectedElementIndex == mCurrElementIdx)
-            DoubleClickFn(path);
+        if (hovered)
+        {
+            if (IsDoubleClick() && mSelectedElementIndex == mCurrElementIdx)
+                DoubleClickFn(path);
 
-        if (hovered && GetMousePressed(MouseButton_Left)) 
-            mSelectedElementIndex = mCurrElementIdx;
+            if (GetMousePressed(MouseButton_Left)) 
+                mSelectedElementIndex = mCurrElementIdx;
+            
+            if (GetMousePressed(MouseButton_Right))
+                SmallMemCpy(copiedResource, path, StringLength((const char*)path));
+        }
     
         // border
         bool isSelected = mSelectedElementIndex == mCurrElementIdx;
@@ -390,6 +410,11 @@ static void DrawSearch(UWindow* window, float searchWidth)
     uPopFloat(uf::ContentStart);
 }
 
+static void OpenCurrentFolder(void* data)
+{
+    wOpenFolder(mCurrentFolder);
+}
+
 static void ShowResourcesWindow()
 {
     static bool windowOpen = true;
@@ -401,7 +426,9 @@ static void ShowResourcesWindow()
     const Vector2f windowPos = { 366.0f, 727.0f };
     const Vector2f windowScale = { 1054.0f, 334.0f };
 
-    if (uBeginWindow("Resources", hash, windowPos, windowScale, &windowOpen, uWindowFlags_FixedElementStart))
+    const uWindowFlags windowFlags = uWindowFlags_FixedElementStart | uWindowFlags_RightClickable;
+    
+    if (uBeginWindow("Resources", hash, windowPos, windowScale, &windowOpen, windowFlags))
     {
         Vector2f linePos = window->elementPos;
         float lineThickness = uGetFloat(uf::LineThickness);
@@ -439,6 +466,12 @@ static void ShowResourcesWindow()
             uLineHorizontal(linePos, lineLength, 0u);
         }
 
+        uRightClickAddEvent("Open Folder", OpenCurrentFolder, nullptr);
+        uRightClickAddEvent("Copy", nullptr, nullptr);
+        uRightClickAddEvent("Delete", DeleteResource, nullptr);
+        if (copiedResource[0] != 0)
+        uRightClickAddEvent("Paste", PasteResource, nullptr);
+
         // draw folder tree
         RecurseFolderTree("Assets", nullptr);
 
@@ -458,7 +491,7 @@ static void ShowResourcesWindow()
             window->elementPos.y += window->elementOffsetY + lineThickness * 3.0f;
 
             constexpr uint scissorMask = uScissorMask_All & ~uScissorMask_Quad;
-            uBeginScissor(window->elementPos - 22.0f, Vec2(windowEndX - scrollWidth, windowEndY) - window->elementPos + 32.0f, 0b1010);
+            uBeginScissor(window->elementPos - 22.0f, Vec2(windowEndX - scrollWidth, windowEndY) - window->elementPos + 32.0f, scissorMask);
             uSetFloat(uf::QuadYMin, window->elementPos.y - 22.0f); // stenciling quads with min y pos
             
             // apply scrolling
@@ -485,7 +518,7 @@ static void ShowResourcesWindow()
                 }
             }
 
-            uEndScissor(0b1010);
+            uEndScissor(scissorMask);
             uSetFloat(uf::QuadYMin, 0.0f);
         }
 

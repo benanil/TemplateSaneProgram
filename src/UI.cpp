@@ -275,7 +275,7 @@ namespace
         98.0f , // uf::FieldWidth
         100.0f, // uf::TextWrapWidth
         16.0f , // uf::ScrollWidth
-        0.0f // uf::QuadYMin
+        0.0f    // uf::QuadYMin
     };
     constexpr int NumFloats = sizeof(mFloats) / sizeof(float);
     // stack for pushed floats
@@ -304,7 +304,6 @@ namespace
     
     //------------------------------------------------------------------------
     // Triangle Renderer
-    
     struct TriangleVert
     {
         ushort posX, posY;
@@ -321,6 +320,8 @@ namespace
     int mCurrentTriangle = 0;
     Shader mTriangleShader;
     
+    //------------------------------------------------------------------------
+    // Windowing API
     const int MaxWindows = 32;
     int mNumWindows = 0;
     int mCurrentWindow = 0; // while rendering
@@ -329,10 +330,86 @@ namespace
 
     uWindowState mWindowState;
 
-    bool mBeginnedWindow = false;
-
     bool mAnyDragging = false; // int or float fields
     bool mLastAnyDragging = false; // int or float fields
+
+    //------------------------------------------------------------------------
+    // Right clicking
+    struct RightClickEvent
+    {
+        char text[24];
+        void* data;
+        void(*Function)(void* userData);
+    };
+    const int MaxRightClickEvents = 32;
+    RightClickEvent mRightClickEvents[MaxRightClickEvents];
+    int mNumRightClickEvents = 0;
+    bool mRightClickActive = false;
+    Vector2f mRightClickPos;
+}
+
+// event will be active within the frame it is called
+void uRightClickAddEvent(const char* text, void(*func)(void*), void* data)
+{
+    if (!mRightClickActive) return;
+    RightClickEvent* event = mRightClickEvents + mNumRightClickEvents;
+    mNumRightClickEvents++;
+    SmallMemCpy(event->text, text, MIN(24, (int)StringLength(text)));
+    event->Function = func;
+    event->data = data;
+}
+
+static Vector2f uGetRightClickEventSize()
+{
+    Vector2f size = { 0.0f, 0.0f };
+    uPushFloat(uf::TextScale, 0.5f);
+    for (int i = 0; i < mNumRightClickEvents; i++)
+    {
+        RightClickEvent* event = mRightClickEvents + i;
+        Vector2f textSize = uCalcTextSize(event->text);
+        size.x = MAX(size.x, textSize.x);
+        size.y = MAX(size.y, textSize.y);
+    }
+    uPopFloat(uf::TextScale);
+    return size;
+}
+
+static void uDrawRightClickEvents()
+{
+    if (mNumRightClickEvents <= 0) return;
+
+    Vector2f size = uGetRightClickEventSize();
+    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.3f);
+    uPushFloat(uf::TextScale, 0.5f);
+    
+    float elementHeight = size.y;
+    float offset = size.y * 0.1f;
+    size.y = elementHeight * mNumRightClickEvents;
+    
+    Vector2f realPos = mRightClickPos / mWindowRatio;
+    uQuad(realPos - offset, size + (offset * 2.0f), uGetColor(uColor::CheckboxBG));
+    
+    Vector2f mouseTestPos = uGetMouseTestPos();
+    size.y = elementHeight;
+    for (int i = 0; i < mNumRightClickEvents; i++)
+    {
+        RightClickEvent* event = mRightClickEvents + i;
+        bool hover = RectPointIntersect(realPos, size, mouseTestPos);
+        if (hover)
+            uQuad(realPos, size, uGetColor(uColor::Hovered));
+
+        if (hover && GetMousePressed(MouseButton_Left))
+            if (event->Function != nullptr)
+                event->Function(event->data);
+
+        event->Function = nullptr; // to null terminate string that has length of 24
+        realPos.y += elementHeight;
+        uText(event->text, realPos);
+    }
+    
+    mNumRightClickEvents = 0;
+    uPopFloat(uf::TextScale);
+    uPopFloat(uf::Depth);
 }
 
 void PlayButtonClickSound() {
@@ -2564,6 +2641,13 @@ static void DrawTabBarNameAndDragWindow(UWindow& window, Vector2f mouseTestPos, 
     hovering = RectPointIntersect(window.position, windowSize, mouseTestPos);
     bool onTopOfAll = hovering && !anyWindowOnTop;
 
+    // right clicked
+    if (onTopOfAll && (window.flags & uWindowFlags_RightClickable) != 0 && GetMousePressed(MouseButton_Right))
+    {
+        mRightClickActive = true;
+        mRightClickPos = mMouseOld;
+    }
+    
     // if window clicked, set as active window
     if (onTopOfAll && !draggingSomething && GetMousePressed(MouseButton_Left))
     {
@@ -2931,15 +3015,20 @@ static void CheckEdgesAndCornersAndResize(Vector2f mousePos, int windowIdx)
 
 static void HandleWindowEvents()
 {
-    if (!GetMouseDown(MouseButton_Left))
+    bool leftPressed = GetMouseDown(MouseButton_Left);
+    if (!leftPressed)
         mWindowState = 0;
 
     // if mouse pressed but none of the windows are touched
     // reset selected elements
-    if (GetMousePressed(MouseButton_Left))
+    if (leftPressed)
     {
         Vector2f mousePos;
         GetMouseWindowPos(&mousePos.x, &mousePos.y);
+
+        Vector2f rightClickSize = uGetRightClickEventSize();
+        bool intersectsRightClick = RectPointIntersect(mRightClickPos, rightClickSize, mousePos);
+        mRightClickActive &= intersectsRightClick && mRightClickActive == true;
 
         bool anyHit = false;
         for (int i = 0; i < mNumWindows; i++)
@@ -3399,6 +3488,8 @@ void uRender()
 
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
+    
+    uDrawRightClickEvents(); // < we have to write this before quad and text rendering
     uRenderQuads(windowSize);
     uRenderTexts(windowSize);
     uRenderColorPicker(windowSize);

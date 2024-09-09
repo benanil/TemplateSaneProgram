@@ -264,6 +264,7 @@ enum uWindowFlags_
     uWindowFlags_NoResize = 2,
     uWindowFlags_FixedElementStart = 4,
     uWindowFlags_NoTabBar = 8, // < not implemented yet
+    uWindowFlags_RightClickable = 16 
 };
 
 typedef uint uWindowFlags;
@@ -300,7 +301,7 @@ struct UWindow
     }
 
     bool IsOpen() {
-        return isOpenPtr && *isOpenPtr;
+        return isOpenPtr != nullptr && *isOpenPtr;
     }
 };
 
@@ -310,6 +311,8 @@ bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f s
 bool uBeginWindow(const char* name, bool* open = nullptr, uWindowFlags flags = 0);
 
 void uWindowEnd();
+
+void uRightClickAddEvent(const char* text, void(*func)(void*), void* data);
 
 bool uAnyWindowHovered(Vector2f mouseWindowPos);
 
