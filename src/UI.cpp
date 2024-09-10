@@ -344,14 +344,14 @@ namespace
     const int MaxRightClickEvents = 32;
     RightClickEvent mRightClickEvents[MaxRightClickEvents];
     int mNumRightClickEvents = 0;
-    bool mRightClickActive = false;
+    int mRightClickWindow = -1;
     Vector2f mRightClickPos;
 }
 
 // event will be active within the frame it is called
 void uRightClickAddEvent(const char* text, void(*func)(void*), void* data)
 {
-    if (!mRightClickActive) return;
+    if (mRightClickWindow == -1) return;
     RightClickEvent* event = mRightClickEvents + mNumRightClickEvents;
     mNumRightClickEvents++;
     SmallMemCpy(event->text, text, MIN(24, (int)StringLength(text)));
@@ -382,9 +382,9 @@ static void uDrawRightClickEvents()
     uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.3f);
     uPushFloat(uf::TextScale, 0.5f);
     
-    float elementHeight = size.y;
-    float offset = size.y * 0.1f;
-    size.y = elementHeight * mNumRightClickEvents;
+    float elementHeight = size.y;   
+    float offset = size.y * 0.2f;
+    size.y = (elementHeight + offset) * mNumRightClickEvents;
     
     Vector2f realPos = mRightClickPos / mWindowRatio;
     uQuad(realPos - offset, size + (offset * 2.0f), uGetColor(uColor::CheckboxBG));
@@ -405,6 +405,7 @@ static void uDrawRightClickEvents()
         event->Function = nullptr; // to null terminate string that has length of 24
         realPos.y += elementHeight;
         uText(event->text, realPos);
+        realPos.y += offset;
     }
     
     mNumRightClickEvents = 0;
@@ -2644,7 +2645,7 @@ static void DrawTabBarNameAndDragWindow(UWindow& window, Vector2f mouseTestPos, 
     // right clicked
     if (onTopOfAll && (window.flags & uWindowFlags_RightClickable) != 0 && GetMousePressed(MouseButton_Right))
     {
-        mRightClickActive = true;
+        mRightClickWindow = mCurrentWindow;
         mRightClickPos = mMouseOld;
     }
     
@@ -3028,7 +3029,8 @@ static void HandleWindowEvents()
 
         Vector2f rightClickSize = uGetRightClickEventSize();
         bool intersectsRightClick = RectPointIntersect(mRightClickPos, rightClickSize, mousePos);
-        mRightClickActive &= intersectsRightClick && mRightClickActive == true;
+        bool rightClickActive = mRightClickWindow != -1 && intersectsRightClick && mRightClickWindow != -1;
+        mRightClickWindow = rightClickActive ? mRightClickWindow : -1;
 
         bool anyHit = false;
         for (int i = 0; i < mNumWindows; i++)

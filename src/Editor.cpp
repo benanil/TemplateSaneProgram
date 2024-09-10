@@ -166,6 +166,45 @@ void EditorCastRay()
     // uDrawText(rayDistTxt, rayPos);
 }
 
+static Vector2f PopupElementPos;
+static Vector2f PopupSize = { 400.0f, 220.0f };
+const float PopElementPadding = 20.0f;
+
+static Vector2f* PopupWindowBegin(const char* windowName, const char* question)
+{
+    uPushFloat(uf::Depth, 0.2f);
+    
+    const Vector2f fullSize = { 1920.0f, 1080.0f };
+    uQuad(Vector2f::Zero(), fullSize, uGetColor(uColor::Quad));
+    
+    Vector2f position = (fullSize * 0.5f) - (PopupSize * 0.5f);
+
+    uQuad(position, PopupSize, uGetColor(uColor::Quad));
+    uBorder(position, PopupSize);
+    position.y += PopElementPadding;
+    
+    Vector2f textSize = uCalcTextSize(question, uTextFlags_WrapWidthDetermined);
+    position += PopElementPadding;
+    
+    uSetFloat(uf::TextWrapWidth, PopupSize.x - (PopElementPadding * 2.0f));
+    uText(windowName, position, uTextFlags_WrapWidthDetermined);
+    
+    uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.8f);
+    position.y += textSize.y + PopElementPadding;
+    uText(question, position, uTextFlags_WrapWidthDetermined);
+    uPopFloat(uf::TextScale);
+    
+    position.y += textSize.y + PopElementPadding;
+    PopupElementPos = position;
+
+    return &PopupElementPos;
+}
+
+static void PopupWindowEnd() 
+{
+    uPopFloat(uf::Depth);
+}
+
 //------------------------------------------------------------------------
 // Prefab View
 static void ShowPrefabView(Prefab* prefab)
@@ -252,18 +291,43 @@ static Texture* GetIconByFileType(const char* path)
     return &mFileIcons[FileType_File];
 }
 
-static char copiedResource[512];
+static char mCopiedResource[512];
+static bool mDeleteContentWarnPopOpen = false;
 
 static void PasteResource(void* unused) {
-    if (copiedResource[0] == 0 || !FileExist(copiedResource)) return;
+    if (mCopiedResource[0] == 0 || !FileExist(mCopiedResource)) return;
     char destination[512] = {};
-    CombinePaths(destination, mCurrentFolder, GetFileName(copiedResource));
-    CopyFile(copiedResource, destination);
+    CombinePaths(destination, mCurrentFolder, GetFileName(mCopiedResource));
+    CopyFile(mCopiedResource, destination);
 }
 
 static void DeleteResource(void* unused) {
-    if (copiedResource[0] == 0 || !FileExist(copiedResource)) return;
-    remove(copiedResource);
+    if (mCopiedResource[0] == 0 || !FileExist(mCopiedResource)) return;
+    mDeleteContentWarnPopOpen = true;
+}
+
+static void DeleteWarnWindow(const char* windowName, const char* question)
+{
+    Vector2f elementPos = *PopupWindowBegin(windowName, question);
+    elementPos.y += PopElementPadding;
+    elementPos.x += PopupSize.x - 100.0f - PopElementPadding;
+    
+    bool pressedEnter = GetKeyPressed(Key_ENTER);
+    if (pressedEnter || uButton("Yes", elementPos, Vector2f::Zero(), uButtonOpt_Border))
+    {
+        bool isDir = IsDirectory(mCopiedResource);
+        if (isDir) RemoveFolder(mCopiedResource);
+        else       RemoveFile(mCopiedResource);
+        mDeleteContentWarnPopOpen = false;
+    }
+    
+    elementPos.x -= 100.0f;
+    if (uButton("No", elementPos, Vector2f::Zero(), uButtonOpt_Border))
+    {
+        mDeleteContentWarnPopOpen = false;
+    }
+
+    PopupWindowEnd();
 }
 
 static void DrawResource(const char* path, 
@@ -294,7 +358,10 @@ static void DrawResource(const char* path,
                 mSelectedElementIndex = mCurrElementIdx;
             
             if (GetMousePressed(MouseButton_Right))
-                SmallMemCpy(copiedResource, path, StringLength((const char*)path));
+            {
+                MemsetZero(mCopiedResource, 512);
+                SmallMemCpy(mCopiedResource, path, StringLength((const char*)path));
+            }
         }
     
         // border
@@ -329,12 +396,12 @@ static void DrawResource(const char* path,
     mCurrElementIdx++;
 }
 
-static void DrawFolders(const char* path, void* dataUnused)
+static void DrawFoldersFn(const char* path, void* dataUnused)
 {
     DrawResource(path, true, 0.7f, FolderIconFn, SetCurrentFolder);
 }
 
-static void DrawFiles(const char* path, void* dataUnused)
+static void DrawFilesFn(const char* path, void* dataUnused)
 {
     DrawResource(path, false, 0.6f, GetIconByFileType, wOpenFile);
 }
@@ -410,9 +477,56 @@ static void DrawSearch(UWindow* window, float searchWidth)
     uPopFloat(uf::ContentStart);
 }
 
-static void OpenCurrentFolder(void* data)
-{
+static void OpenCurrentFolderFn(void* data) {
     wOpenFolder(mCurrentFolder);
+}
+
+static bool mCreateFolderPopOpen = false;
+static bool mCreateFilePopOpen = false;
+static char mCreatedResourceName[256] = {};
+
+static void CreateResourcePopup(const char* windowName, const char* question, bool isFile)
+{
+    Vector2f elementPos = *PopupWindowBegin(windowName, question);
+    uPushFloat(uf::ContentStart, PopupSize.x - 100.0f);
+    uPushFloat(uf::SliderHeight, uGetFloat(uf::SliderHeight) * 1.2f);
+    uSetElementFocused(true);
+        uTextBox("Name", elementPos, Vector2f::Zero(), mCreatedResourceName);
+    uPopFloat(uf::ContentStart);
+    uPopFloat(uf::SliderHeight);
+    
+    elementPos.y += PopElementPadding;
+    elementPos.x += PopupSize.x - 100.0f - PopElementPadding;
+    bool pressedEnter = GetKeyPressed(Key_ENTER);
+    if (pressedEnter || uButton("Create", elementPos, Vector2f::Zero(), uButtonOpt_Border))
+    {
+        char combined[512] = {};
+        CombinePaths(combined, mCurrentFolder, mCreatedResourceName);
+        if (isFile) {
+            AFile file = AFileOpen(combined, AOpenFlag_WriteText);
+            AFileClose(file);
+        }
+        else {
+            CreateFolder(combined);
+        }
+        mCreateFolderPopOpen = mCreateFilePopOpen = false;
+    }
+    
+    elementPos.x -= 100.0f;
+    if (uButton("Cancel", elementPos, Vector2f::Zero(), uButtonOpt_Border))
+    {
+        mCreateFolderPopOpen = mCreateFilePopOpen = false;
+    }
+
+    PopupWindowEnd();
+}
+
+static void CreateNewFolderFn(void* data) {
+    mCreateFolderPopOpen = true;
+}
+
+static void CreateNewFileFn(void* data) {
+    mCreateFilePopOpen = true;
 }
 
 static void ShowResourcesWindow()
@@ -466,11 +580,18 @@ static void ShowResourcesWindow()
             uLineHorizontal(linePos, lineLength, 0u);
         }
 
-        uRightClickAddEvent("Open Folder", OpenCurrentFolder, nullptr);
+        uRightClickAddEvent("Open Folder", OpenCurrentFolderFn, nullptr);
         uRightClickAddEvent("Copy", nullptr, nullptr);
         uRightClickAddEvent("Delete", DeleteResource, nullptr);
-        if (copiedResource[0] != 0)
+        uRightClickAddEvent("Create Folder", CreateNewFolderFn, nullptr);
+        uRightClickAddEvent("Create File", CreateNewFileFn, nullptr);
+
+        if (mCopiedResource[0] != 0)
         uRightClickAddEvent("Paste", PasteResource, nullptr);
+
+        if (mCreateFolderPopOpen) CreateResourcePopup("Create Folder", "What would you like as a folder name?", false);
+        if (mCreateFilePopOpen) CreateResourcePopup("Create File", "What would you like as a file name?", true);
+        if (mDeleteContentWarnPopOpen) DeleteWarnWindow("Delete?", mCopiedResource);
 
         // draw folder tree
         RecurseFolderTree("Assets", nullptr);
@@ -504,17 +625,17 @@ static void ShowResourcesWindow()
             if (!mSearching)
             {
                 // draw folders first
-                VisitFolder(mCurrentFolder, DrawFolders, nullptr);
+                VisitFolder(mCurrentFolder, DrawFoldersFn, nullptr);
                 // draw files second
-                VisitFolder(mCurrentFolder, DrawFiles, nullptr);
+                VisitFolder(mCurrentFolder, DrawFilesFn, nullptr);
             }
             else
             {
                 for (int i = 0; i < mSearchResults.Size(); i++)
                 {
                     bool isDir = IsDirectory(mSearchResults[i]);
-                    if (isDir) DrawFolders(mSearchResults[i], nullptr);
-                    else       DrawFiles(mSearchResults[i], nullptr);
+                    if (isDir) DrawFoldersFn(mSearchResults[i], nullptr);
+                    else       DrawFilesFn(mSearchResults[i], nullptr);
                 }
             }
 
