@@ -8,11 +8,13 @@ if "%1"=="Debug" (
     devenv build/SaneProgram.vcxproj /Build "Release|x64"
     start "" "build/Release/SaneProgram.exe"
 )
-REM zstddeclib.c
+REM External/zstddeclib.c
+REM External/zstd.c ^
 
 REM Compile the C++ code using clang++
-REM clang++ -std=c++14 -O3 -mavx2 -march=native -mfma -msse4.2 -mwindows -luser32 ^
-REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS  ^
+REM clang++ -std=c++17 -O3 -mavx2 -mfma -msse4.2 -mf16c -mrdseed -mwindows -luser32 -lopengl32 -lgdi32 ^
+REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS ^
+REM -DSANE_WINDOWS_BUILD ^
 REM ASTL/Additional/GLTFParser.cpp ^
 REM ASTL/Additional/OBJParser.cpp ^
 REM ASTL/Additional/Profiler.cpp ^
@@ -36,6 +38,9 @@ REM src/BVH.cpp ^
 REM src/TLAS.cpp ^
 REM src/HBAO.cpp ^
 REM src/Editor.cpp ^
+REM -o SaneProgram.exe ^
+REM -lopengl32 -lgdi32  SaneProgram.res
+
 REM External/astc-encoder/astcenc_averages_and_directions.cpp     ^
 REM External/astc-encoder/astcenc_block_sizes.cpp                 ^
 REM External/astc-encoder/astcenc_color_quantize.cpp              ^
@@ -58,12 +63,11 @@ REM External/astc-encoder/astcenc_quantization.cpp                ^
 REM External/astc-encoder/astcenc_symbolic_physical.cpp           ^
 REM External/astc-encoder/astcenc_weight_align.cpp                ^
 REM External/astc-encoder/astcenc_weight_quant_xfer_tables.cpp    ^
-REM -o SaneProgram.exe ^
-REM -lopengl32 -lgdi32  SaneProgram.res
 
 REM Compile the C++ code using g++
-REM g++ -std=c++14 -O3 -mavx2 -mfma -march=native -msse4.2 -mwindows -luser32 ^
+REM g++ -std=c++17 -O3 -mavx2 -mfma -msse4.2 -mf16c -mrdseed -mwindows -luser32 ^
 REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -Wignored-attributes ^
+REM -DSANE_WINDOWS_BUILD ^
 REM src/SaneProgram.cpp ^
 REM ASTL/Additional/GLTFParser.cpp ^
 REM ASTL/Additional/OBJParser.cpp ^
@@ -83,10 +87,6 @@ REM src/Texture.cpp ^
 REM src/BVH.cpp ^
 REM src/TLAS.cpp ^
 REM src/Editor.cpp ^
-REM -o SaneProgram ^
-REM -lopengl32 -lgdi32 SaneProgram.res
-
-REM ------ if this is Editor build compile  External/zstddeclib.c 
 REM External/astc-encoder/astcenc_averages_and_directions.cpp     ^
 REM External/astc-encoder/astcenc_block_sizes.cpp                 ^
 REM External/astc-encoder/astcenc_color_quantize.cpp              ^
@@ -109,7 +109,10 @@ REM External/astc-encoder/astcenc_quantization.cpp                ^
 REM External/astc-encoder/astcenc_symbolic_physical.cpp           ^
 REM External/astc-encoder/astcenc_weight_align.cpp                ^
 REM External/astc-encoder/astcenc_weight_quant_xfer_tables.cpp    ^
+REM -o SaneProgram ^
+REM -lopengl32 -lgdi32 SaneProgram.res
 
+REM ------ if this is Editor build compile  External/zstddeclib.c 
 REM g++ -std=c++14 -O3 -mavx2 -march=native -msse4.2 -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc RandomSSAOKernelGen.cpp -o RandomSSAOKernelGen.exe
 
 

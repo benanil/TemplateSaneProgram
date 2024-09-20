@@ -73,9 +73,9 @@ def AndroidMoveShaders():
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
     
     # Define source and destination paths
-    sourcePath = os.path.join(workspacePath, "Assets/Shaders")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Shaders")
-    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets/Assets")
+    sourcePath = os.path.join(workspacePath, "../Assets/Shaders")
+    destPath   = os.path.join(workspacePath, "../Android/app/src/main/assets/Shaders")
+    assetsPath = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets")
     ensure_directory_exists(assetsPath)
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".glsl")
@@ -84,8 +84,8 @@ def AndroidMoveShaders():
 def AndroidMoveFontFiles():
     print("Moving Font files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
-    sourcePath = os.path.join(workspacePath, "Assets/Fonts")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Fonts")
+    sourcePath = os.path.join(workspacePath, "../Assets/Fonts")
+    destPath   = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets/Fonts")
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".bft")
 
@@ -93,8 +93,8 @@ def AndroidMoveFontFiles():
 def AndroidMoveAudioFiles():
     print("Moving Font files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
-    sourcePath = os.path.join(workspacePath, "Assets/Audio")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Audio")
+    sourcePath = os.path.join(workspacePath, "../Assets/Audio")
+    destPath   = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets/Audio")
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".mp3")
     copy_files(sourcePath, destPath, ".wav")
@@ -105,9 +105,9 @@ def AndroidMoveMeshes():
     print("Moving mesh and astc files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
     # Define source and destination paths
-    sourcePath = os.path.join(workspacePath, "Assets/Meshes")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Meshes")
-    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets/Assets")
+    sourcePath = os.path.join(workspacePath, "../Assets/Meshes")
+    destPath   = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets/Meshes")
+    assetsPath = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets")
     ensure_directory_exists(assetsPath)
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".abm")
@@ -118,9 +118,9 @@ def AndroidMoveTextures():
     print("Moving texture files to Android path..")
     workspacePath = os.getcwd()  # Assuming this retrieves the workspace path
     # Define source and destination paths
-    sourcePath = os.path.join(workspacePath, "Assets/Textures")
-    destPath   = os.path.join(workspacePath, "Android/app/src/main/assets/Assets/Textures")
-    assetsPath = os.path.join(workspacePath, "Android/app/src/main/assets/Assets")
+    sourcePath = os.path.join(workspacePath, "../Assets/Textures")
+    destPath   = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets/Textures")
+    assetsPath = os.path.join(workspacePath, "../Android/app/src/main/assets/Assets")
     ensure_directory_exists(assetsPath)
     ensure_directory_exists(destPath)
     copy_files(sourcePath, destPath, ".png")
@@ -143,8 +143,8 @@ def BuildAndroid():
 
 def RunAndroid():
     workspacePath = os.getcwd()
-    path = os.path.join(workspacePath, "Android/app/release/")
-    apk_path = os.path.join(workspacePath, "Android/app/build/outputs/apk/debug/app-debug.apk")
+    path = os.path.join(workspacePath, "../Android/app/release/")
+    apk_path = os.path.join(workspacePath, "../Android/app/build/outputs/apk/debug/app-debug.apk")
     run_command_in_directory("adb install " + apk_path, workspacePath)
     run_command_in_directory("adb shell am start -n com.anilgames.game/.MainActivity", path) 
 

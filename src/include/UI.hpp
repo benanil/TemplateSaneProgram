@@ -312,13 +312,17 @@ bool uBeginWindow(const char* name, bool* open = nullptr, uWindowFlags flags = 0
 
 void uWindowEnd();
 
+// scroll to desired element
+// when using trees include childs to the index as well
+void uFocusWindowToElement(UWindow* window, int elementIndex);
+
 void uRightClickAddEvent(const char* text, void(*func)(void*), void* data);
 
 bool uAnyWindowHovered(Vector2f mouseWindowPos);
 
 int uFindWindow(uint hash);
 
-UWindow* uGetWindow(int index);
+UWindow* uGetWindowFromHash(int hash);
 
 bool uTreeBegin(const char* text, bool collapsable, bool open, float width = 0.0f);
 

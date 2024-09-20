@@ -4,6 +4,7 @@
 #include "include/SceneRenderer.hpp"
 #include "include/Camera.hpp"
 #include "include/UI.hpp"
+#include <stdio.h>
 
 #include "../ASTL/String.hpp" // StringEqual
 
@@ -35,7 +36,9 @@ void CharacterController::Start(Prefab* _character)
     mControlling = true;
     
     mRotation = QIdentity();
-    mPosition.y     = 0.65f; // make foots touch the ground
+    mPosition.x = -39.0f;
+    mPosition.y =  0.65f; // make foots touch the ground
+    mPosition.z = -16.0f;
     mMovementSpeed  = 2.7f;
     mIdleLimit      = 8.0f;
     mIdleTime       = 0.0f;
@@ -433,6 +436,10 @@ void CharacterController::Update(float deltaTime, bool isSponza)
     mCharacter->UpdateGlobalNodeTransforms(mRootNodeIdx, Matrix4::Identity());
 
     SceneRenderer::SetCharacterPos(mPosition.x, mPosition.y, mPosition.z);
+
+    // char test[512] = {};
+    // sprintf_s(test, 512, "x: %f, y: %f, z: %f", mPosition.x, mPosition.y, mPosition.z);
+    // uText(test, Vec2(500.0f));
 }
 
 void CharacterController::Destroy()

@@ -12,8 +12,8 @@ struct Prefab : public SceneBundle
     GPUMesh  bigMesh; // contains all of the vertices and indices of an prefab
     Matrix4* globalNodeTransforms; // pre calculated global transforms, accumulated with parents
     struct TLAS* tlas;
-    char path[256]; // relative path
     int firstTimeRender; // starts with 4 and decreases until its 0 we draw first time and set this to-1
+    char path[256]; // relative path
 
     Texture GetGPUTexture(int index)
     {

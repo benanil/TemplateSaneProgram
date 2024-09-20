@@ -64,6 +64,8 @@ static FixedSizeGrowableAllocator<char> mSearchTextBuffer(2048);
 static const char* mSearchWord;
 static bool mSearching = false;
 
+constexpr uint PrefabViewWindowHash = StringToHash("Prefab View");
+
 static const char* CopyString(const char* str)
 {
     int len = StringLength(str);
@@ -124,6 +126,49 @@ void EditorDestroy()
     delete[] isNodeOpenArray;
 }
 
+static void FocusPrefabViewToSelectedNode()
+{
+    // stores index and parent index
+    static Queue<uint64_t> queue = {};
+    Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+    
+    uint64_t rootIndex = (uint64_t)mainScene->GetRootNodeIdx();
+    uint64_t parent = rootIndex; // make its parent as itself
+    queue.Enqueue(rootIndex | (parent << 32));
+    
+    uint64_t elementIndex = 1; // start from one because we use nodes tree at start
+    bool isRoot = true;
+    while (!queue.Empty())
+    {
+        uint64_t nodeData = queue.Dequeue();
+        uint64_t nodeIdx = nodeData & 0xFFFFFFFFull;
+        ANode* node = mainScene->nodes + nodeIdx;
+        elementIndex++;
+        
+        uint64_t parentShifted = nodeData >> 32ull; //  & 0x00000000FFFFFFFFull;
+        uint64_t nodeAsParent = nodeIdx << 32ull;
+        
+        if (nodeIdx == SelectedNodeIndex)
+        {
+            isNodeOpenArray[nodeIdx]  = true;
+            int realElementIdx = (int)elementIndex + (SelectedNodePrimitiveIndex * isNodeOpenArray[parentShifted]);
+            uFocusWindowToElement(uGetWindowFromHash(PrefabViewWindowHash), realElementIdx);
+            isNodeOpenArray[parentShifted] = true;
+            break;
+        }
+            
+        bool shouldDive = mainScene->nodes[parentShifted].numChildren == 1;
+
+        if (isNodeOpenArray[parentShifted] || shouldDive || isRoot)
+        for (int i = 0; i < node->numChildren; i++)
+        {
+            queue.Enqueue((uint64_t)node->children[i] | nodeAsParent);
+        }
+        isRoot = false;
+    }
+    queue.Reset();
+}
+
 void EditorCastRay()
 {
     Vector2f rayPos;
@@ -138,15 +183,16 @@ void EditorCastRay()
     Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
     Triout rayResult = RayCastFromCamera(camera, rayPos, currentScene, MainScenePrefab, nullptr);
     
-    if (rayResult.t != RayacastMissDistance) 
+    if (rayResult.t != RayacastMissDistance)
     {
         int nodeIndex = mainScene->nodes[SelectedNodeIndex].index;
-        if (nodeIndex == -1) return;
+        AMesh* mesh = nullptr;
 
-        AMesh* mesh = mainScene->meshes + nodeIndex;
-
-        // remove outline of last selected object
-        mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = false;
+        if (nodeIndex != -1) {
+            mesh = mainScene->meshes + nodeIndex;
+            // remove outline of last selected object
+            mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = false;
+        }
   
         SelectedNodeIndex = rayResult.nodeIndex;
         SelectedNodePrimitiveIndex = rayResult.primitiveIndex;
@@ -155,15 +201,13 @@ void EditorCastRay()
         mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = true;
         
         sphere->globalNodeTransforms[0].r[3] = rayResult.position;
+        
+        FocusPrefabViewToSelectedNode();
     }
     else {
         SelectedNodeIndex = 0;
         SelectedNodePrimitiveIndex = 0;
     }
-    // static char rayDistTxt[16] = {};
-    // float rayDist = 999.0f;
-    // FloatToString(rayDistTxt, rayDist);
-    // uDrawText(rayDistTxt, rayPos);
 }
 
 static Vector2f PopupElementPos;
@@ -207,17 +251,32 @@ static void PopupWindowEnd()
 
 //------------------------------------------------------------------------
 // Prefab View
+
+static void FocusCameraToPrimitive(int nodeIndex, int primitiveIndex)
+{
+    CameraBase* camera = SceneRenderer::GetCamera();
+    Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+    ANode* node = mainScene->nodes + nodeIndex;
+    APrimitive* primitive = mainScene->meshes[node->index].primitives + primitiveIndex;
+    Matrix4 transformation = mainScene->globalNodeTransforms[nodeIndex];
+    Vector4x32f min = Vector4Transform(VecLoadA(primitive->min), transformation.r);
+    Vector4x32f max = Vector4Transform(VecLoadA(primitive->max), transformation.r);
+    camera->FocusToAABB(min, max);
+    SelectedNodeIndex = nodeIndex;
+    SelectedNodePrimitiveIndex = primitiveIndex;
+}
+
 static void ShowPrefabView(Prefab* prefab)
 {
     static Queue<int> queue = {};
 
     static bool windowOpen = true, nodesOpen = true;
-    const Vector2f position = { 1436.0f, 131.0f };
-    const Vector2f scale    = { 450.0f, 600.0f };
+    windowOpen ^= GetKeyPressed('B');
     
-    constexpr uint hash = StringToHash("Prefab View");
- 
-    if (uBeginWindow("Prefab View", hash, position, scale, &windowOpen))
+    const Vector2f position = { 1436.0f, 131.0f };
+    const Vector2f scale    = { 450.0f, 500.0f };
+
+    if (uBeginWindow("Prefab View", PrefabViewWindowHash, position, scale, &windowOpen))
     {
         queue.Enqueue(prefab->GetRootNodeIdx());
         nodesOpen ^= uTreeBegin("Nodes", true, nodesOpen);
@@ -228,17 +287,22 @@ static void ShowPrefabView(Prefab* prefab)
             ANode* node = prefab->nodes + index;
             AMesh* mesh = prefab->meshes + node->index;
             
-            bool collapsable = mesh->numPrimitives > 0;
+            bool collapsable = mesh->numPrimitives > 0 || node->index == -1;
             bool clicked = uTreeBegin(node->name, collapsable, isNodeOpenArray[index]);
             isNodeOpenArray[index] ^= clicked;
 
-            if (isNodeOpenArray[index])
+            if (isNodeOpenArray[index] && node->index != -1)
             for (int i = 0; i < mesh->numPrimitives; i++)
             { 
                 char temp[64] = "no name ";
                 IntToString(temp+8, i);
                 const char* name = mesh->name == nullptr ? temp : mesh->name;
-                uTreeBegin(name, false, false); uTreeEnd();
+                bool primitiveClicked = uTreeBegin(name, false, false);
+                if (!clicked && primitiveClicked) {
+                    FocusCameraToPrimitive(index, i);
+                }
+
+                uTreeEnd();
             }
         
             uTreeEnd();
@@ -532,9 +596,10 @@ static void CreateNewFileFn(void* data) {
 static void ShowResourcesWindow()
 {
     static bool windowOpen = true;
+    windowOpen ^= GetKeyPressed('B');
     
     constexpr uint hash = StringToHash("Resources");
-    UWindow* window = uGetWindow(uFindWindow(hash));
+    UWindow* window = uGetWindowFromHash(hash);
     mResWin = window;
     
     const Vector2f windowPos = { 366.0f, 727.0f };
@@ -652,11 +717,15 @@ void EditorShow()
     static bool open0 = true;
     open0 ^= GetKeyPressed('B');
         
-    SceneRenderer::ShowEditor(0.0f  , &open0);
+    SceneRenderer::ShowEditor(0.0f, &open0);
     
     Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
     ShowPrefabView(mainScene);
     ShowResourcesWindow();
+
+    if (GetKeyPressed('F'))
+        FocusCameraToPrimitive(SelectedNodeIndex, SelectedNodePrimitiveIndex),
+        FocusPrefabViewToSelectedNode();
 }
 
 #endif // AX_GAME_BUILD != 1

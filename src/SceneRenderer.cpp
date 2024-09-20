@@ -1241,8 +1241,6 @@ void ShowEditor(float offset, bool* open)
         }
         uTreeEnd();
         
-        HBAOEdit();
-        
         uWindowEnd();
 
         if (GetKeyPressed('K'))

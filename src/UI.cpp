@@ -674,7 +674,7 @@ FontHandle uLoadFont(const char* file)
     };
     
     constexpr int europeanGlyphCount = ArraySize(europeanChars);
-    static_assert(europeanGlyphCount <= 33);
+    static_assert(europeanGlyphCount <= 33, "too much european char");
     
     for (int i = 0; i < europeanGlyphCount; i++)
     {
@@ -691,7 +691,7 @@ FontHandle uLoadFont(const char* file)
     
     constexpr int aditionalCharCount = ArraySize(aditionalCharacters);
     // we can add 17 more characters for filling 144 char restriction
-    static_assert(aditionalCharCount + 127 < 144); // if you want more you have to make bigger atlas than 12x12
+    static_assert(aditionalCharCount + 127 < 144, "too much character for atlas"); // if you want more you have to make bigger atlas than 12x12
     
     for (int i = 127; i < 127 + aditionalCharCount; i++)
     {
@@ -2511,7 +2511,7 @@ static bool CheckAnyWindowOnTop(int targetIdx,  Vector2f pos)
         
         if (i == targetIdx || !window.IsOpen()) continue;
         
-        if (RectPointIntersect(window.position, window.GetScale(), pos) 
+        if (window.IsOpen() && RectPointIntersect(window.position, window.GetScale(), pos) 
             && window.depth > targetDepth)
         {
             return true;
@@ -2528,9 +2528,9 @@ int uFindWindow(uint32_t hash)
     return mNumWindows;
 }
 
-UWindow* uGetWindow(int index)
+UWindow* uGetWindowFromHash(int hash)
 {
-    return mWindows + index;
+    return mWindows + uFindWindow(hash);
 }
 
 bool uAnyWindowHovered(Vector2f mouseWindowPos)
@@ -2662,7 +2662,6 @@ static void DrawTabBarNameAndDragWindow(UWindow& window, Vector2f mouseTestPos, 
     }
 }
 
-
 static float HandleScrolling(UWindow& window, float topHeight, Vector2f mouseTestPos, bool mouseDown, bool anyWindowOnTop)
 {
     // needs scroll ?
@@ -2696,6 +2695,7 @@ static float HandleScrolling(UWindow& window, float topHeight, Vector2f mouseTes
         // convert to 0 - 1 range
         window.scrollPercent = (mouseTestPos.y - scrollPos.y) / scrollTotalHeight;
         mWindowState = uWindowState_Scroll;
+        mActiveWindow = mCurrentWindow;
     }
     else if (mActiveWindow == mCurrentWindow && !anyWindowOnTop && wasScrolling)
     {
@@ -2721,6 +2721,15 @@ static float HandleScrolling(UWindow& window, float topHeight, Vector2f mouseTes
     uQuad(scrollPos + Vec2(0.0f, yOffset), scrollSize, ~0);
 
     return scrollWidth;
+}
+
+void uFocusWindowToElement(UWindow* window, int elementIndex)
+{
+    int fakeElementIndex = MAX(elementIndex-1, 0);
+    float elementY = (float)(fakeElementIndex) * window->elementOffsetY;
+    float t = elementY / window->lastElementsTotalHeight;
+    window->scrollPercent = Clamp(t, 0.00f, 0.99f);
+    window->selectedElement = elementIndex;
 }
 
 bool uBeginWindow(const char* name, bool* open, uWindowFlags flags)
@@ -2829,6 +2838,7 @@ bool uBeginWindow(const char* name, uint32_t hash, Vector2f position, Vector2f s
     if ((mActiveWindow == windowIndex || mActiveWindow == -1) && !mLastAnyDragging)
     {
         uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.9f);
+        mActiveWindow = windowIndex;
         CheckEdgesAndCornersAndResize(mousePos, windowIndex);
         uPopFloat(uf::Depth);
     }
@@ -3038,14 +3048,7 @@ static void HandleWindowEvents()
             UWindow& window = mWindows[i];
             Vector2f pos = window.position * mWindowRatio;
             Vector2f scale = window.scale * mWindowRatio;
-            
             anyHit |= RectPointIntersect(pos, scale, mousePos);
-        }
-
-        if (!anyHit)
-        {
-            for (int i = 0; i < mNumWindows; i++)
-                mWindows[i].selectedElement = -1;
         }
     }
 }
@@ -3088,6 +3091,7 @@ bool uTreeBegin(const char* text, bool collapsable, bool open, float width)
 {
     UWindow& window = mWindows[mCurrentWindow];
     mTreeDepth++;
+
     if (!WindowElementBegin(window)) return false;
 
     uPushFloat(uf::TextScale, uGetFloat(uf::TextScale) * 0.8f);

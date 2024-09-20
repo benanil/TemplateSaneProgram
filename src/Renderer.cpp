@@ -897,7 +897,7 @@ void rComputeBarier() {
     GLenum res = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, timeoutInNs);
     if(res == GL_TIMEOUT_EXPIRED || res == GL_WAIT_FAILED) {
         // ...handle timeouts and failures
-        AX_WARN("GL_TIMEOUT_EXPIRED");
+        // AX_WARN("GL_TIMEOUT_EXPIRED");
     }
 }
 

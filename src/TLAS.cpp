@@ -302,6 +302,7 @@ void TLAS::TraverseBVH(const Ray& ray, uint rootNode, Triout* out)
                 if (::IntersectBVH(meshRay, &prefab->bigMesh, instance->bvhIndex, out))
                 {
                     out->nodeIndex = instance->nodeIndex;
+                    out->primitiveIndex = instance->primitiveIndex;
                 }
             }
 

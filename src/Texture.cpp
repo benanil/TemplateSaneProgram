@@ -37,7 +37,7 @@
 #include "../External/stb_image.h"
 #include "../External/zstd.h"
 
-#if !AX_GAME_BUILD
+#if 0 // !AX_GAME_BUILD
 #define STB_DXT_IMPLEMENTATION
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
 #include "../External/ProcessDxtc.hpp"
@@ -73,7 +73,7 @@ bool IsTextureLastVersion(const char* path)
     return version == g_AXTextureVersion;
 }
 
-#if !AX_GAME_BUILD
+#if 0 // !AX_GAME_BUILD
 
 static std::thread CompressASTCImagesThread;
 
@@ -262,7 +262,7 @@ uint64_t ASTCCompress(unsigned char* buffer, unsigned char* image, int dim_x, in
 
 static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobile)
 {
-#if !AX_GAME_BUILD
+#if 0 // !AX_GAME_BUILD
     if (IsTextureLastVersion(path)) {
         return;
     }
@@ -608,7 +608,7 @@ static void SaveAndroidCompressedImagesFn(Prefab* scene, char* astcPath)
 
 void SaveSceneImages(Prefab* scene, char* path)
 {
-#if !AX_GAME_BUILD
+#if 0 // !AX_GAME_BUILD
     // // save dxt textures for desktop
     ChangeExtension(path, StringLength(path), "dxt");
     SaveSceneImagesGeneric(scene, path, false); // is mobile false

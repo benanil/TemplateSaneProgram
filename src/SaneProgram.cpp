@@ -66,8 +66,8 @@ int AXStart()
     g_CurrentScene.Init();
     InitBVH();
 
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/Bistro/Bistro.gltf", 1.2f))
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/SponzaGLTF/scene.gltf", 1.2f))
+    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/Bistro/Bistro.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/SponzaGLTF/scene.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
     {
         AX_ERROR("gltf scene load failed");
@@ -95,18 +95,18 @@ int AXStart()
     characterController.Start(paladin);
 
     Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+    SceneRenderer::Init();
+
     int rootNodeIdx = mainScene->GetRootNodeIdx();
     ANode* rootNode = &mainScene->nodes[rootNodeIdx];
-
+    
     // VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
     // mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
-
+    
     mainScene->tlas = new TLAS(mainScene);
     mainScene->tlas->Build();
     SceneRenderer::InitRayTracing(mainScene);
 
-    SceneRenderer::Init();
- 
     wSetWindowResizeCallback(WindowResizeCallback);
     wSetKeyPressCallback(KeyPressCallback);
 
@@ -204,16 +204,11 @@ void AXLoop(bool canRender)
 
     rDrawAllLines((float*)SceneRenderer::GetViewProjection());
     
-    // uPushFloat(uf::TextScale, 0.5f);
-    // uText(Selectednode, perfTxtPos);
-    // uPopFloat(uf::TextScale);
-
     uRender(); // < user interface end 
     
     raycastThread.join();
     EndAndPrintProfile();
 
-    // RenderScene(&FBXScene);
     // todo material system
 }
 

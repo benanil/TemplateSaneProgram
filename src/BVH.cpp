@@ -1,4 +1,7 @@
 
+// Bounding Volume Hierarchy data structure for acceleration
+// you can see example code for raycasting at the end of this file
+
 #include "include/BVH.hpp"
 #include "include/Renderer.hpp"
 #include "include/Scene.hpp"
@@ -482,3 +485,59 @@ Triout RayCastFromCamera(CameraBase* camera,
     Ray ray = camera->ScreenPointToRay(screenPos);
     return RayCastScene(ray, scene, prefabID, animSystem);
 }
+
+// Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+// int rootNodeIdx = mainScene->GetRootNodeIdx();
+// ANode* rootNode = &mainScene->nodes[rootNodeIdx];
+// 
+// // VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
+// // mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
+// 
+// mainScene->tlas = new TLAS(mainScene);
+// mainScene->tlas->Build();
+// SceneRenderer::InitRayTracing(mainScene);
+
+// void EditorCastRay()
+// {
+//     Vector2f rayPos;
+//     GetMouseWindowPos(&rayPos.x, &rayPos.y); // { 1920.0f / 2.0f, 1080.0f / 2.0f };
+// 
+//     if (!GetMousePressed(MouseButton_Left) || uAnyWindowHovered(rayPos)) return;
+//     
+//     Prefab* sphere = g_CurrentScene.GetPrefab(SpherePrefab);
+//     CameraBase* camera = SceneRenderer::GetCamera();
+//     Scene* currentScene = &g_CurrentScene;
+// 
+//     Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+//     Triout rayResult = RayCastFromCamera(camera, rayPos, currentScene, MainScenePrefab, nullptr);
+//     
+//     if (rayResult.t != RayacastMissDistance)
+//     {
+//         int nodeIndex = mainScene->nodes[SelectedNodeIndex].index;
+//         AMesh* mesh = nullptr;
+// 
+//         if (nodeIndex != -1) {
+//             mesh = mainScene->meshes + nodeIndex;
+//             // remove outline of last selected object
+//             mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = false;
+//         }
+//   
+//         SelectedNodeIndex = rayResult.nodeIndex;
+//         SelectedNodePrimitiveIndex = rayResult.primitiveIndex;
+// 
+//         mesh = mainScene->meshes + mainScene->nodes[SelectedNodeIndex].index;
+//         mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = true;
+//         
+//         sphere->globalNodeTransforms[0].r[3] = rayResult.position;
+//         
+//         FocusPrefabViewToSelectedNode();
+//     }
+//     else {
+//         SelectedNodeIndex = 0;
+//         SelectedNodePrimitiveIndex = 0;
+//     }
+//     // static char rayDistTxt[16] = {};
+//     // float rayDist = 999.0f;
+//     // FloatToString(rayDistTxt, rayDist);
+//     // uDrawText(rayDistTxt, rayPos);
+// }

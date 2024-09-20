@@ -43,7 +43,9 @@ struct CameraBase
         nearClip = 0.1f;
         farClip = 700.0f;
         viewportSize = xviewPortSize;
-        position = Vec3(5.5f, 4.0f, 0.0f);
+        targetPos.x = -39.0f;
+        targetPos.z = -16.0f;
+        position = targetPos + Vec3(5.5f, 4.0f, 0.0f);
         wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
         RecalculateView();
@@ -76,6 +78,27 @@ struct CameraBase
         #endif
     }
 
+    void VECTORCALL FocusToAABB(Vector4x32f min, Vector4x32f max)
+    {
+        Vector4x32f center   = VecLerp(min, max, 0.5f);
+        Vector4x32f toCamDir = Vec3Norm(VecSub(VecLoad(position.arr), center));
+        
+        float camDist = Vec3Lenf(VecSub(min, max));
+        Vector4x32f newPos = VecAdd(center, VecMulf(toCamDir, camDist));
+        
+        Vec3Store(position.arr, newPos);
+        Vector4x32f vFront = VecNeg(toCamDir);
+        Vec3Store(Front.arr, vFront);
+        Vector4x32f vRight = Vec3Norm(Vec3Cross(vFront, VecSetR(0.0f, 1.0f, 0.0f, 0.0f)));
+        Vec3Store(Right.arr, vRight);
+        Vec3Store(Up.arr   , Vec3Cross(vRight, vFront));
+
+        RecalculateView();
+        frustumPlanes = CreateFrustumPlanes(view * projection);
+        pitch = ASin(Front.y) * RadToDeg;
+        yaw = ATan2(Front.z, Front.x) * RadToDeg;
+    }
+
     Ray ScreenPointToRay(Vector2f pos) const
     {
         Vector2f coord = { pos.x / (float)viewportSize.x, pos.y / (float)viewportSize.y };
@@ -83,7 +106,6 @@ struct CameraBase
         coord = coord * 2.0f - 1.0f; // Map to range [-1, 1]
 
         Vector4x32f clipSpacePos = VecSetR(coord.x, coord.y, 1.0f, 1.0f);
-
         Vector4x32f viewSpacePos = Matrix4::Vector4Transform(clipSpacePos, inverseProjection);
         viewSpacePos = VecDiv(viewSpacePos, VecSplatW(viewSpacePos));
         
@@ -103,7 +125,7 @@ struct FreeCamera : public CameraBase
 {
     void Init(Vector2i xviewPortSize) override
     {
-        pitch = 1.0f, yaw = -160.0f , senstivity = 10.0f;
+        pitch = 1.0f, yaw = 160.0f , senstivity = 10.0f;
         CalculateLook();
 
         InitBase(xviewPortSize);
@@ -185,9 +207,9 @@ struct PlayerCamera : public CameraBase
     void Init(Vector2i xviewPortSize) override
     {
         senstivity = 0.1f;
-        angle = Vector2f::Zero(); // Vec2(3.12f, 0.0f);
+        angle = Vec2(0.0f); // Vec2(3.12f, 0.0f);
         viewportSize = xviewPortSize;
-        targetPos = Vec3(0.0f, 0.0f, 0.0f);
+        targetPos = Vec3(-39.0f, 0.0f, -16.0f);
         
         Front = Vector3f::Normalize(Vec3(Sin(angle.x * TwoPI), 0.0f, Cos(angle.x * TwoPI)));
 
