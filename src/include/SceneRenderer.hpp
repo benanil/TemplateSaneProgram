@@ -27,7 +27,7 @@ namespace SceneRenderer
 
     void RenderPrefab(Scene* scene, unsigned short prefabID, AnimationController* animSystem = nullptr);
 
-    void EndRendering(bool renderToBackBuffer, Prefab* mainScene);
+    void EndRendering(bool renderToBackBuffer);
 
     void ShowGBuffer();
 

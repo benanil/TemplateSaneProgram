@@ -37,7 +37,7 @@
 #include "../External/stb_image.h"
 #include "../External/zstd.h"
 
-#if 0 // !AX_GAME_BUILD
+#if !AX_GAME_BUILD
 #define STB_DXT_IMPLEMENTATION
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
 #include "../External/ProcessDxtc.hpp"
@@ -73,7 +73,7 @@ bool IsTextureLastVersion(const char* path)
     return version == g_AXTextureVersion;
 }
 
-#if 0 // !AX_GAME_BUILD
+#if !AX_GAME_BUILD
 
 static std::thread CompressASTCImagesThread;
 
@@ -260,14 +260,12 @@ uint64_t ASTCCompress(unsigned char* buffer, unsigned char* image, int dim_x, in
 
 #endif // __ANDROID__
 
-static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobile)
+static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobile, AImage* images, int numImages)
 {
-#if 0 // !AX_GAME_BUILD
+#if !AX_GAME_BUILD
     if (IsTextureLastVersion(path)) {
         return;
     }
-    AImage* images = scene->images;
-    int numImages = scene->numImages;
     int currentInfo = 0;
        
     if (numImages == 0) {
@@ -278,8 +276,8 @@ static void SaveSceneImagesGeneric(Prefab* scene, char* path, const bool isMobil
     std::bitset<512> isNormalMap{};
     std::bitset<512> isMetallicRoughnessMap{};
 
-    AMaterial* materials = scene->materials;
-    int numMaterials = scene->numMaterials;
+    AMaterial* materials = scene ? scene->materials : nullptr;
+    int numMaterials = scene ? scene->numMaterials : 0;
     // this makes always positive
     const short shortWithoutSign = (short)0x7FFF;
        
@@ -582,7 +580,8 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
                     break;
             } 
         }
-        textures[i] = rCreateTexture(info.width, info.height, currentImage, textureType, flags);
+        Texture imported = rCreateTexture(info.width, info.height, currentImage, textureType, flags);
+        textures[i] = imported;
         currentImage += imageSize;
         
         if (IsAndroid() && !notCompressed)
@@ -600,18 +599,18 @@ static void LoadSceneImagesGeneric(const char* texturePath, Texture* textures, i
     AFileClose(file);
 }
 
-static void SaveAndroidCompressedImagesFn(Prefab* scene, char* astcPath)
+static void SaveAndroidCompressedImagesFn(Prefab* scene, char* astcPath, AImage* images, int numImages)
 {
-    SaveSceneImagesGeneric(scene, astcPath, true); // is mobile true
+    SaveSceneImagesGeneric(scene, astcPath, true, images, numImages); // is mobile true
     delete[] astcPath;
 }
 
-void SaveSceneImages(Prefab* scene, char* path)
+void CompressSaveImages(char* path, const char** images, int numImages)
 {
-#if 0 // !AX_GAME_BUILD
+    #if !AX_GAME_BUILD
     // // save dxt textures for desktop
     ChangeExtension(path, StringLength(path), "dxt");
-    SaveSceneImagesGeneric(scene, path, false); // is mobile false
+    SaveSceneImagesGeneric(nullptr, path, false, (AImage*)images, numImages); // is mobile false
     
     // save astc textures for android
     int len = StringLength(path);
@@ -620,14 +619,34 @@ void SaveSceneImages(Prefab* scene, char* path)
     SmallMemCpy(astcPath, path, len + 1);
     
     // save textures in other thread because we don't want to wait android textures while on windows platform
-    new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, scene, astcPath);
+    new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, nullptr, astcPath, (AImage*)images, numImages);
+    #endif
+}
+
+void CompressSaveSceneImages(Prefab* scene, char* path)
+{
+#if !AX_GAME_BUILD
+    AImage* images = scene->images;
+    int numImages = scene->numImages;
+    
+    // // save dxt textures for desktop
+    ChangeExtension(path, StringLength(path), "dxt");
+    SaveSceneImagesGeneric(scene, path, false, images, numImages); // is mobile false
+    
+    // save astc textures for android
+    int len = StringLength(path);
+    ChangeExtension(path, len, "astc");
+    char* astcPath = new char[len + 2] {};
+    SmallMemCpy(astcPath, path, len + 1);
+    
+    // save textures in other thread because we don't want to wait android textures while on windows platform
+    new(&CompressASTCImagesThread)std::thread(SaveAndroidCompressedImagesFn, scene, astcPath, images, numImages);
 #endif
 }
 
-void LoadSceneImages(char* path, Texture*& textures, int numImages)
+void LoadSceneImages(char* path, Texture* textures, int numImages)
 {
     if (numImages == 0) { textures = nullptr; return; }
-    textures = new Texture[numImages]();
 #ifdef __ANDROID__
     ChangeExtension(path, StringLength(path), "astc");
 #else

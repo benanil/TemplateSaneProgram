@@ -95,9 +95,9 @@ static void SearchForElements(const char* path, void* dataUnused)
     }
 }
 
-void EditorInit(Prefab* prefab)
+void EditorInit()
 {
-    isNodeOpenArray = new bool[prefab->numNodes]{};
+    // isNodeOpenArray = new bool[prefab->numNodes]{};
     mFolderOpenMap[StringToHash("Assets")] = true;
 
     const char* FileIconFolders[] = {
@@ -123,7 +123,7 @@ void EditorDestroy()
         rDeleteTexture(mFileIcons[i]);
 
     rDeleteTexture(mSearchIcon);
-    delete[] isNodeOpenArray;
+    // delete[] isNodeOpenArray;
 }
 
 static void FocusPrefabViewToSelectedNode()
@@ -169,52 +169,10 @@ static void FocusPrefabViewToSelectedNode()
     queue.Reset();
 }
 
-void EditorCastRay()
-{
-    Vector2f rayPos;
-    GetMouseWindowPos(&rayPos.x, &rayPos.y); // { 1920.0f / 2.0f, 1080.0f / 2.0f };
-
-    if (!GetMousePressed(MouseButton_Left) || uAnyWindowHovered(rayPos)) return;
-    
-    Prefab* sphere = g_CurrentScene.GetPrefab(SpherePrefab);
-    CameraBase* camera = SceneRenderer::GetCamera();
-    Scene* currentScene = &g_CurrentScene;
-
-    Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
-    Triout rayResult = RayCastFromCamera(camera, rayPos, currentScene, MainScenePrefab, nullptr);
-    
-    if (rayResult.t != RayacastMissDistance)
-    {
-        int nodeIndex = mainScene->nodes[SelectedNodeIndex].index;
-        AMesh* mesh = nullptr;
-
-        if (nodeIndex != -1) {
-            mesh = mainScene->meshes + nodeIndex;
-            // remove outline of last selected object
-            mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = false;
-        }
-  
-        SelectedNodeIndex = rayResult.nodeIndex;
-        SelectedNodePrimitiveIndex = rayResult.primitiveIndex;
-
-        mesh = mainScene->meshes + mainScene->nodes[SelectedNodeIndex].index;
-        mesh->primitives[SelectedNodePrimitiveIndex].hasOutline = true;
-        
-        sphere->globalNodeTransforms[0].r[3] = rayResult.position;
-        
-        FocusPrefabViewToSelectedNode();
-    }
-    else {
-        SelectedNodeIndex = 0;
-        SelectedNodePrimitiveIndex = 0;
-    }
-}
-
-static Vector2f PopupElementPos;
 static Vector2f PopupSize = { 400.0f, 220.0f };
 const float PopElementPadding = 20.0f;
 
-static Vector2f* PopupWindowBegin(const char* windowName, const char* question)
+static Vector2f PopupWindowBegin(const char* windowName, const char* question)
 {
     uPushFloat(uf::Depth, 0.2f);
     
@@ -239,9 +197,7 @@ static Vector2f* PopupWindowBegin(const char* windowName, const char* question)
     uPopFloat(uf::TextScale);
     
     position.y += textSize.y + PopElementPadding;
-    PopupElementPos = position;
-
-    return &PopupElementPos;
+    return position;
 }
 
 static void PopupWindowEnd() 
@@ -372,7 +328,7 @@ static void DeleteResource(void* unused) {
 
 static void DeleteWarnWindow(const char* windowName, const char* question)
 {
-    Vector2f elementPos = *PopupWindowBegin(windowName, question);
+    Vector2f elementPos = PopupWindowBegin(windowName, question);
     elementPos.y += PopElementPadding;
     elementPos.x += PopupSize.x - 100.0f - PopElementPadding;
     
@@ -551,7 +507,7 @@ static char mCreatedResourceName[256] = {};
 
 static void CreateResourcePopup(const char* windowName, const char* question, bool isFile)
 {
-    Vector2f elementPos = *PopupWindowBegin(windowName, question);
+    Vector2f elementPos = PopupWindowBegin(windowName, question);
     uPushFloat(uf::ContentStart, PopupSize.x - 100.0f);
     uPushFloat(uf::SliderHeight, uGetFloat(uf::SliderHeight) * 1.2f);
     uSetElementFocused(true);
@@ -595,7 +551,7 @@ static void CreateNewFileFn(void* data) {
 
 static void ShowResourcesWindow()
 {
-    static bool windowOpen = true;
+    static bool windowOpen = false;
     windowOpen ^= GetKeyPressed('B');
     
     constexpr uint hash = StringToHash("Resources");
@@ -719,13 +675,13 @@ void EditorShow()
         
     SceneRenderer::ShowEditor(0.0f, &open0);
     
-    Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
-    ShowPrefabView(mainScene);
+    // Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
+    // ShowPrefabView(mainScene);
     ShowResourcesWindow();
 
-    if (GetKeyPressed('F'))
-        FocusCameraToPrimitive(SelectedNodeIndex, SelectedNodePrimitiveIndex),
-        FocusPrefabViewToSelectedNode();
+    // if (GetKeyPressed('F'))
+    //     FocusCameraToPrimitive(SelectedNodeIndex, SelectedNodePrimitiveIndex),
+    //     FocusPrefabViewToSelectedNode();
 }
 
 #endif // AX_GAME_BUILD != 1

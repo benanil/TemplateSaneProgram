@@ -448,8 +448,8 @@ void uWindowResizeCallback(int width, int height)
 static void ImportShaders()
 {
     mTriangleShader = rImportShader("Assets/Shaders/UITriangleVert.glsl", "Assets/Shaders/UITriangleFrag.glsl");
-    mFontShader = rImportShader("Assets/Shaders/TextVert.glsl", "Assets/Shaders/TextFrag.glsl");
-    mQuadShader = rImportShader("Assets/Shaders/QuadBatch.glsl", "Assets/Shaders/QuadFrag.glsl");
+    mFontShader = rImportShader("Assets/Shaders/EmptyVert.glsl", "Assets/Shaders/TextFrag.glsl", "Assets/Shaders/TextGeom.glsl");
+    mQuadShader = rImportShader("Assets/Shaders/EmptyVert.glsl", "Assets/Shaders/QuadFrag.glsl", "Assets/Shaders/QuadBatchGeom.glsl");
     mColorPick.shader = rImportShader("Assets/Shaders/SingleQuadVert.glsl", "Assets/Shaders/ColorPickFrag.glsl");
     mColorPick.alpha = 1.0f;
 
@@ -3329,8 +3329,8 @@ static void RenderScissored(ScissorData& scissorData, int indexStartLoc)
         ScissorRect scissorRect = scissorData.rects[i];
         if (scissorRect.numElements == 0) continue;
         rScissor((int)scissorRect.position.x, (int)scissorRect.position.y, scissorRect.sizeX, (int)scissorRect.sizeY);
-        rSetShaderValue(numScisorred * 6, indexStartLoc);
-        rRenderMeshNoVertex(6 * scissorRect.numElements); // 6 index for each char
+        rSetShaderValue(numScisorred, indexStartLoc);
+        rRenderGeomPoint(scissorRect.numElements, 0);
         numScisorred += scissorRect.numElements;
     }
     rSetShaderValue(numScisorred, indexStartLoc);
@@ -3351,11 +3351,10 @@ static void uRenderQuads(Vector2i windowSize)
     
     if (mQuadScissor.count) {
         RenderScissored(mQuadScissor, uIndexStartLocQuad);
-        rSetShaderValue(mQuadScissor.count * 6, uIndexStartLocQuad);
     }
-
+    
     int numNonScissorred = mQuadIndex - mQuadScissor.count;
-    rRenderMeshNoVertex(6 * numNonScissorred); // 6 index for each char
+    rRenderGeomPoint(numNonScissorred, 0);
     mQuadIndex = 0;
 }
 
@@ -3374,11 +3373,10 @@ static void uRenderTexts(Vector2i windowSize)
 
     if (mTextScissor.count) {
         RenderScissored(mTextScissor, uIndexStartLocText);
-        rSetShaderValue(mTextScissor.count * 6, uIndexStartLocText);
     }
     
     int numNonScissorred = mNumChars - mTextScissor.count;
-    rRenderMeshNoVertex(6 * numNonScissorred); // 6 index for each char
+    rRenderGeomPoint(numNonScissorred, 0);
     mNumChars = 0;
 }
 

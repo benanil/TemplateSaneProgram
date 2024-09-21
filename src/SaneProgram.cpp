@@ -18,7 +18,6 @@
 #include "../ASTL/Additional/Profiler.hpp"
 #include "../ASTL/String.hpp"
 
-PrefabID MainScenePrefab = 0;
 PrefabID SpherePrefab = 0;
 
 static PrefabID AnimatedPrefab = 0;
@@ -60,19 +59,21 @@ void PrintPerfFn(const char* text)
 
 static void SetDoubleSidedMaterials(Prefab* mainScene);
 
+extern void InitTerrain();
+extern void RenderTerrain(CameraBase* camera);
+
 // return 1 if success
 int AXStart()
 {
     g_CurrentScene.Init();
-    InitBVH();
+    // InitBVH();
 
-    if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/Bistro/Bistro.gltf", 1.2f))
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/Bistro/Bistro.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/SponzaGLTF/scene.gltf", 1.2f))
-    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/GroveStreet/GroveStreet.gltf", 1.14f))
-    {
-        AX_ERROR("gltf scene load failed");
-        return 0;
-    }
+    // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/GroveStreet/GroveStreet.gltf", 1.14f)){
+    //     AX_ERROR("gltf scene load failed");
+    //     return 0;
+    // }
 
     if (!g_CurrentScene.ImportPrefab(&SpherePrefab, "Assets/Meshes/Sphere.gltf", 0.5f))
     {
@@ -94,28 +95,19 @@ int AXStart()
     Prefab* paladin = g_CurrentScene.GetPrefab(AnimatedPrefab); 
     characterController.Start(paladin);
 
-    Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
     SceneRenderer::Init();
-
-    int rootNodeIdx = mainScene->GetRootNodeIdx();
-    ANode* rootNode = &mainScene->nodes[rootNodeIdx];
-    
-    // VecStore(rootNode->rotation, QFromYAngle(HalfPI/2.0f));
-    // mainScene->UpdateGlobalNodeTransforms(rootNodeIdx, Matrix4::Identity());
-    
-    mainScene->tlas = new TLAS(mainScene);
-    mainScene->tlas->Build();
-    SceneRenderer::InitRayTracing(mainScene);
+    InitTerrain();
 
     wSetWindowResizeCallback(WindowResizeCallback);
     wSetKeyPressCallback(KeyPressCallback);
 
-    SetDoubleSidedMaterials(mainScene);
+    // SetDoubleSidedMaterials(mainScene); // < for bistro scene
 
-    EditorInit(mainScene);
+    EditorInit();
     return 1;
 }
 
+// for bistro scene
 void SetDoubleSidedMaterials(Prefab* mainScene)
 {
     for (int i = 0; i < mainScene->numMaterials; i++)
@@ -154,11 +146,12 @@ void AXLoop(bool canRender)
     CameraBase* camera = SceneRenderer::GetCamera();
     Scene* currentScene = &g_CurrentScene;
 
-    std::thread raycastThread(EditorCastRay);
-    
     // draw when we are playing game, don't render when using pause menu to save power
     if (canRender && (PauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
     {
+        if (GetKeyPressed('T'))
+            InitTerrain();
+
         currentScene->Update();
     
         float deltaTime = (float)GetDeltaTime();
@@ -168,30 +161,31 @@ void AXLoop(bool canRender)
         characterController.Update(deltaTime, isSponza);
         AnimationController* animController = &characterController.mAnimController;
         
-        BeginShadowRendering(currentScene);
+        if (false) 
         {
-            RenderShadowOfPrefab(currentScene, MainScenePrefab, nullptr);
-            // don't render shadow of character, we will fake it.
-            // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
+            BeginShadowRendering(currentScene);
+                //RenderShadowOfPrefab(currentScene, MainScenePrefab, nullptr);
+                // don't render shadow of character, we will fake it.
+                // RenderShadowOfPrefab(currentScene, AnimatedPrefab, animController);
+            EndShadowRendering();
         }
-        EndShadowRendering();
  
         BeginRendering();
         {
-            RenderPrefab(currentScene, MainScenePrefab, nullptr);
+            // RenderPrefab(currentScene, MainScenePrefab, nullptr);
             RenderPrefab(currentScene, AnimatedPrefab, animController);
             // RenderPrefab(currentScene, SpherePrefab, nullptr);
         }
+        
+        RenderTerrain(camera);
 
         bool renderToBackBuffer = !PauseMenuOpened;
-        
-        Prefab* mainScene = g_CurrentScene.GetPrefab(MainScenePrefab);
-        SceneRenderer::EndRendering(renderToBackBuffer, mainScene);
+        SceneRenderer::EndRendering(renderToBackBuffer);
 
-        RenderOutlined(currentScene, MainScenePrefab, SelectedNodeIndex, SelectedNodePrimitiveIndex);
+        // RenderOutlined(currentScene, MainScenePrefab, SelectedNodeIndex, SelectedNodePrimitiveIndex);
         
         ShowGBuffer(); // draw all of the graphics to back buffer (inside all window)
-        
+
         EditorShow();
 
         PauseMenuOpened = false;
@@ -206,7 +200,6 @@ void AXLoop(bool canRender)
     
     uRender(); // < user interface end 
     
-    raycastThread.join();
     EndAndPrintProfile();
 
     // todo material system

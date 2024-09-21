@@ -180,6 +180,8 @@ void rRenderMesh(int numVertex);
 
 void rRenderMeshNoVertex(int numIndex);
 
+void rRenderGeomPoint(int numPoints, int pointOffset); // pointOffset=starting point
+
 int GraphicsTypeToSize(GraphicType type);
 
 /*//////////////////////////////////////////////////////////////////////////*/
@@ -395,8 +397,8 @@ typedef int TextureAccess;
 
 void rBindShader(Shader shader);
 // you don't have to specify names, it is for debug purpose only
-Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile = nullptr, const char* fragFile = nullptr);
-Shader rImportShader(const char* vertexPath, const char* fragmentPath);
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile = nullptr, const char* fragFile = nullptr, const char* geomSource = nullptr, const char* geomPath = nullptr);
+Shader rImportShader(const char* vertexPath, const char* fragmentPath, const char* geomPath = nullptr);
 Shader rCreateFullScreenShader(const char* fragmentSource, const char* name = nullptr);
 Shader rImportFullScreenShader(const char* path);
 

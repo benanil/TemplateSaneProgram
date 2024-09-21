@@ -14,7 +14,7 @@ struct CameraBase
     
     float verticalFOV = 65.0f;
     float nearClip = 0.1f;
-    float farClip = 700.0f;
+    float farClip = 2400.0f;
 
     Vector2i viewportSize, monitorSize;
 
@@ -41,10 +41,10 @@ struct CameraBase
     {
         verticalFOV = 65.0f;
         nearClip = 0.1f;
-        farClip = 700.0f;
+        farClip = 2400.0f;
         viewportSize = xviewPortSize;
-        targetPos.x = -39.0f;
-        targetPos.z = -16.0f;
+        targetPos.x = 39.0f; // negate for bistro scene
+        targetPos.z = 16.0f; // negate for bistro scene
         position = targetPos + Vec3(5.5f, 4.0f, 0.0f);
         wGetMonitorSize(&monitorSize.x, &monitorSize.y);
 
@@ -153,7 +153,7 @@ struct FreeCamera : public CameraBase
     {
         bool pressing = GetMouseDown(MouseButton_Right);
         float dt = (float)GetDeltaTime();
-        float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 5.0f;
+        float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 15.0f;
         
         if (!pressing) { wasPressing = false; return; }
         
@@ -211,8 +211,6 @@ struct PlayerCamera : public CameraBase
         viewportSize = xviewPortSize;
         targetPos = Vec3(-39.0f, 0.0f, -16.0f);
         
-        Front = Vector3f::Normalize(Vec3(Sin(angle.x * TwoPI), 0.0f, Cos(angle.x * TwoPI)));
-
         InitBase(xviewPortSize);
     }
 
@@ -234,6 +232,9 @@ struct PlayerCamera : public CameraBase
         view = Matrix4::Inverse(camera);
 
         frustumPlanes = CreateFrustumPlanes(view * projection);
+   
+        Front = Vec3(-Sin(-y), 0.0f, -Cos(-x));
+        Right = Vector3f::Cross(Front, Vector3f::Up());
     }
     
     void SetCursorPos(int x, int y)

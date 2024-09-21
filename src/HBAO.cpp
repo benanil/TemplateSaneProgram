@@ -72,10 +72,10 @@ static int mQuarterWidth, mQuarterHeight;
 
 // Adjustables
 static float mIntensity          = 1.3f;
-static float mBias               = 0.1f;
-static float mRadius             = 1.94f;
+static float mBias               = 0.6f;
+static float mRadius             = 1.24f;
 static float mBlurSharpness      = 30.0f;
-static float mMattersToViewSpace = 2.0f;
+static float mMattersToViewSpace = 1.0f;
 static bool mIsOpen = !IsAndroid();
 
 // Uniform Locations

@@ -466,7 +466,7 @@ bool rFrameBufferCheck()
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        AX_ERROR("framebuffer incomplate");
+        AX_WARN("framebuffer incomplate");
         return false;
     }
     return true;
@@ -674,6 +674,12 @@ void rRenderMesh(int numVertex)
 void rRenderMeshNoVertex(int numIndex)
 { 
     glDrawArrays(GL_TRIANGLES, 0, numIndex);
+    CHECK_GL_ERROR();
+}
+
+void rRenderGeomPoint(int numPoints, int offset)
+{
+    glDrawArrays(GL_POINTS, offset, numPoints);
     CHECK_GL_ERROR();
 }
 
@@ -901,7 +907,9 @@ void rComputeBarier() {
     }
 }
 
-Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const char* vertexFile, const char* fragFile)
+Shader rCreateShader(const char* vertexSource, const char* fragmentSource, 
+                     const char* vertexFile, const char* fragFile,
+                     const char* geomSource, const char* geomFile)
 {
     // Vertex shader
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -913,17 +921,30 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const
     glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
     glCompileShader(fragmentShader);
     CheckShaderError(fragmentShader, fragFile);
+
+    // Fragment shader
+    GLuint geometryShader = ~0x0u; 
+    if (geomSource != nullptr) {
+        geometryShader = glCreateShader(GL_GEOMETRY_SHADER);
+        glShaderSource(geometryShader, 1, &geomSource, NULL);
+        glCompileShader(geometryShader);
+        CheckShaderError(geometryShader, geomFile);
+    }
+
     // Link shaders
     uint shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
+    if (geometryShader != ~0x0u) glAttachShader(shaderProgram, geometryShader);
+
     glLinkProgram(shaderProgram);
     CheckLinkerError(shaderProgram, fragFile);
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
     glUseProgram(shaderProgram);
-    CHECK_GL_ERROR();
+    CHECK_GL_WARNING();
+    // CHECK_GL_ERROR();
     return {shaderProgram};
 }
 
@@ -949,11 +970,13 @@ Shader rImportFullScreenShader(const char* path)
     return shader;
 }
 
-Shader rImportShader(const char* vertexPath, const char* fragmentPath)
+Shader rImportShader(const char* vertexPath, const char* fragmentPath, const char* geomPath)
 {
     ScopedText vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     ScopedText fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
-    Shader shader = rCreateShader(vertexText.text, fragmentText.text, vertexPath, fragmentPath);
+    ScopedText geomText = nullptr;
+    if (geomPath != nullptr) geomText.text = ReadAllText(geomPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    Shader shader = rCreateShader(vertexText.text, fragmentText.text, vertexPath, fragmentPath, geomText.text, geomPath);
     return shader;
 }
 

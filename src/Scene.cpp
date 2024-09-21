@@ -262,21 +262,24 @@ int Scene::ImportPrefab(PrefabID* sceneID, const char* inPath, float scale)
 
         ChangeExtension(path, StringLength(path), "abm");
 
-        BuildBVH((SceneBundle*)scene);
+        // BuildBVH((SceneBundle*)scene);
 
         parsed &= SaveGLTFBinary((SceneBundle*)scene, path); ASSERT(parsed);
-        SaveSceneImages(scene, path); // save textures as binary
+        CompressSaveSceneImages(scene, path); // save textures as binary
     }
     else
     {
         parsed = LoadSceneBundleBinary(path, (SceneBundle*)scene);
-        BuildBVH(scene);
+        // BuildBVH(scene);
     }
 
     if (!parsed)
         return 0;
 
     // Load to GPU
+    if (scene->numImages == 0) scene->gpuTextures = nullptr; 
+    else scene->gpuTextures = new Texture[scene->numImages]{};
+
     LoadSceneImages(path, scene->gpuTextures, scene->numImages);
     
     // Load AABB's

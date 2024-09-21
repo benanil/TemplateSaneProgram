@@ -54,6 +54,8 @@ extern Tri*      g_Triangles;
 extern uint g_TotalBVHNodesUsed;
 extern uint g_CurrTriangleFace;
 
+extern void TerrainShowEditor();
+
 namespace SceneRenderer
 {
     CameraBase*  m_Camera;
@@ -1121,9 +1123,9 @@ static void GodRaysPass()
     }
 }
 
-void EndRendering(bool renderToBackBuffer, Prefab* mainScene)
+void EndRendering(bool renderToBackBuffer)
 {
-    RayTraceShadows(mainScene);
+    // RayTraceShadows(mainScene);
 
     Vector2i windowSize;
     wGetWindowSize(&windowSize.x, &windowSize.y);
@@ -1183,6 +1185,33 @@ void Destroy()
     HBAODestroy();
 }
 
+static void TreeTest()
+{
+    static bool t1, t2, t3;
+    const char* testText = "test tree node";
+
+    if (t1 ^= uTreeBegin(testText, true, t1))
+    {
+        uTreeBegin(testText, false, false); uTreeEnd();
+        uTreeBegin(testText, false, false); uTreeEnd();
+    }
+    uTreeEnd();
+        
+    if (t2 ^= uTreeBegin(testText, true, t2))
+    {
+        uTreeBegin(testText, false, false); uTreeEnd();
+        uTreeBegin(testText, false, false); uTreeEnd();
+        uTreeBegin(testText, false, false); uTreeEnd();
+    }
+    uTreeEnd();
+
+    if (t3 ^= uTreeBegin(testText, true, t3))
+    {
+        uTreeBegin(testText, false, false); uTreeEnd();
+        uTreeBegin(testText, false, false); uTreeEnd();
+    }
+    uTreeEnd();
+}
 
 void ShowEditor(float offset, bool* open)
 {
@@ -1215,31 +1244,10 @@ void ShowEditor(float offset, bool* open)
         uSeperatorW(uGetColor(uColor::SelectedBorder), uTriEffect_None, 0.95f);
 
         HBAOEdit();
+     
+        TerrainShowEditor();
 
-        static bool t1, t2, t3;
-        const char* testText = "test tree node";
-
-        if (t1 ^= uTreeBegin(testText, true, t1))
-        {
-            uTreeBegin(testText, false, false); uTreeEnd();
-            uTreeBegin(testText, false, false); uTreeEnd();
-        }
-        uTreeEnd();
-        
-        if (t2 ^= uTreeBegin(testText, true, t2))
-        {
-            uTreeBegin(testText, false, false); uTreeEnd();
-            uTreeBegin(testText, false, false); uTreeEnd();
-            uTreeBegin(testText, false, false); uTreeEnd();
-        }
-        uTreeEnd();
-
-        if (t3 ^= uTreeBegin(testText, true, t3))
-        {
-            uTreeBegin(testText, false, false); uTreeEnd();
-            uTreeBegin(testText, false, false); uTreeEnd();
-        }
-        uTreeEnd();
+        TreeTest();
         
         uWindowEnd();
 

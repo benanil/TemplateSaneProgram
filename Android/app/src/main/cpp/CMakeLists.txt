@@ -25,6 +25,7 @@ add_library(test SHARED
         ../../../../../src/CharacterController.cpp
         ../../../../../src/BVH.cpp
         ../../../../../src/TLAS.cpp
+        ../../../../../src/Terrain.cpp
         ../../../../../ASTL/Additional/OBJParser.cpp
         ../../../../../ASTL/Additional/GLTFParser.cpp
         ../../../../../External/zstddeclib.c)

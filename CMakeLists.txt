@@ -37,6 +37,7 @@ set(SOURCES
 	src/BVH.cpp
     src/TLAS.cpp
     src/Editor.cpp
+    src/Terrain.cpp
 )
 
 if(AX_GAME_BUILD)
