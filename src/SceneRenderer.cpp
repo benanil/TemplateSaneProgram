@@ -1105,7 +1105,7 @@ static void GodRaysPass()
 
     rBindFrameBuffer(m_GodRaysFB);
 
-    if (!IsAndroid() && angle < PI) // god rays are disabled on android
+    if (false)//!IsAndroid() && angle < PI) // god rays are disabled on android
     {
         float fovRad = m_Camera->verticalFOV * DegToRad;
         float intensity = ((PI - angle) / PI);

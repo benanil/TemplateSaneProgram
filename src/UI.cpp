@@ -82,18 +82,14 @@ struct FontAtlas
 };
 
 // we will store this in RGBA32u texture
-// x = fixed16x2: size
-// y = fixed16x2: position
-// z = character: char, depth: uint8, scale: half
-// w = rgba8 color
 struct TextData
 {
-    uint size;
+    uint size; // x = fixed16x2: size
     uint8 character, depth;
     half scale;
     uint color;
-    ushort posX;
-    ushort posY;
+    ushort posX; // fixed16: position
+    ushort posY; // fixed16: position
 };
 
 struct QuadData
@@ -348,71 +344,6 @@ namespace
     Vector2f mRightClickPos;
 }
 
-// event will be active within the frame it is called
-void uRightClickAddEvent(const char* text, void(*func)(void*), void* data)
-{
-    if (mRightClickWindow == -1) return;
-    RightClickEvent* event = mRightClickEvents + mNumRightClickEvents;
-    mNumRightClickEvents++;
-    SmallMemCpy(event->text, text, MIN(24, (int)StringLength(text)));
-    event->Function = func;
-    event->data = data;
-}
-
-static Vector2f uGetRightClickEventSize()
-{
-    Vector2f size = { 0.0f, 0.0f };
-    uPushFloat(uf::TextScale, 0.5f);
-    for (int i = 0; i < mNumRightClickEvents; i++)
-    {
-        RightClickEvent* event = mRightClickEvents + i;
-        Vector2f textSize = uCalcTextSize(event->text);
-        size.x = MAX(size.x, textSize.x);
-        size.y = MAX(size.y, textSize.y);
-    }
-    uPopFloat(uf::TextScale);
-    return size;
-}
-
-static void uDrawRightClickEvents()
-{
-    if (mNumRightClickEvents <= 0) return;
-
-    Vector2f size = uGetRightClickEventSize();
-    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.3f);
-    uPushFloat(uf::TextScale, 0.5f);
-    
-    float elementHeight = size.y;   
-    float offset = size.y * 0.2f;
-    size.y = (elementHeight + offset) * mNumRightClickEvents;
-    
-    Vector2f realPos = mRightClickPos / mWindowRatio;
-    uQuad(realPos - offset, size + (offset * 2.0f), uGetColor(uColor::CheckboxBG));
-    
-    Vector2f mouseTestPos = uGetMouseTestPos();
-    size.y = elementHeight;
-    for (int i = 0; i < mNumRightClickEvents; i++)
-    {
-        RightClickEvent* event = mRightClickEvents + i;
-        bool hover = RectPointIntersect(realPos, size, mouseTestPos);
-        if (hover)
-            uQuad(realPos, size, uGetColor(uColor::Hovered));
-
-        if (hover && GetMousePressed(MouseButton_Left))
-            if (event->Function != nullptr)
-                event->Function(event->data);
-
-        event->Function = nullptr; // to null terminate string that has length of 24
-        realPos.y += elementHeight;
-        uText(event->text, realPos);
-        realPos.y += offset;
-    }
-    
-    mNumRightClickEvents = 0;
-    uPopFloat(uf::TextScale);
-    uPopFloat(uf::Depth);
-}
-
 void PlayButtonClickSound() {
     SoundRewind(mButtonClickSound);
     SoundPlay(mButtonClickSound);
@@ -457,7 +388,8 @@ static void ImportShaders()
     const char* textureDrawFragTxt = AX_SHADER_VERSION_PRECISION() R"(
     layout(location = 0) in mediump vec2 vTexCoord; out vec4 color; uniform sampler2D tex;
     void main() {
-        color = texture(tex, vec2(vTexCoord.x, vTexCoord.y));// vec4(texture(tex, vec2(vTexCoord.x, vTexCoord.y)).rgb, 1.0);
+        color = texture(tex, vec2(vTexCoord.x, vTexCoord.y));
+        // color.a = 1.0;
     })";
     mTextureDrawShader = rCreateShader(spriteDrawVertTxt.text, textureDrawFragTxt, "TextureDrawVert", "TextureDrawFrag");
 }
@@ -3024,6 +2956,8 @@ static void CheckEdgesAndCornersAndResize(Vector2f mousePos, int windowIdx)
     }
 }
 
+static Vector2f uGetRightClickEventSize();
+
 static void HandleWindowEvents()
 {
     bool leftPressed = GetMouseDown(MouseButton_Left);
@@ -3139,6 +3073,71 @@ bool uTreeBegin(const char* text, bool collapsable, bool open, float width)
 void uTreeEnd()
 {
     mTreeDepth--;
+}
+
+// event will be active within the frame it is called
+void uRightClickAddEvent(const char* text, void(*func)(void*), void* data)
+{
+    if (mRightClickWindow == -1) return;
+    RightClickEvent* event = mRightClickEvents + mNumRightClickEvents;
+    mNumRightClickEvents++;
+    SmallMemCpy(event->text, text, MIN(24, (int)StringLength(text)));
+    event->Function = func;
+    event->data = data;
+}
+
+static Vector2f uGetRightClickEventSize()
+{
+    Vector2f size = { 0.0f, 0.0f };
+    uPushFloat(uf::TextScale, 0.5f);
+    for (int i = 0; i < mNumRightClickEvents; i++)
+    {
+        RightClickEvent* event = mRightClickEvents + i;
+        Vector2f textSize = uCalcTextSize(event->text);
+        size.x = MAX(size.x, textSize.x);
+        size.y = MAX(size.y, textSize.y);
+    }
+    uPopFloat(uf::TextScale);
+    return size;
+}
+
+static void uDrawRightClickEvents()
+{
+    if (mNumRightClickEvents <= 0) return;
+
+    Vector2f size = uGetRightClickEventSize();
+    uPushFloat(uf::Depth, uGetFloat(uf::Depth) * 0.3f);
+    uPushFloat(uf::TextScale, 0.5f);
+    
+    float elementHeight = size.y;   
+    float offset = size.y * 0.2f;
+    size.y = (elementHeight + offset) * mNumRightClickEvents;
+    
+    Vector2f realPos = mRightClickPos / mWindowRatio;
+    uQuad(realPos - offset, size + (offset * 2.0f), uGetColor(uColor::CheckboxBG));
+    
+    Vector2f mouseTestPos = uGetMouseTestPos();
+    size.y = elementHeight;
+    for (int i = 0; i < mNumRightClickEvents; i++)
+    {
+        RightClickEvent* event = mRightClickEvents + i;
+        bool hover = RectPointIntersect(realPos, size, mouseTestPos);
+        if (hover)
+            uQuad(realPos, size, uGetColor(uColor::Hovered));
+
+        if (hover && GetMousePressed(MouseButton_Left))
+            if (event->Function != nullptr)
+                event->Function(event->data);
+
+        event->Function = nullptr; // to null terminate string that has length of 24
+        realPos.y += elementHeight;
+        uText(event->text, realPos);
+        realPos.y += offset;
+    }
+    
+    mNumRightClickEvents = 0;
+    uPopFloat(uf::TextScale);
+    uPopFloat(uf::Depth);
 }
 
 bool uButtonW(const char* text, Vector2f scale, uButtonOptions opt)

@@ -180,7 +180,7 @@ void rRenderMesh(int numVertex);
 
 void rRenderMeshNoVertex(int numIndex);
 
-void rRenderGeomPoint(int numPoints, int pointOffset); // pointOffset=starting point
+void rRenderGeomPoint(int numPoints, int pointOffset = 0); // pointOffset=starting point
 
 int GraphicsTypeToSize(GraphicType type);
 
@@ -235,6 +235,14 @@ void rRenderFullScreen(unsigned int texture);
 void rRenderFullScreen();
 
 void rSetViewportSize(int width, int height);
+
+void rSetViewportSize(Vector2i widthHeight);
+
+void rSetViewportSizeAndOffset(int width, int height, int offsetX, int offsetY);
+
+void rSetViewportSizeAndOffset(Vector2i widthHeight, Vector2i offsetXY);
+
+Vector2i rGetViewportSize();
 
 void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset);
 
@@ -322,6 +330,8 @@ void rUnpackAlignment(int n);
 
 uint8_t rTextureTypeToBytesPerPixel(TextureType type);
 
+void rCheckError();
+
 // type is either 0 or 1 if compressed. 1 means has alpha
 Texture rCreateTexture(int width, int height, void* data, TextureType type, TexFlags flags = TexFlags_None);
 
@@ -401,6 +411,9 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource, const
 Shader rImportShader(const char* vertexPath, const char* fragmentPath, const char* geomPath = nullptr);
 Shader rCreateFullScreenShader(const char* fragmentSource, const char* name = nullptr);
 Shader rImportFullScreenShader(const char* path);
+
+void rImportShaderSafe(const char* vertexPath, const char* fragmentPath, const char* geomPath, Shader* old);
+void rImportFullScreenShaderSafe(const char* path, Shader* old);
 
 // ComputeShader
 // note: use rBindShader function to bind compute shader

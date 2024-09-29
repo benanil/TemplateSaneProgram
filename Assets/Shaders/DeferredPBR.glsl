@@ -45,8 +45,7 @@ uniform highp mat4 uInvViewProj;
 
 const float PI = 3.1415926535;
 
-mediump vec3 toLinear(mediump vec3 sRGB)
-{
+mediump vec3 toLinear(mediump vec3 sRGB) {
     // https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
     return sRGB * (sRGB * (sRGB * 0.305306011 + 0.682171111) + 0.012522878);
 }
@@ -154,7 +153,7 @@ void main()
     vec3 pos = WorldSpacePosFromDepthBuffer();
     
     half3 viewRay = GetViewRay(uViewPos, pos); // viewPos: uInvView[3].xyz
-    const half3 sunColor = vec3(1.0); // 0.982f, 0.972, 0.966);
+    const half3 sunColor = vec3(1.0); // vec3(0.982f, 0.972, 0.966); // 0.982f, 0.972, 0.966);
     
     half3 lighting = Lighting(albedoShadow.rgb * sunColor, uSunDir, 
                               normalMetallic.xyz, viewRay, metallic, roughness, ao);

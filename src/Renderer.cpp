@@ -148,6 +148,11 @@ const char* GetGLErrorString(GLenum error)
     return "UNKNOWN_GL_ERROR";
 }
 
+void rCheckError()
+{
+    CHECK_GL_ERROR();
+}
+
 uint8_t rTextureTypeToBytesPerPixel(TextureType type)
 {
     const uint8_t map[64] = {
@@ -797,7 +802,7 @@ void rSetMaterial(AMaterial* material)
     // TODO: set material
 }
 
-static void CheckShaderError(uint shader, const char* name)
+static bool CheckShaderError(uint shader, const char* name)
 {
     GLint isCompiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
@@ -807,12 +812,14 @@ static void CheckShaderError(uint shader, const char* name)
         char infoLog[2048]={};
         char empty = 0;
         glGetShaderInfoLog(shader, maxLength, &maxLength, infoLog);
-        AX_ERROR("shader compile error! file: %s log: %s", infoLog, name ? name : &empty);
+        AX_WARN("shader compile error! file: %s log: %s", infoLog, name ? name : &empty);
         glDeleteShader(shader);
+        return 1;
     }
+    return 0;
 }
 
-static void CheckLinkerError(uint shader, const char* name)
+static bool CheckLinkerError(uint shader, const char* name)
 {
     GLint isCompiled = 0;
     glGetProgramiv(shader, GL_LINK_STATUS, &isCompiled);
@@ -824,7 +831,9 @@ static void CheckLinkerError(uint shader, const char* name)
         glGetProgramInfoLog(shader, maxLength, &maxLength, infoLog);
         AX_ERROR("shader link error! file: %s log: %s", infoLog, name ? name : &empty);
         glDeleteShader(shader);
+        return 1;
     }
+    return 0;
 }
 
 Shader rCreateComputeShader(const char* source)
@@ -915,12 +924,14 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource,
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexSource, NULL);
     glCompileShader(vertexShader);
-    CheckShaderError(vertexShader, vertexFile);
+    if (CheckShaderError(vertexShader, vertexFile))
+        return { -1u };
     // Fragment shader
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
     glCompileShader(fragmentShader);
-    CheckShaderError(fragmentShader, fragFile);
+    if (CheckShaderError(fragmentShader, fragFile))
+        return {-1u};
 
     // Fragment shader
     GLuint geometryShader = ~0x0u; 
@@ -928,7 +939,8 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource,
         geometryShader = glCreateShader(GL_GEOMETRY_SHADER);
         glShaderSource(geometryShader, 1, &geomSource, NULL);
         glCompileShader(geometryShader);
-        CheckShaderError(geometryShader, geomFile);
+        if (CheckShaderError(geometryShader, geomFile))
+            return {-1u};
     }
 
     // Link shaders
@@ -938,7 +950,8 @@ Shader rCreateShader(const char* vertexSource, const char* fragmentSource,
     if (geometryShader != ~0x0u) glAttachShader(shaderProgram, geometryShader);
 
     glLinkProgram(shaderProgram);
-    CheckLinkerError(shaderProgram, fragFile);
+    if (CheckLinkerError(shaderProgram, fragFile))
+        return {-1u};
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
@@ -970,6 +983,14 @@ Shader rImportFullScreenShader(const char* path)
     return shader;
 }
 
+void rImportFullScreenShaderSafe(const char* path, Shader* old)
+{
+    ScopedText fragSource = ReadAllText(path, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    Shader shader = rCreateFullScreenShader(fragSource, path);
+    if (shader.handle == -1u) return;
+    old->handle = shader.handle;
+}
+
 Shader rImportShader(const char* vertexPath, const char* fragmentPath, const char* geomPath)
 {
     ScopedText vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
@@ -978,6 +999,19 @@ Shader rImportShader(const char* vertexPath, const char* fragmentPath, const cha
     if (geomPath != nullptr) geomText.text = ReadAllText(geomPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
     Shader shader = rCreateShader(vertexText.text, fragmentText.text, vertexPath, fragmentPath, geomText.text, geomPath);
     return shader;
+}
+
+void rImportShaderSafe(const char* vertexPath, const char* fragmentPath, const char* geomPath, Shader* old)
+{
+    ScopedText vertexText   = ReadAllText(vertexPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText fragmentText = ReadAllText(fragmentPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    ScopedText geomText = nullptr;
+    if (geomPath != nullptr) geomText.text = ReadAllText(geomPath, nullptr, nullptr, AX_SHADER_VERSION_PRECISION());
+    if (vertexText.text == nullptr || fragmentText.text == nullptr) return;
+
+    Shader shader = rCreateShader(vertexText.text, fragmentText.text, vertexPath, fragmentPath, geomText.text, geomPath);
+    if (shader.handle == -1u) return;
+    old->handle = shader.handle;
 }
 
 void rDeleteShader(Shader shader)    
@@ -1311,9 +1345,32 @@ void rSetTexture(unsigned int textureHandle, int index, unsigned int loc)
     rSetTexture(texture, index, loc);
 }
 
+static Vector2i ViewportSize = {1920, 1080};
+
+Vector2i rGetViewportSize() { return ViewportSize; }
+
+void rSetViewportSizeAndOffset(int width, int height, int offsetX, int offsetY)
+{
+    ViewportSize.x = width, ViewportSize.y = height;
+    glViewport(offsetX, offsetY, width, height);
+}
+
+void rSetViewportSizeAndOffset(Vector2i widthHeight, Vector2i offsetXY)
+{
+    ViewportSize.x = widthHeight.x, ViewportSize.y = widthHeight.y;
+    glViewport(offsetXY.x, offsetXY.y, widthHeight.x, widthHeight.y);
+}
+
 void rSetViewportSize(int width, int height)
 {
+    ViewportSize.x = width, ViewportSize.y = height;
     glViewport(0, 0, width, height);
+}
+
+void rSetViewportSize(Vector2i widthHeight)
+{
+    ViewportSize.x = widthHeight.x, ViewportSize.y = widthHeight.y;
+    glViewport(0, 0, widthHeight.x, widthHeight.y);
 }
 
 void rDestroyRenderer()

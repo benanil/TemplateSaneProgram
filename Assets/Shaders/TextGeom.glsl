@@ -1,12 +1,12 @@
 
+layout (points) in; // Geometry shader will receive points
+layout (triangle_strip, max_vertices = 4) out; // Output 4 vertices (triangle strip)
+
 // per character texture
 // x = half2:size, y = character: uint8, depth: uint8, scale: half
 uniform highp usampler2D dataTex; 
 uniform ivec2 uScrSize;
 uniform int uIndexStart; // vertex index of the first text character that will be rendered 
-
-layout (points) in; // Geometry shader will receive points
-layout (triangle_strip, max_vertices = 4) out; // Output 4 vertices (triangle strip)
 
 out mediump vec2 vTexCoord;
 out lowp vec4 vColor;
@@ -68,14 +68,3 @@ void main()
     }
     EndPrimitive();
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -60,6 +60,7 @@ void PrintPerfFn(const char* text)
 static void SetDoubleSidedMaterials(Prefab* mainScene);
 
 extern void InitTerrain();
+extern void UpdateTerrain(CameraBase* camera);
 extern void RenderTerrain(CameraBase* camera);
 
 // return 1 if success
@@ -110,8 +111,7 @@ int AXStart()
 // for bistro scene
 void SetDoubleSidedMaterials(Prefab* mainScene)
 {
-    for (int i = 0; i < mainScene->numMaterials; i++)
-    {
+    for (int i = 0; i < mainScene->numMaterials; i++) {
         mainScene->materials[i].doubleSided = false;
     }
 
@@ -149,8 +149,7 @@ void AXLoop(bool canRender)
     // draw when we are playing game, don't render when using pause menu to save power
     if (canRender && (PauseMenuOpened || GetMenuState() == MenuState_Gameplay || ShouldReRender()))
     {
-        if (GetKeyPressed('T'))
-            InitTerrain();
+        UpdateTerrain(camera);
 
         currentScene->Update();
     
@@ -205,14 +204,16 @@ void AXLoop(bool canRender)
     // todo material system
 }
 
+extern void TerrainDestroy();
 
 void AXExit()
 {
     DestroyBVH();
+    TerrainDestroy();
+    uDestroy();
+    EditorDestroy();
+    
     g_CurrentScene.Destroy();
     characterController.Destroy();
-    uDestroy();
     SceneRenderer::Destroy();
-
-    EditorDestroy();
 }

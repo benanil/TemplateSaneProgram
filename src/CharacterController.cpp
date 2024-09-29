@@ -199,7 +199,7 @@ void CharacterController::TurningState()
         // turning animation ended
         CameraBase* camera = SceneRenderer::GetCamera();
         // angle we have turned + camera look angle
-        float x = camera->angle.x * -TwoPI;
+        float x = camera->yaw * -TwoPI;
         mRotation = QFromYAngle(x - mTurnRotation + PI);
 
         mCurrentMovement.y = Sin(mTurnRotation + HalfPI);
@@ -212,8 +212,8 @@ Vector2f CharacterController::GetTargetMovement()
 {
     Vector2f targetMovement = {0.0f, 0.0f};
     #ifndef __ANDROID__ /* NOT android */
-    if (GetKeyDown('W')) targetMovement.y = +1.0f; 
-    if (GetKeyDown('S')) targetMovement.y = -1.0f; 
+    if (GetKeyDown('W')) targetMovement.y = -1.0f; 
+    if (GetKeyDown('S')) targetMovement.y = +1.0f; 
     if (GetKeyDown('A')) targetMovement.x = -1.0f; 
     if (GetKeyDown('D')) targetMovement.x = +1.0f; 
     #else
@@ -250,12 +250,14 @@ Vector2f CharacterController::GetTargetMovement()
         // use rsqrt and mul instead of sqrt and div, to avoid devide zero by zero
         targetMovement = Vector2f::NormalizeEst(mTouchStart - cursorPos);  
     
-    targetMovement = Min(targetMovement, Vec2( 1.0f,  1.0f));
-    targetMovement = Max(targetMovement, Vec2(-1.0f, -1.0f));
+    targetMovement = Min(targetMovement, Vector2f( 1.0f,  1.0f));
+    targetMovement = Max(targetMovement, Vector2f(-1.0f, -1.0f));
     targetMovement.x = -targetMovement.x;
     #endif
     return targetMovement;
 }
+
+extern float GetTerrainHeight(Vector3f position);
 
 void CharacterController::MovementState(bool isSponza)
 {
@@ -266,9 +268,8 @@ void CharacterController::MovementState(bool isSponza)
     float animX = mCurrentMovement.x;
     if (Abs(animX) > Abs(animY)) animY = animX;
 
-    mAnimController.EvaluateLocomotion(animX, animY, animSpeed);
-
     bool isRunning = GetKeyDown(Key_SHIFT);
+    mAnimController.EvaluateLocomotion(animX, animY, isRunning ? animSpeed * 2.0f : animSpeed);
     targetMovement *= float(isRunning) + 1.0f;
     
     const float smoothTime = 0.25f;
@@ -278,8 +279,8 @@ void CharacterController::MovementState(bool isSponza)
 
     CameraBase* camera = SceneRenderer::GetCamera();
     // angle of user input, (keyboard or joystick)
-    float x = camera->angle.x * -TwoPI;
-    float inputAngle = ATan2(targetMovement.x, Clamp(targetMovement.y, -1.0f, 1.0f));
+    float x = camera->yaw * -TwoPI;
+    float inputAngle = ATan2(targetMovement.y, Clamp(targetMovement.x, -1.0f, 1.0f));
     float movementValue = targetMovement.LengthSquared();
     if (movementValue < 0.001f) inputAngle = 0.0f;
     x += -inputAngle;
@@ -298,17 +299,17 @@ void CharacterController::MovementState(bool isSponza)
 
     // handle character position
     Vector3f forward = { Sin(x), 0.0f, Cos(x) };
-    Vector3f progress = forward * mMovementSpeed * deltaTime;
+    Vector3f progress = forward * mMovementSpeed * deltaTime * (float(isRunning) * 16.0f + 1.0f);
     
     float movementAmount = mCurrentMovement.LengthSafe();
     progress *= Clamp(-movementAmount, -1.0f, 1.0f);
-    progress *= float(isRunning) * 1.55f + 1.0f;
 
     Vector3f oldPos = mPosition;
     mPosition += progress * 1.5f;
     
     if (isSponza) ColissionDetection(oldPos);
     
+    mPosition.y = GetTerrainHeight(mPosition);
     // animatedPos.y = 8.15f; // if you want to walk on top floor
     camera->targetPos = mPosition;
     mNonStopDuration += float(Abs(movementAmount) < 0.002f) * deltaTime;
@@ -380,7 +381,7 @@ void CharacterController::HandleNeckAndSpineRotation(float deltaTime)
     {
         CameraBase* camera = SceneRenderer::GetCamera();
         
-        float neckYTarget = -mLastInputAngle + camera->angle.x * -TwoPI;
+        float neckYTarget = -mLastInputAngle + camera->yaw * -TwoPI;
         const float yMinAngle = -PI / 3.0f, yMaxAngle = PI / 3.0f;
         // take differance of character forward direction and camera direction
         neckYTarget = Clamp(neckYTarget - mOldInputAngle, yMinAngle, yMaxAngle);
@@ -390,8 +391,8 @@ void CharacterController::HandleNeckAndSpineRotation(float deltaTime)
         mAnimController.mSpineYAngle = Lerp(mAnimController.mSpineYAngle, neckYTarget * 0.5f, deltaTime * rotateSpeed);
         
         const float neckMaxXAngle = 1.25f, spineMaxAngle = 1.85f;
-        mAnimController.mNeckXAngle  = Lerp(mAnimController.mNeckXAngle, camera->angle.y * neckMaxXAngle, deltaTime * rotateSpeed);
-        mAnimController.mSpineXAngle = Lerp(mAnimController.mSpineXAngle, camera->angle.y * spineMaxAngle, deltaTime * rotateSpeed);
+        mAnimController.mNeckXAngle  = Lerp(mAnimController.mNeckXAngle, camera->pitch * neckMaxXAngle, deltaTime * rotateSpeed);
+        mAnimController.mSpineXAngle = Lerp(mAnimController.mSpineXAngle, camera->pitch * spineMaxAngle, deltaTime * rotateSpeed);
     }
     else 
     {
@@ -439,7 +440,7 @@ void CharacterController::Update(float deltaTime, bool isSponza)
 
     // char test[512] = {};
     // sprintf_s(test, 512, "x: %f, y: %f, z: %f", mPosition.x, mPosition.y, mPosition.z);
-    // uText(test, Vec2(500.0f));
+    // uText(test, Vector2f(500.0f));
 }
 
 void CharacterController::Destroy()

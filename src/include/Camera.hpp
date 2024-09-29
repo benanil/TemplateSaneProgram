@@ -21,7 +21,6 @@ struct CameraBase
     Vector3f position;
     Vector2f mouseOld;
     Vector3f targetPos;
-    Vector2f angle; // between 0 and 1 but we will multiply by PI
     Vector3f Front, Right, Up;
  
     float pitch = 0.0f, yaw = -9.0f , senstivity = 10.0f;
@@ -153,7 +152,7 @@ struct FreeCamera : public CameraBase
     {
         bool pressing = GetMouseDown(MouseButton_Right);
         float dt = (float)GetDeltaTime();
-        float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 15.0f;
+        float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 85.0f;
         
         if (!pressing) { wasPressing = false; return; }
         
@@ -206,8 +205,7 @@ struct PlayerCamera : public CameraBase
 {
     void Init(Vector2i xviewPortSize) override
     {
-        senstivity = 0.1f;
-        angle = Vec2(0.0f); // Vec2(3.12f, 0.0f);
+        senstivity = 0.02f;
         viewportSize = xviewPortSize;
         targetPos = Vec3(-39.0f, 0.0f, -16.0f);
         
@@ -216,25 +214,23 @@ struct PlayerCamera : public CameraBase
 
     void RecalculateView() override
     {
-        float x = angle.x * TwoPI;
-        float y = angle.y * PI;
-        
-        Quaternion rot = QMul(QFromXAngle(-y), QFromYAngle(-x));
-        
-        Matrix4 camera = {};
-        MatrixFromQuaternion(camera.GetPtr(), rot);
+        Front.x = Cos(yaw * TwoPI) * Cos(pitch * TwoPI);
+        Front.y = Sin(pitch * TwoPI);
+        Front.z = Sin(yaw * TwoPI) * Cos(pitch * TwoPI);
+        Front = -Front;
+        Front.NormalizeSelf();
+        // also re-calculate the Right and Up vector
+        // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
+        Right = Vector3f::NormalizeEst(Vector3f::Cross(Front, Vector3f::Up()));
+        Up = Vector3f::Cross(Right, Front);
 
-        camera.SetPosition(targetPos + Vec3(0.0f, 3.6f, 0.0f)); // camera height from foot
-        camera = Matrix4::FromPosition(0.0f, 0.0f, 5.0f) * camera; // camera distance 
-        
-        inverseView = camera;
-        Vec3Store(position.arr, inverseView[3]);
-        view = Matrix4::Inverse(camera);
+        position = targetPos + Vec3(0.0f, 3.6f, 0.0f);
+        position -= Front * 5.0f;
+
+        view = Matrix4::LookAtRH(position, Front, Up);
+        inverseView = Matrix4::Inverse(view);
 
         frustumPlanes = CreateFrustumPlanes(view * projection);
-   
-        Front = Vec3(-Sin(-y), 0.0f, -Cos(-x));
-        Right = Vector3f::Cross(Front, Vector3f::Up());
     }
     
     void SetCursorPos(int x, int y)
@@ -260,10 +256,10 @@ struct PlayerCamera : public CameraBase
     {
         if (wasPressing && dir.x + dir.y < 100.0f)
         {
-            angle.x += dir.x * dt * senstivity;
-            angle.y += dir.y * dt * senstivity;
-            angle.x = Fract(angle.x);
-            angle.y = Clamp(angle.y, -0.2f, 0.8f);
+            yaw   += dir.x * dt * senstivity;
+            pitch += dir.y * dt * senstivity;
+            yaw    = Fract(yaw);
+            pitch  = Clamp(pitch, -0.2f, 0.8f);
         }
     }
 
@@ -273,8 +269,7 @@ struct PlayerCamera : public CameraBase
         bool pressing = GetMouseDown(MouseButton_Right);
         float dt = (float)GetDeltaTime();
         
-        if (!pressing)
-        {
+        if (!pressing) {
             RecalculateView();
             wasPressing = false; 
             return; 
