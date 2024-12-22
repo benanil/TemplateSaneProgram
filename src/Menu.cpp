@@ -307,6 +307,8 @@ static void TriangleTest()
     uRoundedRectangle(quadPos, width3, 65.0f, HUEToRGBU32(0.4f), uFadeBit | uFadeInvertBit);
 }
 
+static float x = 0.0f;
+
 bool ShowMenu()
 {
     TriangleTest();

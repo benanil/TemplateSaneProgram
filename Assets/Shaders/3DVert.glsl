@@ -21,6 +21,14 @@ uniform mediump vec3 uSunDir;
 uniform int uHasNormalMap;
 uniform int uHasAnimation;
 
+// https://www.shadertoy.com/view/3s33zj
+mat3 adjoint(in mat4 m)
+{
+    return mat3(cross(m[1].xyz, m[2].xyz),
+                cross(m[2].xyz, m[0].xyz),
+                cross(m[0].xyz, m[1].xyz));
+}
+
 // https://developer.android.com/games/optimize/vertex-data-management
 void main()
 {
@@ -43,11 +51,7 @@ void main()
         model = model * transpose(animMat);
     }
 
-    mediump mat3 normalMatrix = mat3(model);
-    normalMatrix[0] = normalize(normalMatrix[0]);
-    normalMatrix[1] = normalize(normalMatrix[1]);
-    normalMatrix[2] = normalize(normalMatrix[2]);
-
+    mediump mat3 normalMatrix = adjoint(model);
     vTBN[0] = normalize(normalMatrix * aTangent.xyz); 
     vTBN[2] = normalize(normalMatrix * aNormal);
     vTBN[1] = cross(vTBN[0], vTBN[2]) * aTangent.w;

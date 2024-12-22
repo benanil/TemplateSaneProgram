@@ -30,7 +30,7 @@ float ShadowLookup(vec4 loc, vec2 offset)
 // https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
 float ShadowCalculation()
 {
-    const vec4 minShadow = vec4(0.25);
+    const vec4 minShadow = vec4(0.15);
     #ifdef ANDROID
     vec2 offset;
     const vec2 mixer = vec2(1.037, 1.137);
@@ -69,10 +69,10 @@ void main()
         discard;
     #endif
 
-    mediump vec3  normal = vTBN[2];
+    mediump vec3 normal = normalize(vTBN[2]);
 
     #if !defined(ANDROID)
-    if (uHasNormalMap == 1 )
+    if (uHasNormalMap == 1)
     {
         // obtain normal from normal map in range [0,1]
         lowp vec2  c = texture(uNormalMap, vTexCoords).rg * 2.0 - 1.0;
@@ -87,7 +87,7 @@ void main()
     color.a = ShadowCalculation();
     oRoughness = metallicRoughness.y;
     oFragColorShadow = color;
-    oNormalMetallic.xyz = normalize(normal) + vec3(1.0) * vec3(0.5); // convert to 0-1 range
+    oNormalMetallic.xyz = normal + vec3(1.0) * vec3(0.5); // convert to 0-1 range
     oNormalMetallic.a = metallicRoughness.x;
     // if (vBoneIdx > 58)
     //     oFragColorShadow = vec4(1.0);

@@ -174,7 +174,7 @@ void rCreateMeshFromPrimitive(APrimitive* primitive, GPUMesh* mesh, bool skined)
 
 void rBindMesh(GPUMesh mesh);
 
-void rRenderMeshIndexed(GPUMesh mesh);
+void rRenderMeshIndexed(GPUMesh mesh, bool isLine = false);
 
 void rRenderMesh(int numVertex);
 
@@ -313,6 +313,7 @@ enum TexFlags_
     TexFlags_ClampToEdge = 4,
     TexFlags_Nearest     = 8,
     TexFlags_Linear      = 16, // default linear in desktop platforms
+    TexFlags_DontDeleteCPUBuffer = 32,
     // no filtering or wrapping
     TexFlags_RawData     = TexFlags_Nearest | TexFlags_ClampToEdge
 };

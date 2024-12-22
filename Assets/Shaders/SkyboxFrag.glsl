@@ -28,7 +28,7 @@ float noise(in vec2 uv)
 #ifdef ANDROID
 #define OCTAVES 3
 #else
-#define OCTAVES 8
+#define OCTAVES 2
 #endif
 float fbm(in vec2 uv)
 {
@@ -97,3 +97,4 @@ void main()
     skyCol = mix(skyCol, 0.68 * vec3(.418, .394, .372), invYSqr);
     color.rgb = skyCol;
 }
+

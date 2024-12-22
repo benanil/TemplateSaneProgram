@@ -1,5 +1,10 @@
 @echo off
 
+REM clang++ -std=c++17 -O3 -mavx2 -mfma -msse4.2 -mf16c -mrdseed -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS ^
+REM AdventOfCode.cpp -o AdventOfCode.exe
+REM 
+REM call AdventOfCode.exe
+
 if "%1"=="Debug" (
     echo Debug build is running
     devenv build/SaneProgram.vcxproj /Build "Debug|x64"
@@ -12,8 +17,7 @@ REM External/zstddeclib.c
 REM External/zstd.c ^
 
 REM Compile the C++ code using clang++
-REM clang++ -std=c++17 -O3 -mavx2 -mfma -msse4.2 -mf16c -mrdseed -mwindows -luser32 -lopengl32 -lgdi32 ^
-REM -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS ^
+REM clang++ -std=c++17 -O3 -mavx2 -mfma -msse4.2 -mf16c -mrdseed -mwindows -luser32 -lopengl32 -lgdi32 -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS ^
 REM -DSANE_WINDOWS_BUILD ^
 REM ASTL/Additional/GLTFParser.cpp ^
 REM ASTL/Additional/OBJParser.cpp ^

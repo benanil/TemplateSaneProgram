@@ -437,15 +437,21 @@ Texture rImportTexture(const char* path, TexFlags flags)
     }
     const TextureType numCompToFormat[5] = { 0, TextureType_R8, TextureType_RG8, TextureType_RGB8, TextureType_RGBA8 };
     Texture texture = rCreateTexture(width, height, image, numCompToFormat[channels], flags);
-    if (!compressed)
+    bool delBuff = (flags & TexFlags_DontDeleteCPUBuffer) == 0;
+    if (!compressed && delBuff)
     {
         stbi_image_free(image);
+        texture.buffer = nullptr;
     }
     return texture;
 }
 
 void rDeleteTexture(Texture texture) 
 { 
+    if (texture.buffer != nullptr)
+    {
+        stbi_image_free(texture.buffer);
+    }
     glDeleteTextures(1, &texture.handle); 
 }
 
@@ -664,9 +670,9 @@ void rRenderMeshIndexOffset(GPUMesh mesh, int numIndex, int offset)
     CHECK_GL_ERROR();
 }
 
-void rRenderMeshIndexed(GPUMesh mesh)
+void rRenderMeshIndexed(GPUMesh mesh, bool isLine)
 {
-    glDrawElements(GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
+    glDrawElements(isLine ? GL_LINES : GL_TRIANGLES, mesh.numIndex, mesh.indexType, nullptr);
     CHECK_GL_ERROR();
 }
 

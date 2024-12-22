@@ -9,6 +9,18 @@
 #include <math.h>
 #include <stdio.h>
 
+struct TreeVertex
+{
+    Vector3f position;
+    half2 uv;
+    Vector3f normal;
+    float padding;
+};
+
+static TreeVertex* mTreeVertices = nullptr;
+static uint* mTreeIndices = nullptr;
+static GPUMesh mTreeMesh;
+
 // From Texture.cpp
 extern void CompressSaveImages(char* path, const char** images, int numImages);
 extern void LoadSceneImages(char* path, Texture* textures, int numImages);
@@ -20,6 +32,9 @@ static Shader mHeightShader;
 static Shader mMoveShader;
 static Shader mCalculateNormalShader;
 static Shader mGrassShader;
+static Shader mTreeShader;
+
+static Texture mTreeLogTextures[3]; // diffuse, (ao,metallic,roughness), normal
 
 static Texture mHeightTexture;
 static Texture mNormalTexture;
@@ -37,61 +52,84 @@ static bool mFirstInit = true;
 static Vector2i mChunkOffset = { 0, 0 };
 
 static bool mShuldUpdate = false;
-// adjustables
-static float START_HEIGHT = 0.25f;
-static float WEIGHT = 0.5f;
-static float MULT = 0.25f;
 
-// mountain
-// static float START_HEIGHT = 0.198f;
-// static float WEIGHT = 1.6f;
-// static float MULT = 0.235f;
+// Tree
+static uint mTreeVertexOffset;
+static uint mTreeIndexOffset;
 
-// constants
+// Constants
 static const int mNumQuads = 64; // on x and z axis  (512/8)
 static const int mChunkNumSegments = 64;
 static const float mQuadSize   = 20.0f; // < in meters. each segment has (chunkSize / numSegment) width and height
 static const float mChunkSize  = mQuadSize * (float)mNumQuads;
 static const float mOffsetSize = mChunkSize / 8.0; // < in meters. each segment has (chunkSize / numSegment) width and height
 
+static void DeleteShaders()
+{
+    rDeleteShader(mTerrainShader);
+    rDeleteShader(mHeightShader);
+    rDeleteShader(mMoveShader);
+    rDeleteShader(mCalculateNormalShader);
+    rDeleteShader(mGrassShader);
+    rDeleteShader(mTreeShader);
+}
+
+static void LoadTerrainLayerTextures()
+{
+    const char* images[] = {
+        "Assets/Textures/Terrain/brown_mud_leaves_01_arm_2k.png",     // mLayers[0].AORoughnessMetallic
+        "Assets/Textures/Terrain/brown_mud_leaves_01_diff_2k.png",    // mLayers[0].Diffuse            
+        "Assets/Textures/Terrain/brown_mud_leaves_01_nor_dx_1k.png",  // mLayers[0].Normal             
+        // 
+        "Assets/Textures/Terrain/rocky_terrain_02_arm_1k.png",        // mLayers[1].AORoughnessMetallic
+        "Assets/Textures/Terrain/rocky_terrain_02_diff_2k.png",       // mLayers[1].Diffuse            
+        "Assets/Textures/Terrain/rocky_terrain_02_nor_dx_1k.png",     // mLayers[1].Normal             
+        // 
+        "Assets/Textures/Terrain/rocky_terrain_arm_1k.png",           // mLayers[2].AORoughnessMetallic
+        "Assets/Textures/Terrain/rocky_terrain_diff_2k.png",          // mLayers[2].Diffuse            
+        "Assets/Textures/Terrain/rocky_terrain_nor_dx_1k.png"         // mLayers[2].Normal             
+    };
+
+    char path[512] = "Assets/Textures/Terrain/Compressed.dxt";
+
+    if (!FileExist(path)) 
+        CompressSaveImages(path, images, ArraySize(images));
+
+    LoadSceneImages(path, mLayers, ArraySize(images));
+}
+
+static void LoadTreeTextures()
+{
+    const char* images[] = {
+        "Assets/Textures/Tree/pine_bark_arm_1k.png",    
+        "Assets/Textures/Tree/pine_bark_diff_1k.png",   
+        "Assets/Textures/Tree/pine_bark_nor_gl_1k.png"
+    };
+
+    char path[512] = "Assets/Textures/Tree/LogCompressed.dxt";
+
+    if (!FileExist(path)) 
+        CompressSaveImages(path, images, ArraySize(images));
+
+    LoadSceneImages(path, mTreeLogTextures, ArraySize(images));
+}
+
 void TerrainCreateShaders()
 {
-    if (mFirstInit == false)
-    {
-        rDeleteShader(mTerrainShader);
-        rDeleteShader(mHeightShader);
-        rDeleteShader(mCalculateNormalShader);
+    if (mFirstInit == false) {
+        DeleteShaders();
     }
-    else
-    {
+    else {
         mGreyNoiseTexture = rImportTexture("Assets/Textures/ShadertoyGreyNoise.png");
-
-        const char* images[] = {
-            "Assets/Textures/Terrain/brown_mud_leaves_01_arm_2k.png",     // mLayers[0].AORoughnessMetallic
-            "Assets/Textures/Terrain/brown_mud_leaves_01_diff_2k.png",    // mLayers[0].Diffuse            
-            "Assets/Textures/Terrain/brown_mud_leaves_01_nor_dx_1k.png",  // mLayers[0].Normal             
-                                                                          // 
-            "Assets/Textures/Terrain/rocky_terrain_02_arm_1k.png",        // mLayers[1].AORoughnessMetallic
-            "Assets/Textures/Terrain/rocky_terrain_02_diff_2k.png",       // mLayers[1].Diffuse            
-            "Assets/Textures/Terrain/rocky_terrain_02_nor_dx_1k.png",     // mLayers[1].Normal             
-                                                                          // 
-            "Assets/Textures/Terrain/rocky_terrain_arm_1k.png",           // mLayers[2].AORoughnessMetallic
-            "Assets/Textures/Terrain/rocky_terrain_diff_2k.png",          // mLayers[2].Diffuse            
-            "Assets/Textures/Terrain/rocky_terrain_nor_dx_1k.png"         // mLayers[2].Normal             
-        };
-
-        char path[512] = "Assets/Textures/Terrain/Compressed.dxt";
-
-        if (!FileExist(path)) 
-            CompressSaveImages(path, images, ArraySize(images));
-        
-        LoadSceneImages(path, mLayers, ArraySize(images));
+        LoadTerrainLayerTextures();
+        LoadTreeTextures();
     }
 
     rImportFullScreenShaderSafe("Assets/Shaders/PerlinNoise.glsl", &mHeightShader);
     rImportFullScreenShaderSafe("Assets/Shaders/MovePixels.glsl", &mMoveShader);
     rImportFullScreenShaderSafe("Assets/Shaders/TerrainGenNormals.glsl", &mCalculateNormalShader);
-
+    
+    rImportShaderSafe("Assets/Shaders/TreeVert.glsl" , "Assets/Shaders/TreeFrag.glsl", nullptr, &mTreeShader);
     rImportShaderSafe("Assets/Shaders/EmptyVert.glsl", "Assets/Shaders/TerrainFrag.glsl", "Assets/Shaders/TerrainGeom.glsl", &mTerrainShader);
     rImportShaderSafe("Assets/Shaders/EmptyVert.glsl", "Assets/Shaders/GrassFrag.glsl", "Assets/Shaders/GrassGeom.glsl", &mGrassShader);
 }
@@ -107,6 +145,117 @@ static void CreateTextures()
 
     mTestTexture2d     = rCreateTexture(512, 512, nullptr, TextureType_R8, TexFlags_RawData);
     mHeightFrameBuffer = rCreateFrameBuffer(true);
+}
+
+static void CylinderDraw(
+    float numHorSegments, // = 16.0f
+    float numVerSegments, // = 6.0f (min 2.0)
+    float treeHeight,     // = 10.0f
+    float logWidth,       // = 1.0
+    float heightStart,
+    bool  reuseVertex
+)
+{
+    const uint uNumHorSegments = uint(numHorSegments);
+    const uint uNumVerSegments = uint(numVerSegments);
+    uint uReuseVertex = uint(reuseVertex);
+
+    uint numVertex = (uNumHorSegments + 1u) * (uNumVerSegments - uReuseVertex);
+    uint numIndex  = (uNumVerSegments-1u) * uNumHorSegments * 6u;
+
+    TreeVertex* vertices = mTreeVertices + mTreeVertexOffset;
+    uint* indices  = mTreeIndices + mTreeIndexOffset; 
+
+    uint indexOffset  = 0u;
+    uint vertexOffset = 0u;
+
+    for (uint v = 0u + uReuseVertex; v < uNumVerSegments; v++)
+    {
+        float vt = float(v) / (numVerSegments - 1.0f);
+        half heightf16 = ConvertFloatToHalf(vt * treeHeight);
+
+        for (uint h = 0u; h < uNumHorSegments + 1u; h++)
+        {
+            float ht = float(h) / numHorSegments;
+            float sn = Sin(ht * TwoPI);
+            float cs = Cos(ht * TwoPI);
+        
+            vertices[vertexOffset + h].position = { sn * logWidth, heightStart + vt * treeHeight, cs * logWidth };
+            vertices[vertexOffset + h].uv       = MakeHalf2(ConvertFloatToHalf(ht), heightf16);
+            vertices[vertexOffset + h].normal   = { sn, 0.0f, cs };
+        }
+        vertexOffset += uNumHorSegments + 1u;
+    }
+
+    indexOffset  = 0u;
+    vertexOffset = mTreeVertexOffset - uReuseVertex * (uNumHorSegments + 1u);
+    for (uint v = 0u; v < uNumVerSegments-1u; v++)
+    {
+        for (uint h = 0u; h < uNumHorSegments; h++, indexOffset += 6u)
+        {
+            indices[indexOffset + 0u] = h + vertexOffset + 1u;
+            indices[indexOffset + 1u] = h + vertexOffset + uNumHorSegments + 1u;
+            indices[indexOffset + 2u] = h + vertexOffset;
+                                    
+            indices[indexOffset + 3u] = h + vertexOffset + 1u;
+            indices[indexOffset + 4u] = h + vertexOffset + uNumHorSegments + 2u;
+            indices[indexOffset + 5u] = h + vertexOffset + uNumHorSegments + 1u;
+        }
+        vertexOffset += uNumHorSegments + 1u;
+    }
+
+    mTreeVertexOffset += numVertex;
+    mTreeIndexOffset += numIndex;
+}
+
+static void CreateTrees()
+{
+    float numHorSegments = 16.0f;
+    float numVerSegments = 6.0f; 
+    float treeHeight     = 3.0f;
+    float logWidth       = 1.0f;
+
+    uint numVertex = uint(numHorSegments + 1u) * (uint)numVerSegments;
+    uint numIndex  = uint(numVerSegments-1u) * (uint)numHorSegments * 6u;
+
+    mTreeVertices = new TreeVertex[numVertex];
+    mTreeIndices = new uint[numIndex];
+
+    CylinderDraw(
+        numHorSegments,
+        2.0f, // numVerSegments
+        treeHeight,
+        logWidth,
+        0.0f, // heightStart
+        false
+    );
+
+    CylinderDraw(
+        numHorSegments,
+        2.0f, // numVerSegments
+        treeHeight,
+        logWidth * 1.2f,
+        3.0f, // heightStart
+        true
+    );
+
+    const InputLayout layout[] = {
+        {3, GraphicType_Float },
+        {2, GraphicType_Half  },
+        {3, GraphicType_Float }
+    };
+    InputLayoutDesc inputDesc;
+    inputDesc.numLayout = ArraySize(layout);
+    inputDesc.stride    = sizeof(TreeVertex);
+    inputDesc.layout    = layout;
+    inputDesc.dynamic   = false;
+    mTreeMesh = rCreateMesh(mTreeVertices, mTreeIndices, numVertex, numIndex, GraphicType_UnsignedInt, &inputDesc);
+}
+
+static void DestroyTrees()
+{
+    delete[] mTreeVertices;
+    delete[] mTreeIndices;
 }
 
 inline float fract(float x) {
@@ -151,7 +300,8 @@ float GetTerrainHeight(Vector3f position)
     position /= (float)mNumQuads * mQuadSize;
     position *= 20.0f;
     
-    Vector2f pos2 = Vec2(position.x, position.z);
+    const Vector2f seed = { 5.0f, 5.0f };
+    Vector2f pos2 = Vec2(position.x - seed.x, position.z - seed.y);
     float height = Clamp(terrain(pos2, 8, 0.250f, 0.5f, 0.250f), 0.00f, 1.0f);
     height      += Clamp(terrain(pos2, 8, 0.198f, 1.6f, 0.210f),-0.16f, 2.7f);
     return height * 36.0f;
@@ -227,9 +377,6 @@ static void GenerateHeightTexture(eMoveMask move)
     rBindFrameBuffer(mHeightFrameBuffer);
 
     rBindShader(mHeightShader);
-    // rSetShaderValue(START_HEIGHT    , rGetUniformLocation("START_HEIGHT"));
-    // rSetShaderValue(WEIGHT          , rGetUniformLocation("WEIGHT"));
-    // rSetShaderValue(MULT            , rGetUniformLocation("MULT"));
     rSetShaderValue(mChunkOffset.arr, rGetUniformLocation("mChunkOffset"), GraphicType_Vector2i);
     rSetShaderValue(moveDir.arr     , rGetUniformLocation("mMoveDir"), GraphicType_Vector2i);
     
@@ -270,6 +417,7 @@ void InitTerrain()
 {
     TerrainCreateShaders();
     CreateTextures();
+    CreateTrees();
     GenerateHeightTexture(0);
 
     mFirstInit = false;
@@ -310,7 +458,6 @@ void RenderTerrain(CameraBase* camera)
 
     // uSprite(Vec2( 30.0f, 700.0f), Vec2(300.0f), &mNormalTexture);
     // uSprite(Vec2(330.0f, 700.0f), Vec2(300.0f), &mNormalTexture1);
-
     Matrix4 viewProj = camera->view * camera->projection;
     rBindShader(mTerrainShader);
     rSetTexture(mHeightTexture, 0, rGetUniformLocation("mPerlinNoise"));
@@ -336,6 +483,20 @@ void RenderTerrain(CameraBase* camera)
     rSetShaderValue((float)TimeSinceStartup(), rGetUniformLocation("mTime"));
     SetCameraUniforms(camera, viewProj);
     rRenderGeomPoint(512 * 512);
+
+    if (false)
+    {
+        rBindShader(mTreeShader);
+        rBindMesh(mTreeMesh);
+        Matrix4 model = Matrix4::Identity();
+        // we will use instancing!
+        rSetShaderValue(model.GetPtr(), rGetUniformLocation("uModel"), GraphicType_Matrix4);
+        rSetShaderValue(viewProj.GetPtr(), rGetUniformLocation("uViewProj"), GraphicType_Matrix4);
+        rSetTexture(mTreeLogTextures[0], 0, rGetUniformLocation("uBarkAORoughnessMetallic"));
+        rSetTexture(mTreeLogTextures[1], 1, rGetUniformLocation("uBarkDiffuse"));
+        rSetTexture(mTreeLogTextures[2], 2, rGetUniformLocation("uBarkNormal"));
+        rRenderMeshIndexed(mTreeMesh);
+    }
 }
 
 void TerrainDestroy()
@@ -345,12 +506,7 @@ void TerrainDestroy()
     rDeleteTexture(mNormalTexture);    
     rDeleteTexture(mNormalTexture1);
     rDeleteTexture(mTestTexture2d);
-
-    rDeleteShader(mTerrainShader);
-    rDeleteShader(mHeightShader);
-    rDeleteShader(mMoveShader);
-    rDeleteShader(mCalculateNormalShader);
-    rDeleteShader(mGrassShader);
+    DeleteShaders();
 }
 
 void TerrainShowEditor()
@@ -359,7 +515,5 @@ void TerrainShowEditor()
     sprintf_s(characterPosText, sizeof(characterPosText), "%f, %f, %f", characterPos.x, characterPos.y, characterPos.z);
     uText(characterPosText, Vec2(1500.0f, 800.0f));
 
-    if (uFloatFieldW("START_HEIGHT", &START_HEIGHT, 0.0f, 32.0f, 0.05f)) mShuldUpdate = true;
-    if (uFloatFieldW("WEIGHT", &WEIGHT, 0.0f, 32.0f, 0.05f)) mShuldUpdate = true;
-    if (uFloatFieldW("MULT", &MULT, 0.0f, 32.0f, 0.05f)) mShuldUpdate = true;
+    // if (uFloatFieldW("START_HEIGHT", &START_HEIGHT, 0.0f, 32.0f, 0.05f)) mShuldUpdate = true;
 }

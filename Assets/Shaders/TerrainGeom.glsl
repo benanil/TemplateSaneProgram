@@ -50,12 +50,14 @@ void main()
     groupPos += vec2(mChunkOffset) * offsetSize;
 
     vec2 chunkCenterPos = groupPos + 10.0;
-    vec2 toChunk = normalize(mCameraPos.xz - chunkCenterPos);
-    vec2 chunkToCam = mCameraPos.xz - chunkCenterPos;
+    vec2 camPosBack = mCameraPos.xz - mCameraDir.xz * 6.0; // slightly back of camera
+    vec2 toChunk = normalize(camPosBack - chunkCenterPos);
+    vec2 chunkToCam = camPosBack - chunkCenterPos;
     ivec2 segmentIndex = ivec2(igroupStart * iquadNumSeg);
-    bool closeToQuad = dot(chunkToCam, chunkToCam) < 2512.0f;
+    float chunkDistSqr = dot(chunkToCam, chunkToCam);
+    bool closeToQuad =  chunkDistSqr < 2512.0f;
 
-    if (!(AngleBetween(mCameraDir.xz, toChunk) < 1.4 || closeToQuad))
+    if (!(AngleBetween(mCameraDir.xz, toChunk) < 1.31 || closeToQuad) || chunkDistSqr > 340000.0) // || chunkDistSqr > 40000.0f
         return;
     
     for (int i = 0; i < iquadNumSeg; i++)

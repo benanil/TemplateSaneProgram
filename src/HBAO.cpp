@@ -232,6 +232,7 @@ void SetHBAOData(float fov)
 // just linearizes the depth, no hbao spesific thing
 void HBAOLinearizeDepth(Texture* depthTex, float near, float far)
 {
+    if (!mIsOpen) return;
     rSetViewportSize(mWidth, mHeight);
     rBindFrameBuffer(mLinearDepthFB);
     rBindShader(mLinearizeDepthSH);

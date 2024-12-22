@@ -269,7 +269,7 @@ void CharacterController::MovementState(bool isSponza)
     if (Abs(animX) > Abs(animY)) animY = animX;
 
     bool isRunning = GetKeyDown(Key_SHIFT);
-    mAnimController.EvaluateLocomotion(animX, animY, isRunning ? animSpeed * 2.0f : animSpeed);
+    mAnimController.EvaluateLocomotion(animX, animY, isRunning ? animSpeed * 1.5f : animSpeed);
     targetMovement *= float(isRunning) + 1.0f;
     
     const float smoothTime = 0.25f;
@@ -299,7 +299,7 @@ void CharacterController::MovementState(bool isSponza)
 
     // handle character position
     Vector3f forward = { Sin(x), 0.0f, Cos(x) };
-    Vector3f progress = forward * mMovementSpeed * deltaTime * (float(isRunning) * 16.0f + 1.0f);
+    Vector3f progress = forward * mMovementSpeed * deltaTime * (float(isRunning) * 4.0f + 1.0f);
     
     float movementAmount = mCurrentMovement.LengthSafe();
     progress *= Clamp(-movementAmount, -1.0f, 1.0f);
@@ -309,7 +309,7 @@ void CharacterController::MovementState(bool isSponza)
     
     if (isSponza) ColissionDetection(oldPos);
     
-    mPosition.y = GetTerrainHeight(mPosition);
+    mPosition.y = 0.0f; // GetTerrainHeight(mPosition);
     // animatedPos.y = 8.15f; // if you want to walk on top floor
     camera->targetPos = mPosition;
     mNonStopDuration += float(Abs(movementAmount) < 0.002f) * deltaTime;

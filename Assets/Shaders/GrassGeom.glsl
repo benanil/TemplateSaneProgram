@@ -17,17 +17,6 @@ out lowp float vIsTop; // top vertex of triangle ?
 
 const float PI = 3.14159265;
 
-float ACosPositive(float x) {
-    float p = -0.1565827f * x + 1.570796f;
-    return p * sqrt(1.0f - x);
-}
-
-float AngleBetween(vec2 from, vec2 to) {
-    float denominator = inversesqrt(dot(from, from) * dot(to, to));
-    float dot = min(dot(from, to) * denominator, 1.0);
-    return ACosPositive(dot);
-}
-
 float Sin0pi(float x) {
     x *= 0.63655f; // constant founded using desmos
     x *= 2.0f - x;
@@ -40,11 +29,11 @@ float Cos0pi(float a) {
     return 1.0f - 32.0f * a * a * (0.75f - a);
 }
 
-float hash(ivec2 p ) {                       
+float hash(ivec2 p ) {
     // 2D -> 1D
     int n = p.x*3 + p.y*113;
     // 1D hash by Hugo Elias
-	n = (n << 13) ^ n;
+    n = (n << 13) ^ n;
     n = n * (n * n * 15731 + 789221) + 1376312589;
     return -1.0 + 2.0 * float(n &0x0fffffff) / float(0x0fffffff);
 }
@@ -86,8 +75,9 @@ void main()
     grassPos += vec2(mChunkOffset) * offsetSize;
 
     vec2 grassCenterPos = grassPos + segmentSize;
-    vec2 toGrass = normalize(mCameraPos.xz - grassCenterPos);
-    vec2 grassToCam = mCameraPos.xz - grassCenterPos;
+    vec2 camPosBack = mCameraPos.xz + mCameraDir.xz * 6.0;
+    vec2 toGrass = normalize(camPosBack - grassCenterPos);
+    vec2 grassToCam = camPosBack - grassCenterPos;
     const float MaxGrassDist = 40000.0f;
     float grassDistSqr = dot(grassToCam, grassToCam);
     bool closeToGrass = grassDistSqr < MaxGrassDist;
@@ -96,7 +86,7 @@ void main()
     float steepness = 1.0 - sqr(testNormal.y); // abs(normal.x) + abs(normal.z); 
     float testHeight = texelFetchOffset(mPerlinNoise, grassStart, 0, ivec2(0, 0)).r / 2.24;
 
-    if (AngleBetween(mCameraDir.xz, toGrass) > 1.4 || !closeToGrass || steepness > 0.7 || testHeight > 0.67)
+    if (dot(-mCameraDir.xz, toGrass) > -0.5 || !closeToGrass || steepness > 0.7 || testHeight > 0.67)
         return;
 
     float heightCenter   = texelFetchOffset(mPerlinNoise, grassStart, 0, ivec2( 0, 0)).r;
@@ -154,21 +144,24 @@ void main()
         vIsTop = 0.0;
         EmitVertex();
 
-        vec4 mid = mix(right, up, 0.25);
-        mid.xz += wind * 0.16;
-        gl_Position = mViewProj * mid;
-        vWorldPos = mid.xyz;
-        vNormal = norm;
-        vIsTop = 0.35;
-        EmitVertex();
+        // if (grassDist < 0.3) // < reduce triangle count when we are close, but I haven't seen any performance improvements
+        {
+            vec4 mid = mix(right, up, 0.25);
+            mid.xz += wind * 0.16;
+            gl_Position = mViewProj * mid;
+            vWorldPos = mid.xyz;
+            vNormal = norm;
+            vIsTop = 0.35;
+            EmitVertex();
 
-        mid = mix(left, up, 0.5);
-        mid.xz += wind * 0.44;
-        gl_Position = mViewProj * mid;
-        vWorldPos = mid.xyz;
-        vNormal = norm;
-        vIsTop = 0.6;
-        EmitVertex();
+            mid = mix(left, up, 0.5);
+            mid.xz += wind * 0.44;
+            gl_Position = mViewProj * mid;
+            vWorldPos = mid.xyz;
+            vNormal = norm;
+            vIsTop = 0.6;
+            EmitVertex();
+        }
 
         up.xz += wind * 1.0;
         gl_Position = mViewProj * up;

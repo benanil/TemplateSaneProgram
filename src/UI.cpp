@@ -435,8 +435,9 @@ void uInitialize()
     // per character textures
     // we will store mTextData array in this texture
     // todo 4k texture data might not be supported by low level devices
-    mTextDataTex = rCreateTexture(MaxCharacters, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData); // MaxCharacters >> 10 == MaxCharacters / 1024
-    mQuadDataTex = rCreateTexture(MaxQuads, 1, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
+    // 64 is sqrt of 4096
+    mTextDataTex = rCreateTexture(64, 64, nullptr, TextureType_RGBA32UI, TexFlags_RawData); // MaxCharacters >> 10 == MaxCharacters / 1024
+    mQuadDataTex = rCreateTexture(32, 32, nullptr, TextureType_RGBA32UI, TexFlags_RawData);
     
     rBindShader(mFontShader);
     dataTexLoc    = rGetUniformLocation("dataTex");

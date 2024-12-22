@@ -20,7 +20,7 @@ void main()
     int quadID = uIndexStart + gl_PrimitiveIDIn;
 
     // unpack per quad data
-    highp uvec4 data    = texelFetch(dataTex, ivec2(quadID, 0), 0);
+    highp uvec4 data    = texelFetch(dataTex, ivec2(quadID & 31, quadID >> 5), 0);
                 vColor  = unpackUnorm4x8(data.y);
     
     lowp vec2 depthCutStart = unpackUnorm4x8(data.z).xy;

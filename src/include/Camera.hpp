@@ -152,7 +152,7 @@ struct FreeCamera : public CameraBase
     {
         bool pressing = GetMouseDown(MouseButton_Right);
         float dt = (float)GetDeltaTime();
-        float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 85.0f;
+        float speed = dt * (1.0f + GetKeyDown(Key_SHIFT) * 2.0f) * 5.0f;
         
         if (!pressing) { wasPressing = false; return; }
         
