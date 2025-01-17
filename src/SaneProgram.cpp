@@ -74,7 +74,7 @@ extern void RenderTerrain(CameraBase* camera);
 int AXStart()
 {
     g_CurrentScene.Init();
-    // InitBVH();
+    InitBVH();
 
     if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/Bistro/Bistro.gltf", 1.2f))
     // if (!g_CurrentScene.ImportPrefab(&MainScenePrefab, "Assets/Meshes/SponzaGLTF/scene.gltf", 1.2f))
