@@ -2,7 +2,7 @@
 
 REM clang++ -std=c++17 -O3 -mavx2 -mfma -msse4.2 -mf16c -mrdseed -s -fno-rtti -fno-stack-protector -fno-exceptions -static-libstdc++ -static-libgcc -fno-unwind-tables -D_CRT_SECURE_NO_WARNINGS ^
 REM AdventOfCode.cpp -o AdventOfCode.exe
-REM 
+REM this is test
 REM call AdventOfCode.exe
 
 if "%1"=="Debug" (
